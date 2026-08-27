@@ -1,10 +1,12 @@
+server:
+  port: 8888
+
 spring:
   application:
     name: config-server
-  profiles:
-    active: native
   cloud:
     config:
       server:
-        native:
-          search-locations: file:${user.dir}/config-repo
+        git:
+          uri: https://github.com/sajo-team/sajo.git
+          search-paths: config-repo

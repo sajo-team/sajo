@@ -1,5 +1,2 @@
-spring:
-  datasource:
-    url: jdbc:postgresql://localhost:5432/sajo_db
-    username: ${DB_USERNAME}
-    password: ${DB_PASSWORD}
+test:
+  message: "hello from config server"
