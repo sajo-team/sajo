@@ -2,7 +2,7 @@ spring:
   application:
     name: auth-service
   config:
-    import: "configserver:http://localhost:8888"
+    import: "configserver:http://config-server:8888"
 
 server:
   port: 8081
@@ -10,4 +10,4 @@ server:
 eureka:
   client:
     service-url:
-      defaultZone: http://localhost:8761/eureka
+      defaultZone: http://eureka-server:8761/eureka
