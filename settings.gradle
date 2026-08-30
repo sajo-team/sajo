@@ -1,0 +1,9 @@
+rootProject.name = 'sajo'
+
+include 'gateway'
+include 'discovery-service'
+include 'config-server'
+include 'user-service'
+include 'market-service'
+include 'trading-service'
+include 'ai-risk-service'

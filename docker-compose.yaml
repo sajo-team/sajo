@@ -1,60 +1,33 @@
 services:
-  eureka-server:
-    build:
-      context: ./infra/eureka-server
-      dockerfile: ../../Dockerfile
+  postgres-user-account:
+    image: postgres:17-alpine
+    container_name: sajo-postgres
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: userdb
     ports:
-      - "8761:8761"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8761/actuator/health"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-      start_period: 10s
-    networks:
-      - sajo-net
+      - "5432:5432"
 
-  config-server:
-    build:
-      context: ./infra/config-server
-      dockerfile: ../../Dockerfile
+  postgres-market-strategy:
+    image: postgres:17-alpine
+    container_name: sajo-postgres-market-strategy
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: market_strategy_db
     ports:
-      - "8888:8888"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8888/actuator/health"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-      start_period: 10s
-    networks:
-      - sajo-net
+      - "5433:5432"
 
-  gateway:
-    build:
-      context: ./infra/gateway
-      dockerfile: ../../Dockerfile
+  postgres-trading:
+    image: postgres:17-alpine
+    container_name: sajo-postgres-trading
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: trading_db
     ports:
-      - "8080:8080"
-    depends_on:
-      eureka-server:
-        condition: service_healthy
-    networks:
-      - sajo-net
+      - "5434:5432"
 
-  auth-service:
-    build:
-      context: ./apps/auth-service
-      dockerfile: ../../Dockerfile
+  mongo-ai-risk:
+    image: mongo:8.0
+    container_name: sajo-mongo-ai-risk
     ports:
-      - "8081:8081"
-    depends_on:
-      eureka-server:
-        condition: service_healthy
-      config-server:
-        condition: service_healthy
-    networks:
-      - sajo-net
-
-networks:
-  sajo-net:
-    driver: bridge
+      - "27017:27017"
