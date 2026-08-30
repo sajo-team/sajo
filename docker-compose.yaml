@@ -62,3 +62,94 @@ services:
     container_name: sajo-grafana
     ports:
       - "3000:3000"
+  discovery-service:
+    build:
+      context: .
+      dockerfile: discovery-service/Dockerfile
+    container_name: discovery-service
+    ports:
+      - "8761:8761"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+
+  config-server:
+    build:
+      context: .
+      dockerfile: config-server/Dockerfile
+    container_name: config-server
+    ports:
+      - "8888:8888"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      GITHUB_TOKEN: ${GITHUB_TOKEN}
+    depends_on:
+      - discovery-service
+
+  gateway:
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+    container_name: gateway
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+    depends_on:
+      - discovery-service
+      - config-server
+
+  user-service:
+    build:
+      context: .
+      dockerfile: user-service/Dockerfile
+    container_name: user-service
+    ports:
+      - "8081:8081"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+    depends_on:
+      - discovery-service
+      - config-server
+      - postgres-user-account
+
+  market-service:
+    build:
+      context: .
+      dockerfile: market-service/Dockerfile
+    container_name: market-service
+    ports:
+      - "8082:8082"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+    depends_on:
+      - discovery-service
+      - config-server
+      - postgres-market-strategy
+
+  trading-service:
+    build:
+      context: .
+      dockerfile: trading-service/Dockerfile
+    container_name: trading-service
+    ports:
+      - "8083:8083"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+    depends_on:
+      - discovery-service
+      - config-server
+      - postgres-trading
+
+  ai-risk-service:
+    build:
+      context: .
+      dockerfile: ai-risk-service/Dockerfile
+    container_name: ai-risk-service
+    ports:
+      - "8084:8084"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+    depends_on:
+      - discovery-service
+      - config-server
+      - mongo-ai-risk
