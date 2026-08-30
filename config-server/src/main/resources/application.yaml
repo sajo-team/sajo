@@ -8,4 +8,6 @@ spring:
     config:
       server:
         git:
-          uri: file:///Users/t2025-m0253/sajo-config-repo
+          uri: https://github.com/sajo-team/sajo-config-repo.git
+          username: hyeok0008
+          password: ${GITHUB_TOKEN}

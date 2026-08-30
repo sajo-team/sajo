@@ -4,6 +4,20 @@ server:
 spring:
   application:
     name: ai-risk-service
-  data:
-    mongodb:
-      uri: mongodb://localhost:27017/ai_risk_db
+---
+spring:
+  config:
+    activate:
+      on-profile: local
+    import: "optional:configserver:http://localhost:8888"
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+    import: "optional:configserver:http://config-server:8888"
+  cloud:
+    config:
+      retry:
+        max-attempts: 10
+        initial-interval: 2000

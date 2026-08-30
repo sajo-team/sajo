@@ -4,10 +4,20 @@ server:
 spring:
   application:
     name: market-service
-  datasource:
-    url: jdbc:postgresql://localhost:5433/market_strategy_db
-    username: postgres
-    password: postgres
-  jpa:
-    hibernate:
-      ddl-auto: update
+---
+spring:
+  config:
+    activate:
+      on-profile: local
+    import: "optional:configserver:http://localhost:8888"
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+    import: "optional:configserver:http://config-server:8888"
+  cloud:
+    config:
+      retry:
+        max-attempts: 10
+        initial-interval: 2000
