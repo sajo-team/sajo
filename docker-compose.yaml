@@ -31,6 +31,7 @@ services:
     container_name: sajo-mongo-ai-risk
     ports:
       - "27017:27017"
+
   kafka:
     image: apache/kafka:latest
     container_name: sajo-kafka
@@ -62,6 +63,7 @@ services:
     container_name: sajo-grafana
     ports:
       - "3000:3000"
+
   discovery-service:
     build:
       context: .
@@ -97,6 +99,7 @@ services:
     depends_on:
       - discovery-service
       - config-server
+    restart: on-failure
 
   user-service:
     build:
@@ -111,6 +114,7 @@ services:
       - discovery-service
       - config-server
       - postgres-user-account
+    restart: on-failure
 
   market-service:
     build:
@@ -125,6 +129,7 @@ services:
       - discovery-service
       - config-server
       - postgres-market-strategy
+    restart: on-failure
 
   trading-service:
     build:
@@ -139,6 +144,7 @@ services:
       - discovery-service
       - config-server
       - postgres-trading
+    restart: on-failure
 
   ai-risk-service:
     build:
@@ -153,3 +159,4 @@ services:
       - discovery-service
       - config-server
       - mongo-ai-risk
+    restart: on-failure
