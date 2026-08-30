@@ -1,0 +1,34 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: discovery-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["discovery-service:8761"]
+
+  - job_name: gateway
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["gateway:8080"]
+
+  - job_name: user-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["user-service:8081"]
+
+  - job_name: market-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["market-service:8082"]
+
+  - job_name: trading-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["trading-service:8083"]
+
+  - job_name: ai-risk-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["ai-risk-service:8084"]

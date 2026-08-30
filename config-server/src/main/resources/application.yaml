@@ -9,5 +9,16 @@ spring:
       server:
         git:
           uri: https://github.com/sajo-team/sajo-config-repo.git
-          username: hyeok0008
+          username: ${GITHUB_USERNAME}
           password: ${GITHUB_TOKEN}
+          default-label: main
+
+
+encrypt:
+  key: ${ENCRYPT_KEY}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus

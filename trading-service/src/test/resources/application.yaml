@@ -1,8 +1,11 @@
 spring:
   datasource:
-    url: jdbc:postgresql://localhost:5434/trading_db
+    url: jdbc:postgresql://localhost:5432/sajo?currentSchema=trading
     username: postgres
     password: postgres
   jpa:
     hibernate:
       ddl-auto: update
+  cloud:
+    config:
+      enabled: false

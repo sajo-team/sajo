@@ -1,0 +1,10 @@
+.git
+.github
+**/.gradle
+**/build
+**/out
+.idea
+*.log
+.env
+monitoring
+README.md
