@@ -7,3 +7,5 @@ include 'user-service'
 include 'market-service'
 include 'trading-service'
 include 'ai-risk-service'
+
+include 'libs:common'

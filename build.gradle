@@ -14,9 +14,19 @@ allprojects {
     }
 }
 
-subprojects {
+def libsProjects = subprojects.findAll { it.path == ':libs' || it.path.startsWith(':libs:') }
+def serviceProjects = subprojects.findAll { !(it.path == ':libs' || it.path.startsWith(':libs:')) }
+
+configure(serviceProjects) {
     apply plugin: 'java'
     apply plugin: 'org.springframework.boot'
+}
+
+configure(libsProjects) {
+    apply plugin: 'java-library'
+}
+
+subprojects {
     apply plugin: 'io.spring.dependency-management'
 
     java {
