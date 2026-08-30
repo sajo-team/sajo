@@ -15,11 +15,11 @@ jobs:
         image: postgres:17-alpine
         env:
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: userdb
+          POSTGRES_DB: sajo
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U postgres"
+          --health-cmd "pg_isready -U postgres -d sajo"
           --health-interval 5s
           --health-timeout 3s
           --health-retries 10
@@ -44,11 +44,11 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
-      - name: Create market_strategy_db and trading_db on the shared postgres service
-
+      - name: Create user_account/market_strategy/trading schemas on the shared sajo db
         run: |
-          PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE DATABASE market_strategy_db;"
-          PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE DATABASE trading_db;"
+          PGPASSWORD=postgres psql -h localhost -U postgres -d sajo -c "CREATE SCHEMA IF NOT EXISTS user_account;"
+          PGPASSWORD=postgres psql -h localhost -U postgres -d sajo -c "CREATE SCHEMA IF NOT EXISTS market_strategy;"
+          PGPASSWORD=postgres psql -h localhost -U postgres -d sajo -c "CREATE SCHEMA IF NOT EXISTS trading;"
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
