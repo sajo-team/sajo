@@ -21,3 +21,8 @@ spring:
     activate:
       on-profile: prod
     import: "optional:configserver:http://config-server:8888"
+  cloud:
+    config:
+      retry:
+        max-attempts: 10
+        initial-interval: 2000

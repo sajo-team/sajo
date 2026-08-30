@@ -73,6 +73,12 @@ services:
       - "8761:8761"
     environment:
       SPRING_PROFILES_ACTIVE: prod
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8761/actuator/health | grep -q UP || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
 
   config-server:
     build:
@@ -85,7 +91,14 @@ services:
       SPRING_PROFILES_ACTIVE: prod
       GITHUB_TOKEN: ${GITHUB_TOKEN}
     depends_on:
-      - discovery-service
+      discovery-service:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8888/actuator/health | grep -q UP || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
 
   gateway:
     build:
@@ -97,8 +110,10 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: prod
     depends_on:
-      - discovery-service
-      - config-server
+      discovery-service:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
     restart: on-failure
 
   user-service:
@@ -111,9 +126,12 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: prod
     depends_on:
-      - discovery-service
-      - config-server
-      - postgres-user-account
+      discovery-service:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      postgres-user-account:
+        condition: service_started
     restart: on-failure
 
   market-service:
@@ -126,9 +144,12 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: prod
     depends_on:
-      - discovery-service
-      - config-server
-      - postgres-market-strategy
+      discovery-service:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      postgres-market-strategy:
+        condition: service_started
     restart: on-failure
 
   trading-service:
@@ -141,9 +162,12 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: prod
     depends_on:
-      - discovery-service
-      - config-server
-      - postgres-trading
+      discovery-service:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      postgres-trading:
+        condition: service_started
     restart: on-failure
 
   ai-risk-service:
@@ -156,7 +180,10 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: prod
     depends_on:
-      - discovery-service
-      - config-server
-      - mongo-ai-risk
+      discovery-service:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      mongo-ai-risk:
+        condition: service_started
     restart: on-failure
