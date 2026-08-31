@@ -1,4 +1,5 @@
 com.sajo.common.config.CommonExceptionAutoConfiguration
 com.sajo.common.config.CommonJpaAuditingAutoConfiguration
 com.sajo.common.config.CommonAuditorAwareAutoConfiguration
+com.sajo.common.config.CommonSecurityAutoConfiguration
 com.sajo.common.config.CommonPageableAutoConfiguration

@@ -5,8 +5,6 @@ include 'discovery-service'
 include 'user-service'
 include 'market-service'
 include 'trading-service'
-include 'ai-risk-service'
-include 'common'
 include 'config-server'
 
 include 'libs:common'

@@ -27,8 +27,3 @@ scrape_configs:
     metrics_path: /actuator/prometheus
     static_configs:
       - targets: ["trading-service:8083"]
-
-  - job_name: ai-risk-service
-    metrics_path: /actuator/prometheus
-    static_configs:
-      - targets: ["ai-risk-service:8084"]

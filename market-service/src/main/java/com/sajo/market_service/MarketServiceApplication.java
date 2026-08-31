@@ -3,7 +3,7 @@ package com.sajo.market_service;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
-@SpringBootApplication(scanBasePackages = "com.sajo")
+@SpringBootApplication
 public class MarketServiceApplication {
 
 	public static void main(String[] args) {

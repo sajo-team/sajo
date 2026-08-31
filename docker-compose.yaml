@@ -238,6 +238,7 @@ services:
       SPRING_PROFILES_ACTIVE: prod
       CONFIG_SERVER_URL: http://config-server:8888
       DB_PASSWORD: ${DB_PASSWORD}
+      MONGO_PASSWORD: ${MONGO_PASSWORD}
     ports:
       - "127.0.0.1:8083:8083"
     networks:
@@ -248,26 +249,6 @@ services:
       config-server:
         condition: service_healthy
       postgres:
-        condition: service_healthy
-    restart: unless-stopped
-
-  ai-risk-service:
-    build:
-      context: .
-      dockerfile: ai-risk-service/Dockerfile
-    container_name: ai-risk-service
-    environment:
-      SPRING_PROFILES_ACTIVE: prod
-      CONFIG_SERVER_URL: http://config-server:8888
-      MONGO_PASSWORD: ${MONGO_PASSWORD}
-    ports:
-      - "127.0.0.1:8084:8084"
-    networks:
-      - sajo-net
-    depends_on:
-      discovery-service:
-        condition: service_healthy
-      config-server:
         condition: service_healthy
       mongo-ai-risk:
         condition: service_healthy
