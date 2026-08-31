@@ -8,4 +8,17 @@ spring:
     config:
       server:
         git:
-          uri: file:///Users/t2025-m0253/sajo-config-repo
+          uri: https://github.com/sajo-team/sajo-config-repo.git
+          username: ${GITHUB_USERNAME}
+          password: ${GITHUB_TOKEN}
+          default-label: main
+
+
+encrypt:
+  key: ${ENCRYPT_KEY}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus

@@ -4,10 +4,57 @@ server:
 spring:
   application:
     name: market-service
+  config:
+    import: "optional:configserver:${CONFIG_SERVER_URL:http://localhost:8888}"
+  cloud:
+    config:
+      retry:
+        max-attempts: 10
+        initial-interval: 2000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
+
+---
+spring:
+  config:
+    activate:
+      on-profile: local
   datasource:
-    url: jdbc:postgresql://localhost:5433/market_strategy_db
+    url: jdbc:postgresql://localhost:5432/sajo?currentSchema=market_strategy
     username: postgres
     password: postgres
   jpa:
+    properties:
+      hibernate:
+        default_schema: market_strategy
     hibernate:
       ddl-auto: update
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+  datasource:
+    url: jdbc:postgresql://postgres:5432/sajo?currentSchema=market_strategy
+    username: postgres
+    password: ${DB_PASSWORD}
+  jpa:
+    properties:
+      hibernate:
+        default_schema: market_strategy
+    hibernate:
+      ddl-auto: validate
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://discovery-service:8761/eureka/

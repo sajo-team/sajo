@@ -11,49 +11,28 @@ jobs:
     runs-on: ubuntu-latest
 
     services:
-      postgres-user-account:
+      postgres:
         image: postgres:17-alpine
         env:
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: userdb
+          POSTGRES_DB: sajo
         ports:
           - 5432:5432
         options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
+          --health-cmd "pg_isready -U postgres -d sajo"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
 
-      postgres-market-strategy:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: market_strategy_db
-        ports:
-          - 5433:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
-      postgres-trading:
-        image: postgres:17-alpine
-        env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: trading_db
-        ports:
-          - 5434:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
-      mongo-ai-risk:
+      mongo:
         image: mongo:8.0
         ports:
           - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand(\"ping\")'"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
 
     steps:
       - name: Checkout code
@@ -65,8 +44,14 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
+      - name: Create user_account/market_strategy/trading schemas on the shared sajo db
+        run: |
+          PGPASSWORD=postgres psql -h localhost -U postgres -d sajo -c "CREATE SCHEMA IF NOT EXISTS user_account;"
+          PGPASSWORD=postgres psql -h localhost -U postgres -d sajo -c "CREATE SCHEMA IF NOT EXISTS market_strategy;"
+          PGPASSWORD=postgres psql -h localhost -U postgres -d sajo -c "CREATE SCHEMA IF NOT EXISTS trading;"
+
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Build with Gradle
-        run: ./gradlew build
+      - name: Build and test with Gradle
+        run: ./gradlew build -x :config-server:test
