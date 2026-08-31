@@ -20,7 +20,7 @@ public class TradingLimit extends BaseUpdatableEntity {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(name = "user_id", nullable = false)
+    @Column(name = "user_id", nullable = false, unique = true)
     private UUID userId;
 
     @Column(name = "daily_max_order_amount", nullable = false)
