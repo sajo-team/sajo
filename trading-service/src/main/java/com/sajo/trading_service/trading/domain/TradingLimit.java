@@ -1,6 +1,8 @@
 package com.sajo.trading_service.trading.domain;
 
 import com.sajo.common.entity.BaseUpdatableEntity;
+import com.sajo.common.exception.BusinessException;
+import com.sajo.trading_service.trading.exception.TradingErrorCode;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -49,21 +51,27 @@ public class TradingLimit extends BaseUpdatableEntity {
             BigDecimal dailyLossLimitRate
     ){
         if (userId == null) {
-            throw new IllegalArgumentException("사용자 ID는 필수입니다.");
+            throw new BusinessException(
+                    TradingErrorCode.INVALID_TRADING_LIMIT,
+                    "사용자 ID는 필수입니다."
+            );
         }
         if(dailyMaxOrderAmount == null || dailyMaxOrderAmount <= 0){
-            throw new IllegalArgumentException(
-                    "일일 최대 주문 금액은 0보다 커야합니다"
+            throw new BusinessException(
+                    TradingErrorCode.INVALID_TRADING_LIMIT,
+                    "일일 최대 주문 금액은 0보다 커야 합니다"
             );
         }
         if(dailyMaxOrderCount == null || dailyMaxOrderCount <= 0){
-            throw new IllegalArgumentException(
-                    "일일 최대 주문 횟수는 0보다 커야합니다"
+            throw new BusinessException(
+                    TradingErrorCode.INVALID_TRADING_LIMIT,
+                    "일일 최대 주문 횟수는 0보다 커야 합니다"
             );
         }
         if(dailyLossLimitRate == null || dailyLossLimitRate.compareTo(BigDecimal.ZERO) <= 0){
-            throw new IllegalArgumentException(
-                    "일일 최대 손실 한도는 0보다 커야합니다."
+            throw new BusinessException(
+                    TradingErrorCode.INVALID_TRADING_LIMIT,
+                    "일일 최대 손실 한도는 0보다 커야 합니다."
             );
         }
         return new TradingLimit(
