@@ -6,9 +6,8 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update
-  data:
-    mongodb:
-      uri: mongodb://localhost:27017/ai_risk_db
+  mongodb:
+    uri: mongodb://localhost:27017/ai_risk_db
   cloud:
     config:
       enabled: false
