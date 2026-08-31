@@ -33,6 +33,9 @@ spring:
         default_schema: trading
     hibernate:
       ddl-auto: update
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/ai_risk_db
 
 eureka:
   client:
@@ -53,6 +56,9 @@ spring:
         default_schema: trading
     hibernate:
       ddl-auto: validate
+  data:
+    mongodb:
+      uri: mongodb://mongo-ai-risk:27017/ai_risk_db
 
 eureka:
   client:

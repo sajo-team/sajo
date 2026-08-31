@@ -8,8 +8,7 @@ COPY gateway/build.gradle gateway/build.gradle
 COPY user-service/build.gradle user-service/build.gradle
 COPY market-service/build.gradle market-service/build.gradle
 COPY trading-service/build.gradle trading-service/build.gradle
-COPY ai-risk-service/build.gradle ai-risk-service/build.gradle
-COPY common/build.gradle common/build.gradle
+COPY libs/common/build.gradle libs/common/build.gradle
 COPY config-server/build.gradle config-server/build.gradle
 RUN gradle :config-server:dependencies --no-daemon || true
 
