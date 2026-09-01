@@ -2,7 +2,9 @@ package com.sajo.trading_service.trading.service.command;
 
 import com.sajo.common.exception.BusinessException;
 import com.sajo.trading_service.trading.controller.dto.request.TradingLimitCreateRequest;
+import com.sajo.trading_service.trading.controller.dto.request.TradingLimitUpdateRequest;
 import com.sajo.trading_service.trading.controller.dto.response.TradingLimitCreateResponse;
+import com.sajo.trading_service.trading.controller.dto.response.TradingLimitUpdateResponse;
 import com.sajo.trading_service.trading.domain.TradingLimit;
 import com.sajo.trading_service.trading.exception.TradingErrorCode;
 import com.sajo.trading_service.trading.repository.command.TradingLimitCommandRepository;
@@ -15,6 +17,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -142,5 +145,69 @@ class TradingLimitCommandServiceTest {
 
         verify(tradingLimitCommandRepository, never())
                 .save(any(TradingLimit.class));
+    }
+
+    @Test
+    @DisplayName("자동매매 공통 한도의 일부 항목만 수정한다")
+    void updateTradingLimit() {
+        // given
+        UUID userId = UUID.randomUUID();
+
+        TradingLimit tradingLimit = TradingLimit.create(
+                userId,
+                3_000_000L,
+                10,
+                new BigDecimal("5.00")
+        );
+
+        TradingLimitUpdateRequest request = new TradingLimitUpdateRequest(
+                5_000_000L,
+                null,
+                null
+        );
+
+        given(tradingLimitCommandRepository.findByUserId(userId))
+                .willReturn(Optional.of(tradingLimit));
+
+        // when
+        TradingLimitUpdateResponse response =
+                tradingLimitCommandService.updateTradingLimit(userId, request);
+
+        // then
+        assertThat(response.dailyMaxOrderAmount()).isEqualTo(5_000_000L);
+        assertThat(response.dailyMaxOrderCount()).isEqualTo(10);
+        assertThat(response.dailyLossLimitRate())
+                .isEqualByComparingTo("5.00");
+    }
+
+    @Test
+    @DisplayName("자동매매 공통 한도가 없으면 수정 시 예외가 발생한다")
+    void updateTradingLimitNotFound() {
+        // given
+        UUID userId = UUID.randomUUID();
+
+        TradingLimitUpdateRequest request = new TradingLimitUpdateRequest(
+                5_000_000L,
+                null,
+                null
+        );
+
+        given(tradingLimitCommandRepository.findByUserId(userId))
+                .willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() ->
+                tradingLimitCommandService.updateTradingLimit(userId, request)
+        )
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException =
+                            (BusinessException) exception;
+
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(
+                                    TradingErrorCode.TRADING_LIMIT_NOT_FOUND
+                            );
+                });
     }
 }

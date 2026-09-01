@@ -33,6 +33,11 @@ spring:
         default_schema: market_strategy
     hibernate:
       ddl-auto: update
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password: redis
 
 eureka:
   client:
