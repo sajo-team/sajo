@@ -81,4 +81,20 @@ public class TradingLimit extends BaseUpdatableEntity {
                 dailyLossLimitRate
         );
     }
+
+    public void update(
+            Long dailyMaxOrderAmount,
+            Integer dailyMaxOrderCount,
+            BigDecimal dailyLossLimitRate
+    ){
+        if(dailyMaxOrderAmount != null){
+            this.dailyMaxOrderAmount = dailyMaxOrderAmount;
+        }
+        if(dailyMaxOrderCount != null){
+            this.dailyMaxOrderCount = dailyMaxOrderCount;
+        }
+        if(dailyLossLimitRate != null){
+            this.dailyLossLimitRate = dailyLossLimitRate;
+        }
+    }
 }
