@@ -70,4 +70,21 @@ class GlobalExceptionHandlerTest {
                 .andExpect(jsonPath("$.errorCode").value("COMMON_9999"))
                 .andExpect(jsonPath("$.errors").doesNotExist());
     }
+
+    @Test
+    @DisplayName("FeignApiException은 호출한 서비스의 status/errorCode/message를 그대로 반환한다")
+    void feignApiException_passesThroughOriginalStatusAndErrorCode() throws Exception {
+        mockMvc.perform(get("/feign-error"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.errorCode").value("ACCOUNT_0001"))
+                .andExpect(jsonPath("$.message").value("계좌를 찾을 수 없습니다"));
+    }
+
+    @Test
+    @DisplayName("FeignApiException의 status가 표준 HttpStatus에 없으면 502로 대체한다")
+    void feignApiException_fallsBackToBadGatewayOnNonStandardStatus() throws Exception {
+        mockMvc.perform(get("/feign-error-non-standard-status"))
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.errorCode").value("CLIENT_CLOSED"));
+    }
 }
