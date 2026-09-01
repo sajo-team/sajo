@@ -29,6 +29,7 @@ class KafkaIntegrationTest {
     @Autowired
     private RecordingListener recordingListener;
 
+    @SuppressWarnings("SpringJavaInjectionPointsAutowiringInspection") // Boot가 인프라 빈으로 자동 등록함, IDE가 못 따라가는 오탐
     @Autowired
     private KafkaListenerEndpointRegistry registry;
 
