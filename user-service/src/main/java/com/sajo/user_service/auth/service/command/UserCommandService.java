@@ -6,6 +6,7 @@ import com.sajo.user_service.auth.domain.User;
 import com.sajo.user_service.auth.exception.UserErrorCode;
 import com.sajo.user_service.auth.repository.command.UserCommandRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,6 +30,11 @@ public class UserCommandService {
                 request.name()
         );
 
-        return userCommandRepository.save(user);
+        try{
+        return userCommandRepository.saveAndFlush(user);
+        }catch (DataIntegrityViolationException e) {
+            throw new BusinessException(UserErrorCode.DUPLICATE_EMAIL);
+    }
+
     }
 }
