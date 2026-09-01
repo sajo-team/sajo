@@ -39,6 +39,12 @@ public class KisApiClient {
         if (response == null) {
             throw new IllegalStateException("KIS 현재가 응답이 비어 있습니다.");
         }
+        if (!response.isSuccess()) {
+            throw new IllegalStateException(
+                    "KIS 현재가 조회에 실패했습니다. msg_cd=%s, msg1=%s"
+                            .formatted(response.messageCode(), response.message())
+            );
+        }
         return QuoteResponse.from(response, stockCode);
     }
 }

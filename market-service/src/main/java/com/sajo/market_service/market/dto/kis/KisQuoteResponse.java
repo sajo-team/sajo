@@ -10,6 +10,10 @@ public record KisQuoteResponse(
         KisQuoteOutput output
 ) {
 
+    public boolean isSuccess() {
+        return "0".equals(resultCode);
+    }
+
     public record KisQuoteOutput(
             @JsonProperty("stck_prpr") String currentPrice,
             @JsonProperty("stck_oprc") String openPrice,

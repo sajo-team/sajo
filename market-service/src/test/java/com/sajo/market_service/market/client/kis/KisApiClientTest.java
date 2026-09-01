@@ -12,6 +12,8 @@ import org.springframework.web.client.RestClient;
 import java.math.BigDecimal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.queryParam;
@@ -51,6 +53,30 @@ class KisApiClientTest {
         assertEquals(70000L, response.currentPrice());
         assertEquals(new BigDecimal("0.7194"), response.changeRate());
         assertEquals(new BigDecimal("15.20"), response.per());
+        server.verify();
+    }
+
+    @Test
+    void throwsExceptionWhenKisBusinessResponseFails() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        KisApiClient client = new KisApiClient(builder, new KisApiProperties("https://kis.example"));
+
+        server.expect(requestTo("https://kis.example/uapi/domestic-stock/v1/quotations/inquire-price?FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=005930"))
+                .andRespond(withSuccess("""
+                        {"rt_cd":"1","msg_cd":"MCA05918","msg1":"종목코드 오류입니다."}
+                        """, MediaType.APPLICATION_JSON));
+
+        IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> client.getQuote(
+                        new UserKisTokenResponse("access-token", "app-key", "secret-key"),
+                        "005930"
+                )
+        );
+
+        assertTrue(exception.getMessage().contains("MCA05918"));
+        assertTrue(exception.getMessage().contains("종목코드 오류입니다."));
         server.verify();
     }
 }
