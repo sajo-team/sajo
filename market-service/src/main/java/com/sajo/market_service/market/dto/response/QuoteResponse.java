@@ -1,6 +1,8 @@
 package com.sajo.market_service.market.dto.response;
 
+import com.sajo.common.exception.BusinessException;
 import com.sajo.market_service.market.dto.kis.KisQuoteResponse;
+import com.sajo.market_service.market.exception.MarketErrorCode;
 
 import java.math.BigDecimal;
 
@@ -24,9 +26,18 @@ public record QuoteResponse(
 ) {
 
     public static QuoteResponse from(KisQuoteResponse response, String stockCode) {
+        if (response == null) {
+            throw new BusinessException(
+                    MarketErrorCode.KIS_QUOTE_RESPONSE_INVALID,
+                    "KIS 현재가 응답이 비어 있습니다."
+            );
+        }
         KisQuoteResponse.KisQuoteOutput output = response.output();
         if (output == null) {
-            throw new IllegalStateException("KIS 현재가 응답에 output이 없습니다.");
+            throw new BusinessException(
+                    MarketErrorCode.KIS_QUOTE_RESPONSE_INVALID,
+                    "KIS 현재가 응답에 output이 없습니다."
+            );
         }
         return new QuoteResponse(
                 stockCode,
