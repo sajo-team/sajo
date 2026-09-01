@@ -2,7 +2,9 @@ package com.sajo.trading_service.trading.service.command;
 
 import com.sajo.common.exception.BusinessException;
 import com.sajo.trading_service.trading.controller.dto.request.TradingLimitCreateRequest;
+import com.sajo.trading_service.trading.controller.dto.request.TradingLimitUpdateRequest;
 import com.sajo.trading_service.trading.controller.dto.response.TradingLimitCreateResponse;
+import com.sajo.trading_service.trading.controller.dto.response.TradingLimitUpdateResponse;
 import com.sajo.trading_service.trading.domain.TradingLimit;
 import com.sajo.trading_service.trading.exception.TradingErrorCode;
 import com.sajo.trading_service.trading.repository.command.TradingLimitCommandRepository;
@@ -39,5 +41,26 @@ public class TradingLimitCommandService {
         TradingLimit savedTradingLimit = tradingLimitCommandRepository.save(tradingLimit);
 
         return TradingLimitCreateResponse.from(savedTradingLimit);
+    }
+
+    @Transactional
+    public TradingLimitUpdateResponse updateTradingLimit(
+            UUID userId,
+            TradingLimitUpdateRequest request
+    ){
+        TradingLimit tradingLimit =
+                tradingLimitCommandRepository.findByUserId(userId)
+                        .orElseThrow(()->
+                                new BusinessException(
+                                        TradingErrorCode.TRADING_LIMIT_NOT_FOUND
+                                )
+                        );
+        tradingLimit.update(
+                request.dailyMaxOrderAmount(),
+                request.dailyMaxOrderCount(),
+                request.dailyLossLimitRate()
+        );
+
+        return TradingLimitUpdateResponse.from(tradingLimit);
     }
 }
