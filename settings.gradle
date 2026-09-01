@@ -8,3 +8,6 @@ include 'trading-service'
 include 'config-server'
 
 include 'libs:common'
+
+include 'libs:common-redis'
+include 'libs:common-kafka'
