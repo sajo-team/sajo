@@ -1,11 +1,13 @@
 package com.sajo.common.exception;
 
 import com.sajo.common.code.ErrorResponseCode;
+import com.sajo.common.feign.FeignApiException;
 import com.sajo.common.response.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
@@ -99,6 +101,21 @@ public class GlobalExceptionHandler {
 
         log.warn("uri: {}, businessException: {}", request.getRequestURI(), e.getMessage());
         return ErrorResponse.toResponseEntity(e.getErrorCode(), e.getMessage());
+    }
+
+    // 하위 서비스 Feign 호출 실패 시 (호출한 쪽이 직접 catch해서 도메인 예외로 바꾸지 않은 경우)
+    @ExceptionHandler(FeignApiException.class)
+    public ResponseEntity<ErrorResponse> handleFeignApiException(FeignApiException e, HttpServletRequest request) {
+
+        log.warn("uri: {}, feignApiException: {} {}", request.getRequestURI(), e.getErrorCode(), e.getMessage());
+
+        HttpStatus status = HttpStatus.resolve(e.getStatus());
+        if (status == null) {
+            status = HttpStatus.BAD_GATEWAY;
+        }
+
+        return ResponseEntity.status(status)
+                .body(new ErrorResponse(false, e.getErrorCode(), e.getMessage(), null));
     }
 
     // 위에서 못 잡은 나머지 모든 예외 시 (원인 불명 서버 에러)
