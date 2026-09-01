@@ -10,24 +10,60 @@ spring:
     gateway:
       server.webmvc:
         routes:
-          - id: user-service
+          - id: user-service-users
             uri: lb://user-service
             predicates:
-              - Path=/USER-SERVICE/**
-            filters:
-              - StripPrefix=1
-          - id: market-service
+              - Path=/api/v1/users/**
+          - id: user-service-auth
+            uri: lb://user-service
+            predicates:
+              - Path=/api/v1/auth/**
+          - id: user-service-accounts
+            uri: lb://user-service
+            predicates:
+              - Path=/api/v1/accounts/**
+
+          - id: market-service-market
             uri: lb://market-service
             predicates:
-              - Path=/MARKET-SERVICE/**
-            filters:
-              - StripPrefix=1
-          - id: trading-service
+              - Path=/api/v1/market/**
+          - id: market-service-strategies
+            uri: lb://market-service
+            predicates:
+              - Path=/api/v1/strategies/**
+          - id: market-service-admin-market
+            uri: lb://market-service
+            predicates:
+              - Path=/api/v1/admin/market/**
+          - id: market-service-admin-strategy
+            uri: lb://market-service
+            predicates:
+              - Path=/api/v1/admin/strategy-evaluation-failures/**
+
+          - id: trading-service-trading-limits
             uri: lb://trading-service
             predicates:
-              - Path=/TRADING-SERVICE/**
-            filters:
-              - StripPrefix=1
+              - Path=/api/v1/trading-limits/**
+          - id: trading-service-orders
+            uri: lb://trading-service
+            predicates:
+              - Path=/api/v1/orders/**
+          - id: trading-service-auto-tradings
+            uri: lb://trading-service
+            predicates:
+              - Path=/api/v1/auto-tradings/**
+          - id: trading-service-executions
+            uri: lb://trading-service
+            predicates:
+              - Path=/api/v1/executions/**
+          - id: trading-service-ai
+            uri: lb://trading-service
+            predicates:
+              - Path=/api/v1/ai/**
+          - id: trading-service-admin-ai
+            uri: lb://trading-service
+            predicates:
+              - Path=/api/v1/admin/ai/**
     config:
       retry:
         max-attempts: 10
