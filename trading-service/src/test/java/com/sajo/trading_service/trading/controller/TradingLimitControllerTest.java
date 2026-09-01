@@ -1,10 +1,14 @@
 package com.sajo.trading_service.trading.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sajo.common.exception.BusinessException;
 import com.sajo.common.exception.GlobalExceptionHandler;
 import com.sajo.trading_service.trading.controller.dto.request.TradingLimitCreateRequest;
 import com.sajo.trading_service.trading.controller.dto.response.TradingLimitCreateResponse;
+import com.sajo.trading_service.trading.controller.dto.response.TradingLimitQueryResponse;
+import com.sajo.trading_service.trading.exception.TradingErrorCode;
 import com.sajo.trading_service.trading.service.command.TradingLimitCommandService;
+import com.sajo.trading_service.trading.service.query.TradingLimitQueryService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,6 +25,7 @@ import java.util.UUID;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -37,6 +42,9 @@ class TradingLimitControllerTest {
 
     @MockitoBean
     private TradingLimitCommandService tradingLimitCommandService;
+
+    @MockitoBean
+    private TradingLimitQueryService tradingLimitQueryService;
 
     @Test
     @DisplayName("자동매매 공통 한도를 생성하면 201을 반환한다")
@@ -105,5 +113,60 @@ class TradingLimitControllerTest {
                 )
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
+    @DisplayName("자동매매 공통 한도를 조회하면 200을 반환한다")
+    void getTradingLimit() throws Exception {
+        UUID userId = UUID.randomUUID();
+        UUID tradingLimitId = UUID.randomUUID();
+
+        TradingLimitQueryResponse response =
+                new TradingLimitQueryResponse(
+                        tradingLimitId,
+                        3_000_000L,
+                        10,
+                        new BigDecimal("5.00"),
+                        Instant.now(),
+                        Instant.now()
+                );
+
+        given(tradingLimitQueryService.findByUserId(userId))
+                .willReturn(response);
+
+        mockMvc.perform(
+                        get("/api/v1/trading-limits")
+                                .param("userId", userId.toString())
+                )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.tradingLimitId")
+                        .value(tradingLimitId.toString()))
+                .andExpect(jsonPath("$.data.dailyMaxOrderAmount")
+                        .value(3_000_000))
+                .andExpect(jsonPath("$.data.dailyMaxOrderCount")
+                        .value(10))
+                .andExpect(jsonPath("$.data.dailyLossLimitRate")
+                        .value(5.00));
+    }
+
+    @Test
+    @DisplayName("자동매매 공통 한도가 없으면 404를 반환한다")
+    void getTradingLimitNotFound() throws Exception {
+        UUID userId = UUID.randomUUID();
+
+        given(tradingLimitQueryService.findByUserId(userId))
+                .willThrow(new BusinessException(
+                        TradingErrorCode.TRADING_LIMIT_NOT_FOUND
+                ));
+
+        mockMvc.perform(
+                        get("/api/v1/trading-limits")
+                                .param("userId", userId.toString())
+                )
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.errorCode")
+                        .value("AUTO_TRADING_0003"));
     }
 }
