@@ -1,0 +1,180 @@
+package com.sajo.market_service.strategy.service.command;
+
+import com.sajo.market_service.strategy.controller.dto.request.StrategyCreateRequest;
+import com.sajo.market_service.strategy.controller.dto.response.StrategyCreateResponse;
+import com.sajo.market_service.strategy.repository.command.StrategyCommandRepository;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.math.BigDecimal;
+import java.util.UUID;
+
+import com.sajo.common.exception.BusinessException;
+import com.sajo.market_service.strategy.controller.dto.request.StrategyCreateRequest;
+import com.sajo.market_service.strategy.controller.dto.response.StrategyCreateResponse;
+import com.sajo.market_service.strategy.domain.Strategy;
+import com.sajo.market_service.strategy.domain.StrategyStatus;
+import com.sajo.market_service.strategy.exception.StrategyErrorCode;
+import com.sajo.market_service.strategy.repository.command.StrategyCommandRepository;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.math.BigDecimal;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+
+@ExtendWith(MockitoExtension.class)
+class StrategyCommandServiceTest {
+
+    @Mock
+    private StrategyCommandRepository strategyCommandRepository;
+
+    private StrategyCommandService strategyCommandService;
+
+    @BeforeEach
+    void setUp() {
+        strategyCommandService = new StrategyCommandService(strategyCommandRepository);
+    }
+
+    @Test
+    @DisplayName("전략을 생성하면 기본 상태는 INACTIVE로 저장된다")
+    void createStrategy() {
+        // given
+        UUID userId = UUID.randomUUID();
+        UUID stockId = UUID.randomUUID();
+
+        StrategyCreateRequest request = new StrategyCreateRequest(
+                stockId,
+                "005930",
+                "삼성전자 눌림목 전략",
+                70_000L,
+                80_000L,
+                new BigDecimal("5.0000"),
+                new BigDecimal("10.0000"),
+                3_000_000L,
+                new BigDecimal("15.0000"),
+                new BigDecimal("1.2000"),
+                new BigDecimal("10.0000")
+        );
+
+        given(strategyCommandRepository.save(any(Strategy.class)))
+                .willAnswer(invocation -> invocation.getArgument(0));
+
+        // when
+        StrategyCreateResponse response =
+                strategyCommandService.createStrategy(userId, request);
+
+        // then
+        ArgumentCaptor<Strategy> captor = ArgumentCaptor.forClass(Strategy.class);
+        verify(strategyCommandRepository).save(captor.capture());
+
+        Strategy savedStrategy = captor.getValue();
+        assertThat(savedStrategy.getUserId()).isEqualTo(userId);
+        assertThat(savedStrategy.getStockId()).isEqualTo(stockId);
+        assertThat(savedStrategy.getStockCode()).isEqualTo("005930");
+        assertThat(savedStrategy.getStrategyName()).isEqualTo("삼성전자 눌림목 전략");
+        assertThat(savedStrategy.getBuyConditionPrice()).isEqualTo(70_000L);
+        assertThat(savedStrategy.getSellConditionPrice()).isEqualTo(80_000L);
+        assertThat(savedStrategy.getStopLossRate()).isEqualByComparingTo("5.0000");
+        assertThat(savedStrategy.getAllocatedAmount()).isEqualTo(3_000_000L);
+        assertThat(savedStrategy.getStatus()).isEqualTo(StrategyStatus.INACTIVE); // 핵심 요구사항
+
+        assertThat(response.strategyName()).isEqualTo("삼성전자 눌림목 전략");
+        assertThat(response.status()).isEqualTo(StrategyStatus.INACTIVE);
+    }
+
+    @Test
+    @DisplayName("선택 항목(목표수익률, PER·PBR·ROE 조건) 없이도 전략을 생성할 수 있다")
+    // 모든 조건 구조가 일치하기에 대표 케이스 검증
+    void createStrategyWithoutOptionalFields() {
+        // given
+        UUID userId = UUID.randomUUID();
+        UUID stockId = UUID.randomUUID();
+
+        StrategyCreateRequest request = new StrategyCreateRequest(
+                stockId, "005930", "삼성전자 눌림목 전략",
+                70_000L, 80_000L, new BigDecimal("5.0000"),
+                null, // targetReturnRate 생략
+                3_000_000L,
+                null, null, null // per/pbr/roe 생략
+        );
+
+        given(strategyCommandRepository.save(any(Strategy.class)))
+                .willAnswer(invocation -> invocation.getArgument(0));
+
+        // when
+        StrategyCreateResponse response =
+                strategyCommandService.createStrategy(userId, request);
+
+        // then
+        assertThat(response.targetReturnRate()).isNull();
+        assertThat(response.perCondition()).isNull();
+        assertThat(response.pbrCondition()).isNull();
+        assertThat(response.roeCondition()).isNull();
+        assertThat(response.status()).isEqualTo(StrategyStatus.INACTIVE);
+    }
+
+    @Test
+    @DisplayName("매수 조건 가격이 0 이하이면 전략을 생성할 수 없다")
+    // 숫자 검증
+    void createStrategyInvalidBuyConditionPrice() {
+        // given
+        UUID userId = UUID.randomUUID();
+        StrategyCreateRequest request = new StrategyCreateRequest(
+                UUID.randomUUID(), "005930", "테스트 전략",
+                0L, 80_000L, new BigDecimal("5.0000"), null,
+                3_000_000L, null, null, null
+        );
+
+        // when & then
+        assertThatThrownBy(() -> strategyCommandService.createStrategy(userId, request))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(StrategyErrorCode.INVALID_STRATEGY);
+                });
+
+        verify(strategyCommandRepository, never()).save(any(Strategy.class));
+    }
+
+    @Test
+    @DisplayName("전략명이 공백이면 전략을 생성할 수 없다")
+    // 문자열 검증
+    void createStrategyBlankName() {
+        // given
+        UUID userId = UUID.randomUUID();
+        StrategyCreateRequest request = new StrategyCreateRequest(
+                UUID.randomUUID(), "005930", "   ",
+                70_000L, 80_000L, new BigDecimal("5.0000"), null,
+                3_000_000L, null, null, null
+        );
+
+        // when & then
+        assertThatThrownBy(() -> strategyCommandService.createStrategy(userId, request))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(StrategyErrorCode.INVALID_STRATEGY);
+                });
+
+        verify(strategyCommandRepository, never()).save(any(Strategy.class));
+    }
+}
