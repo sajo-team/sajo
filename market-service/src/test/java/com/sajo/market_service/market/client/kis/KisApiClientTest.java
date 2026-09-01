@@ -1,8 +1,10 @@
 package com.sajo.market_service.market.client.kis;
 
+import com.sajo.common.exception.BusinessException;
 import com.sajo.market_service.market.client.user.dto.UserKisTokenResponse;
 import com.sajo.market_service.market.config.KisApiProperties;
 import com.sajo.market_service.market.dto.response.QuoteResponse;
+import com.sajo.market_service.market.exception.MarketErrorCode;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
@@ -67,16 +69,39 @@ class KisApiClientTest {
                         {"rt_cd":"1","msg_cd":"MCA05918","msg1":"종목코드 오류입니다."}
                         """, MediaType.APPLICATION_JSON));
 
-        IllegalStateException exception = assertThrows(
-                IllegalStateException.class,
+        BusinessException exception = assertThrows(
+                BusinessException.class,
                 () -> client.getQuote(
                         new UserKisTokenResponse("access-token", "app-key", "secret-key"),
                         "005930"
                 )
         );
 
+        assertEquals(MarketErrorCode.KIS_QUOTE_RESPONSE_INVALID, exception.getErrorCode());
         assertTrue(exception.getMessage().contains("MCA05918"));
         assertTrue(exception.getMessage().contains("종목코드 오류입니다."));
+        server.verify();
+    }
+
+    @Test
+    void throwsBusinessExceptionWhenKisResponseIsEmpty() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        KisApiClient client = new KisApiClient(builder, new KisApiProperties("https://kis.example"));
+
+        server.expect(requestTo("https://kis.example/uapi/domestic-stock/v1/quotations/inquire-price?FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=005930"))
+                .andRespond(withSuccess("", MediaType.APPLICATION_JSON));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> client.getQuote(
+                        new UserKisTokenResponse("access-token", "app-key", "secret-key"),
+                        "005930"
+                )
+        );
+
+        assertEquals(MarketErrorCode.KIS_QUOTE_RESPONSE_INVALID, exception.getErrorCode());
+        assertTrue(exception.getMessage().contains("응답이 비어 있습니다."));
         server.verify();
     }
 }

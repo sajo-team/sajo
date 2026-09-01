@@ -1,9 +1,11 @@
 package com.sajo.market_service.market.client.kis;
 
+import com.sajo.common.exception.BusinessException;
 import com.sajo.market_service.market.client.user.dto.UserKisTokenResponse;
 import com.sajo.market_service.market.config.KisApiProperties;
 import com.sajo.market_service.market.dto.kis.KisQuoteResponse;
 import com.sajo.market_service.market.dto.response.QuoteResponse;
+import com.sajo.market_service.market.exception.MarketErrorCode;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
@@ -37,10 +39,14 @@ public class KisApiClient {
                 .body(KisQuoteResponse.class);
 
         if (response == null) {
-            throw new IllegalStateException("KIS 현재가 응답이 비어 있습니다.");
+            throw new BusinessException(
+                    MarketErrorCode.KIS_QUOTE_RESPONSE_INVALID,
+                    "KIS 현재가 응답이 비어 있습니다."
+            );
         }
         if (!response.isSuccess()) {
-            throw new IllegalStateException(
+            throw new BusinessException(
+                    MarketErrorCode.KIS_QUOTE_RESPONSE_INVALID,
                     "KIS 현재가 조회에 실패했습니다. msg_cd=%s, msg1=%s"
                             .formatted(response.messageCode(), response.message())
             );
