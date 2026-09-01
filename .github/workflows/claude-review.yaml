@@ -48,6 +48,12 @@ jobs:
             PR NUMBER: ${{ github.event.pull_request.number }}
 
             Review the code changes in this pull request.
+            
+             Before reviewing:
+             - Read the repository root `CLAUDE.md`.
+             - Treat `CLAUDE.md` as the project-specific architecture and code review guidelines.
+             - Review the changed code against both `CLAUDE.md` and the criteria below.
+             - Do not invent project conventions that are not defined in `CLAUDE.md` or supported by the existing codebase.
 
             Focus on:
             - Bugs and incorrect business logic
@@ -60,12 +66,19 @@ jobs:
             - MSA service responsibility violations
             - Missing or insufficient tests
 
+            Review only the changed code and the surrounding context necessary
+            to understand the change.
+
+            Prioritize issues that can cause actual bugs, failures, security problems, data consistency problems, or maintainability issues.
+
             Do not suggest unnecessary refactoring or stylistic changes.
 
             For each important issue:
             - Explain what the problem is.
             - Explain why it can cause a problem.
             - Suggest a concrete fix.
+            
+            If there are no important issues, leave a short PR comment stating that no blocking or significant issues were found.
 
             Write the review in Korean.
 
