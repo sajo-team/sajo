@@ -8,9 +8,26 @@ spring:
     import: "optional:configserver:${CONFIG_SERVER_URL:http://localhost:8888}"
   cloud:
     gateway:
-      discovery:
-        locator:
-          enabled: true
+      server.webmvc:
+        routes:
+          - id: user-service
+            uri: lb://user-service
+            predicates:
+              - Path=/USER-SERVICE/**
+            filters:
+              - StripPrefix=1
+          - id: market-service
+            uri: lb://market-service
+            predicates:
+              - Path=/MARKET-SERVICE/**
+            filters:
+              - StripPrefix=1
+          - id: trading-service
+            uri: lb://trading-service
+            predicates:
+              - Path=/TRADING-SERVICE/**
+            filters:
+              - StripPrefix=1
     config:
       retry:
         max-attempts: 10
