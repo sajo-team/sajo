@@ -5,7 +5,6 @@ import com.sajo.common.exception.BusinessException;
 import com.sajo.common.response.ErrorResponse;
 import feign.Response;
 import feign.codec.ErrorDecoder;
-import org.springframework.http.HttpStatus;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
@@ -29,13 +28,9 @@ public class CommonFeignErrorDecoder implements ErrorDecoder {
         try {
             ErrorResponse errorResponse = objectMapper.readValue(response.body().asInputStream(), ErrorResponse.class);
 
-            FeignErrorCode errorCode = new FeignErrorCode(
-                    HttpStatus.valueOf(response.status()), errorResponse.errorCode(), errorResponse.message());
-
-            return new BusinessException(errorCode);
-        } catch (IOException | JacksonException | IllegalArgumentException e) {
-            // 상대 서비스가 우리 ErrorResponse 포맷이 아닌 응답을 줬거나 (IOException | JacksonException)
-            // 표준 HttpStatus에 없는 상태코드를 준 경우
+            return new FeignApiException(errorResponse.errorCode(), errorResponse.message(), response.status());
+        } catch (IOException | JacksonException e) {
+            // 상대 서비스가 우리 ErrorResponse 포맷이 아닌 응답을 준 경우
             return new BusinessException(ErrorResponseCode.FEIGN_CALL_FAILED);
         }
     }
