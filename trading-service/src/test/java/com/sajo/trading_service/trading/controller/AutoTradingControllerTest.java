@@ -6,26 +6,30 @@ import com.sajo.common.exception.GlobalExceptionHandler;
 import com.sajo.trading_service.trading.controller.dto.request.AutoTradingCreateRequest;
 import com.sajo.trading_service.trading.controller.dto.request.AutoTradingUpdateRequest;
 import com.sajo.trading_service.trading.controller.dto.response.AutoTradingCreateResponse;
+import com.sajo.trading_service.trading.controller.dto.response.AutoTradingQueryResponse;
 import com.sajo.trading_service.trading.controller.dto.response.AutoTradingUpdateResponse;
 import com.sajo.trading_service.trading.exception.TradingErrorCode;
 import com.sajo.trading_service.trading.service.command.AutoTradingCommandService;
+import com.sajo.trading_service.trading.service.query.AutoTradingQueryService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -41,6 +45,9 @@ class AutoTradingControllerTest {
 
     @MockitoBean
     private AutoTradingCommandService autoTradingCommandService;
+
+    @MockitoBean
+    private AutoTradingQueryService autoTradingQueryService;
 
     @Test
     @DisplayName("전략별 자동매매 설정을 생성하면 201을 반환한다")
@@ -193,5 +200,128 @@ class AutoTradingControllerTest {
                 )
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
+    @DisplayName("자동매매 설정 목록 조회에 성공한다")
+    void getAllAutoTradings_success() throws Exception {
+        // given
+        UUID userId = UUID.randomUUID();
+        UUID autoTradingId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+
+        AutoTradingQueryResponse response =
+                new AutoTradingQueryResponse(
+                        autoTradingId,
+                        strategyId,
+                        true,
+                        Instant.now(),
+                        Instant.now()
+                );
+
+        when(autoTradingQueryService.findAllByUserId(
+                eq(userId),
+                any()
+        )).thenReturn(
+                new PageImpl<>(List.of(response))
+        );
+
+        // when & then
+        mockMvc.perform(
+                        get("/api/v1/auto-tradings")
+                                .param("userId", userId.toString())
+                )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(
+                        jsonPath("$.data.content[0].autoTradingId")
+                                .value(autoTradingId.toString())
+                )
+                .andExpect(
+                        jsonPath("$.data.content[0].strategyId")
+                                .value(strategyId.toString())
+                )
+                .andExpect(
+                        jsonPath("$.data.content[0].enabled")
+                                .value(true)
+                );
+    }
+
+    @Test
+    @DisplayName("자동매매 설정 단건 조회에 성공한다")
+    void getAutoTrading_success() throws Exception {
+        // given
+        UUID userId = UUID.randomUUID();
+        UUID autoTradingId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+
+        AutoTradingQueryResponse response =
+                new AutoTradingQueryResponse(
+                        autoTradingId,
+                        strategyId,
+                        true,
+                        Instant.now(),
+                        Instant.now()
+                );
+
+        when(autoTradingQueryService.findById(
+                autoTradingId,
+                userId
+        )).thenReturn(response);
+
+        // when & then
+        mockMvc.perform(
+                        get(
+                                "/api/v1/auto-tradings/{autoTradingId}",
+                                autoTradingId
+                        )
+                                .param("userId", userId.toString())
+                )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(
+                        jsonPath("$.data.autoTradingId")
+                                .value(autoTradingId.toString())
+                )
+                .andExpect(
+                        jsonPath("$.data.strategyId")
+                                .value(strategyId.toString())
+                )
+                .andExpect(
+                        jsonPath("$.data.enabled")
+                                .value(true)
+                );
+    }
+
+    @Test
+    @DisplayName("자동매매 설정을 찾을 수 없으면 404를 반환한다")
+    void getAutoTrading_notFound() throws Exception {
+        // given
+        UUID userId = UUID.randomUUID();
+        UUID autoTradingId = UUID.randomUUID();
+
+        when(autoTradingQueryService.findById(
+                autoTradingId,
+                userId
+        )).thenThrow(
+                new BusinessException(
+                        TradingErrorCode.AUTO_TRADING_NOT_FOUND
+                )
+        );
+
+        // when & then
+        mockMvc.perform(
+                        get(
+                                "/api/v1/auto-tradings/{autoTradingId}",
+                                autoTradingId
+                        )
+                                .param("userId", userId.toString())
+                )
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(
+                        jsonPath("$.errorCode")
+                                .value("AUTO_TRADING_0008")
+                );
     }
 }
