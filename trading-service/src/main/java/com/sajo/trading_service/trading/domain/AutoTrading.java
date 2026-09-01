@@ -51,4 +51,9 @@ public class AutoTrading extends BaseUpdatableEntity {
 
         return new AutoTrading(userId, strategyId);
     }
+    public void update(
+            Boolean enabled
+    ) {
+        this.enabled = enabled;
+    }
 }
