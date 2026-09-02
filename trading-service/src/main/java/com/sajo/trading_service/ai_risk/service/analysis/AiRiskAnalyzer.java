@@ -4,6 +4,7 @@ import com.sajo.trading_service.ai_risk.client.backtest.dto.BacktestInternalResp
 import com.sajo.trading_service.ai_risk.client.strategy.dto.StrategyInternalResponse;
 import com.sajo.trading_service.ai_risk.domain.AiAnalysisFailureType;
 import com.sajo.trading_service.ai_risk.exception.AiAnalysisException;
+import com.sajo.trading_service.ai_risk.service.analysis.dto.AiRiskAnalysisOutput;
 import com.sajo.trading_service.ai_risk.service.analysis.dto.AiRiskAnalysisResult;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.client.ChatClient;
@@ -15,8 +16,11 @@ import org.springframework.stereotype.Component;
 public class AiRiskAnalyzer {
 
     private final  BeanOutputConverter<AiRiskAnalysisResult> outputConverter = new BeanOutputConverter<>(AiRiskAnalysisResult.class);
-
     private final ChatClient chatClient;
+
+    //TODO : 프롬프트 생성 API 구현 후 수정 예정
+    private static final String PROMPT_VERSION = "TEMP";
+    private static final String MODEL = "gpt-5-mini";
 
     private String createAnalysisData(
             StrategyInternalResponse strategy,
@@ -65,7 +69,7 @@ public class AiRiskAnalyzer {
         );
     }
 
-    public AiRiskAnalysisResult analyze(
+    public AiRiskAnalysisOutput analyze(
             StrategyInternalResponse strategy,
             BacktestInternalResponse backtest
     ){
@@ -87,6 +91,7 @@ public class AiRiskAnalyzer {
 
         String analysisData = createAnalysisData(strategy, backtest);
 
+        long startTime = System.currentTimeMillis();
         String rawResponse;
 
         try{
@@ -103,8 +108,19 @@ public class AiRiskAnalyzer {
             );
         }
 
+        long latencyMs = System.currentTimeMillis() - startTime;
+
         try{
-            return outputConverter.convert(rawResponse);
+            AiRiskAnalysisResult result = outputConverter.convert(rawResponse);
+
+            return new AiRiskAnalysisOutput(
+                    result,
+                    rawResponse,
+                    systemPrompt,
+                    PROMPT_VERSION,
+                    MODEL,
+                    latencyMs
+            );
 
         } catch (Exception e){
             throw new AiAnalysisException(
