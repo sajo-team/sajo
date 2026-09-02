@@ -56,7 +56,7 @@ class AccountCommandControllerTest {
         // when & then
         mockMvc.perform(
                         post("/api/v1/accounts")
-                                .header("X-User-Id", userId.toString())
+                                .param("userId", userId.toString())
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request))
                 )
@@ -76,7 +76,7 @@ class AccountCommandControllerTest {
         // when & then
         mockMvc.perform(
                         post("/api/v1/accounts")
-                                .header("X-User-Id", userId.toString())
+                                .param("userId", userId.toString())
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request))
                 )
@@ -99,7 +99,7 @@ class AccountCommandControllerTest {
         // when & then
         mockMvc.perform(
                         post("/api/v1/accounts")
-                                .header("X-User-Id", userId.toString())
+                                .param("userId", userId.toString())
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request))
                 )
