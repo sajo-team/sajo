@@ -82,12 +82,12 @@ API 성공 응답은 공통 라이브러리의 `GeneralResponse<T>`와 `GeneralR
 
 ## 7. Transaction
 
-- 데이터 상태를 변경하는 Command 작업은 적절한 Transaction 경계 안에서 처리한다.
+- 데이터 상태를 변경하는 Command 작업은 `@Transactional`을 적용하여 적절한 Transaction 경계 안에서 처리한다.
+- 조회만 수행하는 Query Service에는 `@Transactional(readOnly = true)`를 적용한다.
+- Query 작업에서는 데이터 상태를 변경하지 않는다.
 - Transaction 범위를 불필요하게 넓히지 않는다.
 - 외부 API 및 다른 서비스 호출이 Transaction 내부에 포함될 경우 장시간 Transaction이나 데이터 정합성 문제가 발생하지 않는지 확인한다.
-
-> Query Service의 `@Transactional(readOnly = true)` 적용 여부는 아직 프로젝트 공통 규칙으로 강제하지 않는다.
-
+- PR 리뷰 시 Command 작업의 Transaction 누락과 Query Service의 `readOnly = true` 누락을 확인한다.
 
 ## 8. MSA Communication
 
