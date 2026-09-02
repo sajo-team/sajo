@@ -85,10 +85,17 @@ jobs:
             git reset --hard origin/main
             git checkout ${{ github.event.workflow_run.head_sha }}
 
+            LATEST_MAIN_SHA=$(git ls-remote origin main | awk '{print $1}')
+            if [ "$LATEST_MAIN_SHA" != "${{ github.event.workflow_run.head_sha }}" ]; then
+              echo "This deploy targets ${{ github.event.workflow_run.head_sha }}, but origin/main has since moved to $LATEST_MAIN_SHA."
+              echo "A newer commit's deploy will handle this (or already has). Skipping to avoid deploying stale code."
+              exit 0
+            fi
+
             PREV_TAG=$(cat ~/sajo/.last_healthy_sha 2>/dev/null || echo "")
 
             check_health() {
-              local ports="8080 8081 8082 8083"
+              local ports="8080 8081 8082 8083 8761 8888"
               for i in $(seq 1 30); do
                 all_up=true
                 for port in $ports; do
@@ -110,7 +117,7 @@ jobs:
             docker compose -f docker-compose.prod.yaml pull
             docker compose -f docker-compose.prod.yaml up -d
 
-            echo "Waiting for gateway/user-service/market-service/trading-service health checks..."
+            echo "Waiting for health checks (discovery-service, config-server, gateway, user-service, market-service, trading-service)..."
             if check_health; then
               echo "$IMAGE_TAG" > ~/sajo/.last_healthy_sha
               echo "Deploy succeeded, all core services are healthy."
