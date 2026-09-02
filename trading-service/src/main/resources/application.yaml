@@ -57,6 +57,10 @@ spring:
       ddl-auto: validate
   mongodb:
     uri: mongodb://mongo-ai-risk:27017/ai_risk_db
+  kafka:
+    bootstrap-servers: kafka:9092
+    consumer:
+      group-id: trading-consumer-group
 
 eureka:
   client:
