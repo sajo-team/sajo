@@ -29,6 +29,7 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          show_full_output: true
 
             # 코드 리뷰 기준
             # 1. 기능 정확성: 버그, 잘못된 비즈니스 로직, Edge Case 확인
