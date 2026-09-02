@@ -6,15 +6,19 @@ import com.sajo.user_service.account.controller.dto.request.AccountCreateRequest
 import com.sajo.user_service.account.controller.dto.response.AccountResponse;
 import com.sajo.user_service.account.domain.Account;
 import com.sajo.user_service.account.service.command.AccountCommandService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.util.UUID;
 
-@RestController("/api/v1")
+@RestController
+@RequestMapping("/api/v1")
 @RequiredArgsConstructor
 public class AccountCommandController {
 
@@ -23,7 +27,7 @@ public class AccountCommandController {
     @PostMapping("/accounts")
     public ResponseEntity<GeneralResponse<AccountResponse>> createAccount(
             @RequestHeader("X-User-Id") UUID userId,
-            AccountCreateRequest request
+            @Valid @RequestBody AccountCreateRequest request
     ) {
         Account account = accountCommandService.createAccount(userId, request);
         return GeneralResponse.toResponseEntity(GeneralResponseCode.CREATED, AccountResponse.from(account));

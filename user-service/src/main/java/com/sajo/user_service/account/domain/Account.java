@@ -5,6 +5,8 @@ import com.sajo.user_service.account.crypto.AesGcmStringConverter;
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -42,17 +44,25 @@ public class Account extends BaseUpdatableEntity {
     @Column(unique = true, nullable = false)
     private String accountNoHash;
 
-    private Account(UUID userId, String appKey, String secretKey, String accountNo, String accountNoHash) {
+    @Column(nullable = false)
+    @Enumerated(value = EnumType.STRING)
+    private AccountType accountType;
+
+    private Account(
+            UUID userId, String appKey, String secretKey, String accountNo, String accountNoHash,
+            AccountType accountType) {
         this.userId = userId;
         this.appKey = appKey;
         this.secretKey = secretKey;
         this.accountNo = accountNo;
         this.accountNoHash = accountNoHash;
+        this.accountType = accountType;
     }
 
     public static Account createAccount(
-            UUID userId, String appKey, String secretKey, String accountNo, String accountNoHash) {
-        return new Account(userId, appKey, secretKey, accountNo, accountNoHash);
+            UUID userId, String appKey, String secretKey, String accountNo, String accountNoHash,
+            AccountType accountType) {
+        return new Account(userId, appKey, secretKey, accountNo, accountNoHash, accountType);
     }
 
 }

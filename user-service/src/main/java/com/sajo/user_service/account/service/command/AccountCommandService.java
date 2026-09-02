@@ -37,7 +37,8 @@ public class AccountCommandService {
         // ToDo: appKey, secretKey 유효성 검증
 
         Account account = Account.createAccount(
-                userId, request.appKey(), request.secretKey(), request.accountNo(), accountNoHash);
+                userId, request.appKey(), request.secretKey(), request.accountNo(), accountNoHash,
+                request.accountType());
 
         try {
             return accountCommandRepository.saveAndFlush(account);
