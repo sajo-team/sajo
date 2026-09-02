@@ -17,6 +17,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.math.BigDecimal;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -143,5 +144,24 @@ class StrategyQueryRepositoryTest {
         assertThat(page.getContent()).hasSize(2);
         assertThat(page.getTotalElements()).isEqualTo(3);
         assertThat(page.getTotalPages()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("전략 ID와 사용자 ID가 일치하면 상세 조회된다.")
+    void findByIdAndUserIdAndDeletedAtIsNull() {
+        // given
+        UUID userId = UUID.randomUUID();
+        Strategy saved = strategyQueryRepository.saveAndFlush(
+                newStrategy(userId, "005930", "내 전략")
+        );
+
+        // when
+        Optional<Strategy> result =
+                strategyQueryRepository.findByIdAndUserIdAndDeletedAtIsNull(saved.getId(), userId);
+
+        // then
+        assertThat(result).isPresent();
+        assertThat(result.get().getId()).isEqualTo(saved.getId());
+        assertThat(result.get().getUserId()).isEqualTo(saved.getUserId());
     }
 }

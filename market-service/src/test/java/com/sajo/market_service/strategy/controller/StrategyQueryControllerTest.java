@@ -1,6 +1,7 @@
 package com.sajo.market_service.strategy.controller;
 
 import com.sajo.common.exception.GlobalExceptionHandler;
+import com.sajo.market_service.strategy.controller.dto.response.StrategyDetailResponse;
 import com.sajo.market_service.strategy.controller.dto.response.StrategyListResponse;
 import com.sajo.market_service.strategy.controller.dto.response.StrategySummaryResponse;
 import com.sajo.market_service.strategy.domain.StrategyStatus;
@@ -14,6 +15,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
@@ -109,5 +111,37 @@ class StrategyQueryControllerTest {
         // when & then
         mockMvc.perform(get("/api/v1/strategies"))
                 .andExpect(status().isInternalServerError());
+    }
+
+    @Test
+    @DisplayName("전략 상세를 조회하면 200과 상세 정보를 반환한다.")
+    void getStrategy() throws Exception {
+        // given
+        UUID userId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+
+        StrategyDetailResponse response = new StrategyDetailResponse(
+                strategyId,
+                "005930",
+                "삼성전자 눌림목 전략",
+                70_000L,
+                80_000L,
+                new BigDecimal("5.0000"),
+                new BigDecimal("10.0000"),
+                3_000_000L,
+                StrategyStatus.INACTIVE
+        );
+
+        given(strategyQueryService.getStrategy(userId, strategyId))
+                .willReturn(response);
+
+        // when & then
+        mockMvc.perform(get("/api/v1/strategies/{strategyId}", strategyId)
+                .param("userId", userId.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.strategyId").value(strategyId.toString()))
+                .andExpect(jsonPath("$.data.stockCode").value("005930"))
+                .andExpect(jsonPath("$.data.status").value("INACTIVE"));
     }
 }
