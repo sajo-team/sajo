@@ -5,23 +5,53 @@ import org.junit.jupiter.api.Test;
 
 import java.time.LocalDate;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.assertj.core.api.Assertions.assertThat;
 
 class DailyPriceResponseTest {
 
     @Test
     void mapsKisDailyPriceFieldsToInternalResponse() {
-        KisDailyPriceResponse.KisDailyPriceOutput output = new KisDailyPriceResponse.KisDailyPriceOutput(
-                "20260901", "69000", "70500", "68800", "70000", "123456", "8610000000");
+        DailyPriceResponse response = DailyPriceResponse.from(
+                output("20260901", "69000", "70500", "68800", "70000", "123456", "8610000000"), "005930"
+        ).orElseThrow();
 
-        DailyPriceResponse response = DailyPriceResponse.from(output);
+        assertThat(response.tradeDate()).isEqualTo(LocalDate.of(2026, 9, 1));
+        assertThat(response.openPrice()).isEqualTo(69000L);
+        assertThat(response.highPrice()).isEqualTo(70500L);
+        assertThat(response.lowPrice()).isEqualTo(68800L);
+        assertThat(response.closePrice()).isEqualTo(70000L);
+        assertThat(response.volume()).isEqualTo(123456L);
+        assertThat(response.tradeAmount()).isEqualTo(8610000000L);
+    }
 
-        assertEquals(LocalDate.of(2026, 9, 1), response.tradeDate());
-        assertEquals(69000L, response.openPrice());
-        assertEquals(70500L, response.highPrice());
-        assertEquals(68800L, response.lowPrice());
-        assertEquals(70000L, response.closePrice());
-        assertEquals(123456L, response.volume());
-        assertEquals(8610000000L, response.tradeAmount());
+    @Test
+    void treatsBlankOrMalformedOptionalNumericFieldsAsNull() {
+        DailyPriceResponse response = DailyPriceResponse.from(
+                output("20260901", "", "invalid", "68800", "70000", "", "invalid"), "005930"
+        ).orElseThrow();
+
+        assertThat(response.openPrice()).isNull();
+        assertThat(response.highPrice()).isNull();
+        assertThat(response.lowPrice()).isEqualTo(68800L);
+        assertThat(response.volume()).isNull();
+        assertThat(response.tradeAmount()).isNull();
+    }
+
+    @Test
+    void skipsRowWhenRequiredTradeDateOrClosePriceIsInvalid() {
+        assertThat(DailyPriceResponse.from(
+                output("invalid-date", "69000", "70500", "68800", "70000", "123456", "8610000000"), "005930"
+        )).isEmpty();
+        assertThat(DailyPriceResponse.from(
+                output("20260901", "69000", "70500", "68800", "invalid", "123456", "8610000000"), "005930"
+        )).isEmpty();
+    }
+
+    private KisDailyPriceResponse.KisDailyPriceOutput output(
+            String tradeDate, String openPrice, String highPrice, String lowPrice, String closePrice,
+            String volume, String tradeAmount
+    ) {
+        return new KisDailyPriceResponse.KisDailyPriceOutput(
+                tradeDate, openPrice, highPrice, lowPrice, closePrice, volume, tradeAmount);
     }
 }

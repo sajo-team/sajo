@@ -125,6 +125,9 @@ public class KisApiClient {
             String message = response == null ? "응답이 비어 있습니다." : "msg_cd=%s, msg1=%s".formatted(response.messageCode(), response.message());
             throw new BusinessException(MarketErrorCode.KIS_QUOTE_RESPONSE_INVALID, "KIS 일별 시세 조회에 실패했습니다. " + message);
         }
-        return response.output2() == null ? List.of() : response.output2().stream().map(DailyPriceResponse::from).toList();
+        return response.output2() == null ? List.of() : response.output2().stream()
+                .map(output -> DailyPriceResponse.from(output, stockCode))
+                .flatMap(java.util.Optional::stream)
+                .toList();
     }
 }

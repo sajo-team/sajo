@@ -327,6 +327,28 @@ class KisApiClientTest {
         server.verify();
     }
 
+    @Test
+    void skipsInvalidDailyPriceRowAndKeepsValidRows() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        KisApiClient client = new KisApiClient(builder, new KisApiProperties("https://kis.example"));
+
+        server.expect(requestTo(dailyPriceUrl("20260901", "20260902")))
+                .andRespond(withSuccess("""
+                        {"rt_cd":"0","msg_cd":"MCA00000","msg1":"정상처리 되었습니다.","output2":[
+                          {"stck_bsop_date":"20260902","stck_oprc":"69000","stck_hgpr":"70500","stck_lwpr":"68800","stck_clpr":"70000","acml_vol":"123456","acml_tr_pbmn":"8610000000"},
+                          {"stck_bsop_date":"20260901","stck_oprc":"69000","stck_hgpr":"70500","stck_lwpr":"68800","stck_clpr":"invalid","acml_vol":"123456","acml_tr_pbmn":"8610000000"}
+                        ]}
+                        """, MediaType.APPLICATION_JSON));
+
+        List<DailyPriceResponse> prices = client.getDailyPrices(
+                CREDENTIALS, "005930", LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 2));
+
+        assertEquals(1, prices.size());
+        assertEquals(LocalDate.of(2026, 9, 2), prices.getFirst().tradeDate());
+        server.verify();
+    }
+
     private static String dailyPriceUrl(String startDate, String endDate) {
         return DAILY_PRICE_URL + "?FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=005930"
                 + "&FID_INPUT_DATE_1=" + startDate + "&FID_INPUT_DATE_2=" + endDate

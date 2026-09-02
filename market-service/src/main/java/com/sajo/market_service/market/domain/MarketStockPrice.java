@@ -16,7 +16,7 @@ import java.util.UUID;
 /**
  * 종목 현재가·일별 시세 이력 (m_market_stocks_price).
  * source(REST/WEBSOCKET)로 수집 경로를 구분하며, 수정되지 않는 이력 데이터라 BaseEntity(생성 시각만)를 상속한다.
- * 일별 시세는 stock_id + date 조합이 유일해야 한다(DB 유니크 제약으로 강제).
+ * REST 일별 시세만 stock_id + date 조합이 유일해야 한다(Partial Unique Index로 강제).
  * 이 Entity는 저장 여부를 스스로 판단하지 않는다 — 저장 시점(스케줄러/동기화 로직 전용) 정책은 Service 계층 책임이다.
  */
 @Getter
