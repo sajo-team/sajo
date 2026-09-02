@@ -112,6 +112,7 @@ public class AiRiskAnalysisProcessor {
         saveHistorySafely(history);
     }
 
+    // TODO: 프롬프트 버전 관리 구현 시 실패 이력에도 prompt version/content 저장
     private void saveParseFailureHistory(
             AiRiskAnalysisRequestedEvent event,
             AiResponseParseException exception
