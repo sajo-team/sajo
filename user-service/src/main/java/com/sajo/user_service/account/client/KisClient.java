@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 
 @Slf4j
@@ -52,6 +53,11 @@ public class KisClient {
                 throw new BusinessException(AccountErrorCode.INVALID_KIS_CREDENTIALS, message);
             }
             throw new BusinessException(AccountErrorCode.KIS_TOKEN_ISSUE_FAILED, message);
+
+        } catch (RestClientException e) {
+            // 타임아웃/연결 실패 등 HTTP 응답 자체를 못 받은 경우
+            log.warn("KIS 토큰 발급 중 네트워크 오류 발생. message={}", e.getMessage(), e);
+            throw new BusinessException(AccountErrorCode.KIS_TOKEN_ISSUE_FAILED, e.getMessage());
         }
 
         if (response == null) {
