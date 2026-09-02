@@ -84,11 +84,19 @@ jobs:
             PREV_TAG=$(cat ~/sajo/.last_healthy_sha 2>/dev/null || echo "")
 
             check_health() {
+              local ports="8080 8081 8082 8083"
               for i in $(seq 1 30); do
-                if curl -sf http://localhost:8080/actuator/health | grep -q '"status":"UP"'; then
+                all_up=true
+                for port in $ports; do
+                  if ! curl -sf http://localhost:$port/actuator/health | grep -q '"status":"UP"'; then
+                    all_up=false
+                    break
+                  fi
+                done
+                if [ "$all_up" = true ]; then
                   return 0
                 fi
-                echo "Not healthy yet, retrying ($i/30)..."
+                echo "Not all services healthy yet, retrying ($i/30)..."
                 sleep 5
               done
               return 1
@@ -98,16 +106,17 @@ jobs:
             docker compose -f docker-compose.prod.yaml pull
             docker compose -f docker-compose.prod.yaml up -d
 
-            echo "Waiting for gateway health check..."
+            echo "Waiting for gateway/user-service/market-service/trading-service health checks..."
             if check_health; then
               echo "$IMAGE_TAG" > ~/sajo/.last_healthy_sha
-              echo "Deploy succeeded, gateway is healthy."
+              echo "Deploy succeeded, all core services are healthy."
               exit 0
             fi
 
-            echo "Gateway did not become healthy within timeout."
+            echo "Services did not become healthy within timeout."
             if [ -n "$PREV_TAG" ]; then
-              echo "Rolling back to previous known-good image: $PREV_TAG"
+              echo "Rolling back to previous known-good commit: $PREV_TAG"
+              git checkout $PREV_TAG
               export IMAGE_TAG=$PREV_TAG
               docker compose -f docker-compose.prod.yaml pull
               docker compose -f docker-compose.prod.yaml up -d
