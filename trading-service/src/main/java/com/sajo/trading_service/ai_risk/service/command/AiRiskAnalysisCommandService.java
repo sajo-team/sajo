@@ -8,13 +8,9 @@ import com.sajo.trading_service.ai_risk.client.strategy.StrategyFeignClient;
 import com.sajo.trading_service.ai_risk.controller.dto.request.AiRiskAnalysisCreateRequest;
 import com.sajo.trading_service.ai_risk.controller.dto.response.AiRiskAnalysisCreateResponse;
 import com.sajo.trading_service.ai_risk.domain.AiRiskAnalysis;
-import com.sajo.trading_service.ai_risk.event.AiRiskAnalysisRequestedEvent;
 import com.sajo.trading_service.ai_risk.exception.AiRiskErrorCode;
-import com.sajo.trading_service.ai_risk.repository.command.AiRiskAnalysisCommandRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 

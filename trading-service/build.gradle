@@ -44,3 +44,12 @@ dependencyManagement {
 tasks.named('test') {
     useJUnitPlatform()
 }
+
+tasks.register('aiRiskUnitTest', Test){
+    useJUnitPlatform{
+        includeTags 'unit & ai-risk'
+    }
+
+    group = 'verification'
+    description = 'Runs AI risk unit tests only.'
+}
