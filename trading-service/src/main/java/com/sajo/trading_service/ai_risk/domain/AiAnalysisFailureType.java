@@ -1,4 +1,4 @@
-package com.sajo.trading_service.ai_risk.domain.enums;
+package com.sajo.trading_service.ai_risk.domain;
 
 public enum AiAnalysisFailureType {
     LLM_API_ERROR, //GPT API 호출 실패
