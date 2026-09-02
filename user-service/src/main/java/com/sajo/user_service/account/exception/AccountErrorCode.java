@@ -13,7 +13,11 @@ public enum AccountErrorCode implements ErrorCode {
 
     ALREADY_HAS_ACCOUNT(HttpStatus.CONFLICT, "ACCOUNT_0002", "이미 등록된 계좌가 있습니다"),
 
-    DUPLICATE_ACCOUNT_REQUEST(HttpStatus.CONFLICT, "ACCOUNT_0003", "이미 처리된 요청입니다");
+    DUPLICATE_ACCOUNT_REQUEST(HttpStatus.CONFLICT, "ACCOUNT_0003", "이미 처리된 요청입니다"),
+
+    KIS_TOKEN_ISSUE_FAILED(HttpStatus.BAD_GATEWAY, "ACCOUNT_0004", "KIS 토큰 발급에 실패했습니다"),
+
+    INVALID_KIS_CREDENTIALS(HttpStatus.BAD_REQUEST, "ACCOUNT_0005", "유효하지 않은 appKey/secretKey입니다");
 
     private final HttpStatus status;
     private final String errorCode;
