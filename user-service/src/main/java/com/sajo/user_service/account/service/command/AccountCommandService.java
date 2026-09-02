@@ -25,13 +25,13 @@ class AccountCommandService {
             UUID userId, String appKey, String secretKey, String accountNo, AccountType accountType) {
 
         // 유저당 계좌 1개 (1:1) 검증 - KIS 호출 사이의 레이스 윈도우를 잡기 위한 최종 재확인
-        if (accountCommandRepository.existsByUserId(userId)) {
+        if (accountCommandRepository.existsByUserIdAndDeletedAtIsNull(userId)) {
             throw new BusinessException(AccountErrorCode.ALREADY_HAS_ACCOUNT);
         }
 
         // 계좌 중복 검증
         String accountNoHash = hmacSha256Hasher.hash(accountNo);
-        if (accountCommandRepository.existsByAccountNoHash(accountNoHash)) {
+        if (accountCommandRepository.existsByAccountNoHashAndDeletedAtIsNull(accountNoHash)) {
             throw new BusinessException(AccountErrorCode.DUPLICATE_ACCOUNT_NO);
         }
 

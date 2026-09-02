@@ -40,9 +40,9 @@ class AccountQueryServiceTest {
         // given
         UUID userId = UUID.randomUUID();
 
-        given(accountQueryRepository.existsByUserId(userId)).willReturn(false);
+        given(accountQueryRepository.existsByUserIdAndDeletedAtIsNull(userId)).willReturn(false);
         given(hmacSha256Hasher.hash("123-456-789")).willReturn("hashed-account-no");
-        given(accountQueryRepository.existsByAccountNoHash("hashed-account-no")).willReturn(false);
+        given(accountQueryRepository.existsByAccountNoHashAndDeletedAtIsNull("hashed-account-no")).willReturn(false);
 
         // when & then
         assertThatCode(() -> accountQueryService.validateCreatable(userId, "123-456-789"))
@@ -54,7 +54,7 @@ class AccountQueryServiceTest {
     void validateCreatableFailsWhenUserAlreadyHasAccount() {
         // given
         UUID userId = UUID.randomUUID();
-        given(accountQueryRepository.existsByUserId(userId)).willReturn(true);
+        given(accountQueryRepository.existsByUserIdAndDeletedAtIsNull(userId)).willReturn(true);
 
         // when & then
         assertThatThrownBy(() -> accountQueryService.validateCreatable(userId, "123-456-789"))
@@ -71,9 +71,9 @@ class AccountQueryServiceTest {
     void validateCreatableFailsWhenAccountNoDuplicate() {
         // given
         UUID userId = UUID.randomUUID();
-        given(accountQueryRepository.existsByUserId(userId)).willReturn(false);
+        given(accountQueryRepository.existsByUserIdAndDeletedAtIsNull(userId)).willReturn(false);
         given(hmacSha256Hasher.hash("123-456-789")).willReturn("hashed-account-no");
-        given(accountQueryRepository.existsByAccountNoHash("hashed-account-no")).willReturn(true);
+        given(accountQueryRepository.existsByAccountNoHashAndDeletedAtIsNull("hashed-account-no")).willReturn(true);
 
         // when & then
         assertThatThrownBy(() -> accountQueryService.validateCreatable(userId, "123-456-789"))

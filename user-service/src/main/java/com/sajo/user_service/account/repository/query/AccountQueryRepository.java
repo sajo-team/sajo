@@ -6,6 +6,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import java.util.UUID;
 
 public interface AccountQueryRepository extends JpaRepository<Account, UUID> {
-    boolean existsByAccountNoHash(String accountNoHash);
-    boolean existsByUserId(UUID userId);
+    boolean existsByAccountNoHashAndDeletedAtIsNull(String accountNoHash);
+    boolean existsByUserIdAndDeletedAtIsNull(UUID userId);
 }

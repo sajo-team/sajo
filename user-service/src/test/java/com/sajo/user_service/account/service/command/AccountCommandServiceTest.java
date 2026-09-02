@@ -47,8 +47,8 @@ class AccountCommandServiceTest {
         UUID userId = UUID.randomUUID();
 
         given(hmacSha256Hasher.hash("123-456-789")).willReturn("hashed-account-no");
-        given(accountCommandRepository.existsByUserId(userId)).willReturn(false);
-        given(accountCommandRepository.existsByAccountNoHash("hashed-account-no")).willReturn(false);
+        given(accountCommandRepository.existsByUserIdAndDeletedAtIsNull(userId)).willReturn(false);
+        given(accountCommandRepository.existsByAccountNoHashAndDeletedAtIsNull("hashed-account-no")).willReturn(false);
         given(accountCommandRepository.saveAndFlush(any(Account.class)))
                 .willAnswer(invocation -> invocation.getArgument(0));
 
@@ -77,7 +77,7 @@ class AccountCommandServiceTest {
         // given
         UUID userId = UUID.randomUUID();
 
-        given(accountCommandRepository.existsByUserId(userId)).willReturn(true);
+        given(accountCommandRepository.existsByUserIdAndDeletedAtIsNull(userId)).willReturn(true);
 
         // when & then
         assertThatThrownBy(() -> accountCommandService.createAccount(
@@ -99,8 +99,8 @@ class AccountCommandServiceTest {
         UUID userId = UUID.randomUUID();
 
         given(hmacSha256Hasher.hash("123-456-789")).willReturn("hashed-account-no");
-        given(accountCommandRepository.existsByUserId(userId)).willReturn(false);
-        given(accountCommandRepository.existsByAccountNoHash("hashed-account-no")).willReturn(true);
+        given(accountCommandRepository.existsByUserIdAndDeletedAtIsNull(userId)).willReturn(false);
+        given(accountCommandRepository.existsByAccountNoHashAndDeletedAtIsNull("hashed-account-no")).willReturn(true);
 
         // when & then
         assertThatThrownBy(() -> accountCommandService.createAccount(
@@ -122,8 +122,8 @@ class AccountCommandServiceTest {
         UUID userId = UUID.randomUUID();
 
         given(hmacSha256Hasher.hash("123-456-789")).willReturn("hashed-account-no");
-        given(accountCommandRepository.existsByUserId(userId)).willReturn(false);
-        given(accountCommandRepository.existsByAccountNoHash("hashed-account-no")).willReturn(false);
+        given(accountCommandRepository.existsByUserIdAndDeletedAtIsNull(userId)).willReturn(false);
+        given(accountCommandRepository.existsByAccountNoHashAndDeletedAtIsNull("hashed-account-no")).willReturn(false);
         given(accountCommandRepository.saveAndFlush(any(Account.class)))
                 .willThrow(new DataIntegrityViolationException("duplicate key"));
 
