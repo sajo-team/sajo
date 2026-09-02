@@ -56,6 +56,7 @@ jobs:
   deploy:
     needs: build-and-push
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     permissions:
       contents: read
@@ -88,7 +89,7 @@ jobs:
               for i in $(seq 1 30); do
                 all_up=true
                 for port in $ports; do
-                  if ! curl -sf http://localhost:$port/actuator/health | grep -q '"status":"UP"'; then
+                  if ! curl -sf --max-time 5 http://localhost:$port/actuator/health | grep -q '"status":"UP"'; then
                     all_up=false
                     break
                   fi
