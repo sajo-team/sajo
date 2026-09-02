@@ -18,6 +18,12 @@ management:
       exposure:
         include: health,prometheus
 
+market:
+  quote-cache:
+    ttl: 60s
+    lock-ttl: 30s
+    lock-wait-timeout: 5s
+
 ---
 spring:
   config:
