@@ -18,6 +18,8 @@ public enum TradingErrorCode implements ErrorCode {
     AUTO_TRADING_ALREADY_EXISTS(HttpStatus.CONFLICT, "AUTO_TRADING_0007", "해당 전략에 대한 자동매매 설정이 이미 존재합니다"),
     AUTO_TRADING_NOT_FOUND(HttpStatus.NOT_FOUND, "AUTO_TRADING_0008", "자동매매 설정을 찾을 수 없습니다"),
     AUTO_TRADING_STATUS_CHANGE_NOT_ALLOWED(HttpStatus.CONFLICT, "AUTO_TRADING_0009", "현재 상태에서 자동매매 설정 변경이 허용되지 않습니다"),
+    INVALID_ORDER(HttpStatus.BAD_REQUEST, "AUTO_TRADING_0010", "주문 입력값이 올바르지 않습니다"),
+    ORDER_NOT_FOUND(HttpStatus.NOT_FOUND, "AUTO_TRADING_0011", "주문을 찾을 수 없습니다"),
 
     ;
 
