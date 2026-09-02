@@ -6,6 +6,7 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
 
+import java.sql.Statement;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -42,7 +43,12 @@ public class MarketStockPriceDailyRestWriter {
                 .map(price -> toParameters(stockId, price, createdAt))
                 .toArray(MapSqlParameterSource[]::new);
         int[] updateCounts = jdbcTemplate.batchUpdate(INSERT_DAILY_REST_PRICE, parameters);
-        return java.util.Arrays.stream(updateCounts).map(count -> Math.max(count, 0)).sum();
+        // SUCCESS_NO_INFO(-2) does not represent an exact inserted-row count, so exclude it from the returned count.
+        // Callers must not use this value as a correctness decision; ON CONFLICT is the final duplicate guard.
+        return java.util.Arrays.stream(updateCounts)
+                .filter(count -> count != Statement.SUCCESS_NO_INFO)
+                .map(count -> Math.max(count, 0))
+                .sum();
     }
 
     private MapSqlParameterSource toParameters(UUID stockId, DailyPriceResponse price, Instant createdAt) {

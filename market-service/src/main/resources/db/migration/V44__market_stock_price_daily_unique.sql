@@ -31,5 +31,22 @@ ALTER TABLE market_strategy.m_market_stocks_price
 ALTER TABLE market_strategy.m_market_stocks_price
     ADD COLUMN IF NOT EXISTS close_price BIGINT;
 
-ALTER TABLE market_strategy.m_market_stocks_price
-    RENAME COLUMN trade_amount TO accumulated_trade_amount;
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'market_strategy'
+          AND table_name = 'm_market_stocks_price'
+          AND column_name = 'trade_amount'
+    ) AND NOT EXISTS (
+        SELECT 1
+        FROM information_schema.columns
+        WHERE table_schema = 'market_strategy'
+          AND table_name = 'm_market_stocks_price'
+          AND column_name = 'accumulated_trade_amount'
+    ) THEN
+        ALTER TABLE market_strategy.m_market_stocks_price
+            RENAME COLUMN trade_amount TO accumulated_trade_amount;
+    END IF;
+END $$;

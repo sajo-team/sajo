@@ -14,6 +14,11 @@ public record DailyPriceResponse(LocalDate tradeDate, Long openPrice, Long highP
 
     //잘못된 KIS 데이터 파싱 처리 추가
     public static Optional<DailyPriceResponse> from(KisDailyPriceResponse.KisDailyPriceOutput output, String stockCode) {
+        if (output == null) {
+            log.warn("KIS 일별 시세 행을 건너뜁니다. stockCode={}, tradeDate=null, field=output, exceptionType=NullOutput",
+                    stockCode);
+            return Optional.empty();
+        }
         LocalDate tradeDate = parseRequiredDate(output.tradeDate(), stockCode);
         Long closePrice = parseRequiredLong(output.closePrice(), stockCode, output.tradeDate(), "closePrice");
         if (tradeDate == null || closePrice == null) {
@@ -46,7 +51,11 @@ public record DailyPriceResponse(LocalDate tradeDate, Long openPrice, Long highP
             if (value == null || value.isBlank()) {
                 throw new IllegalArgumentException("required value is blank");
             }
-            return Long.valueOf(value);
+            long parsedValue = Long.parseLong(value);
+            if (parsedValue < 0) {
+                throw new IllegalArgumentException("required value is negative");
+            }
+            return parsedValue;
         } catch (RuntimeException exception) {
             log.warn("KIS 일별 시세 행을 건너뜁니다. stockCode={}, tradeDate={}, field={}, exceptionType={}",
                     stockCode, tradeDate, fieldName, exception.getClass().getSimpleName());
@@ -66,7 +75,13 @@ public record DailyPriceResponse(LocalDate tradeDate, Long openPrice, Long highP
             if (value == null || value.isBlank()) {
                 return null;
             }
-            return Long.valueOf(value);
+            long parsedValue = Long.parseLong(value);
+            if (parsedValue < 0) {
+                log.warn("KIS 일별 시세 숫자 필드를 null로 처리합니다. stockCode={}, tradeDate={}, field={}, exceptionType=NegativeValue",
+                        stockCode, tradeDate, fieldName);
+                return null;
+            }
+            return parsedValue;
         } catch (NumberFormatException exception) {
             log.warn("KIS 일별 시세 숫자 필드를 null로 처리합니다. stockCode={}, tradeDate={}, field={}, exceptionType={}",
                     stockCode, tradeDate, fieldName, exception.getClass().getSimpleName());

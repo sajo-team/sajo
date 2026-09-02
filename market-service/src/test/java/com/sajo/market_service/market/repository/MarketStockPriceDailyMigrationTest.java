@@ -70,6 +70,7 @@ class MarketStockPriceDailyMigrationTest {
         createLegacyTable(true);
 
         applyMigration();
+        applyMigration();
 
         assertThat(constraintExists("uk_market_stock_price_stock_date_time_source")).isFalse();
         assertThat(constraintExists("uk_market_stock_price_stock_date")).isFalse();
@@ -114,11 +115,7 @@ class MarketStockPriceDailyMigrationTest {
         }
         try (Connection connection = postgres.createConnection("");
              Statement statement = connection.createStatement()) {
-            for (String statementSql : sql.split(";")) {
-                if (!statementSql.isBlank()) {
-                    statement.execute(statementSql);
-                }
-            }
+            statement.execute(sql);
         }
     }
 

@@ -47,6 +47,27 @@ class DailyPriceResponseTest {
         )).isEmpty();
     }
 
+    @Test
+    void skipsNullOutputOrNegativeClosePrice() {
+        assertThat(DailyPriceResponse.from(null, "005930")).isEmpty();
+        assertThat(DailyPriceResponse.from(
+                output("20260901", "69000", "70500", "68800", "-1", "123456", "8610000000"), "005930"
+        )).isEmpty();
+    }
+
+    @Test
+    void treatsNegativeOptionalNumericFieldsAsNull() {
+        DailyPriceResponse response = DailyPriceResponse.from(
+                output("20260901", "-1", "-1", "-1", "70000", "-1", "-1"), "005930"
+        ).orElseThrow();
+
+        assertThat(response.openPrice()).isNull();
+        assertThat(response.highPrice()).isNull();
+        assertThat(response.lowPrice()).isNull();
+        assertThat(response.volume()).isNull();
+        assertThat(response.tradeAmount()).isNull();
+    }
+
     private KisDailyPriceResponse.KisDailyPriceOutput output(
             String tradeDate, String openPrice, String highPrice, String lowPrice, String closePrice,
             String volume, String tradeAmount

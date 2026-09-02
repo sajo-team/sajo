@@ -16,6 +16,7 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -30,6 +31,7 @@ public class KisApiClient {
     private static final String DOMESTIC_STOCK_TRANSACTION_ID = "FHKST01010100";
     private static final String INQUIRE_DAILY_PRICE_PATH = "/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice";
     private static final String DAILY_PRICE_TRANSACTION_ID = "FHKST03010100";
+    private static final long MAX_DAILY_PRICE_LOOKBACK_DAYS = 365;
 
     private final RestClient restClient;
 
@@ -89,6 +91,7 @@ public class KisApiClient {
 
     public List<DailyPriceResponse> getDailyPrices(UserKisTokenResponse credentials, String stockCode,
                                                     LocalDate startDate, LocalDate endDate) {
+        validateDailyPricePeriod(startDate, endDate);
         List<DailyPriceResponse> prices = new ArrayList<>();
         Set<LocalDate> seenDates = new HashSet<>();
         LocalDate currentEndDate = endDate;
@@ -102,6 +105,16 @@ public class KisApiClient {
             currentEndDate = oldestDate.minusDays(1);
         }
         return prices.stream().sorted(Comparator.comparing(DailyPriceResponse::tradeDate)).toList();
+    }
+
+    private void validateDailyPricePeriod(LocalDate startDate, LocalDate endDate) {
+        if (startDate == null || endDate == null || startDate.isAfter(endDate)
+                || ChronoUnit.DAYS.between(startDate, endDate) > MAX_DAILY_PRICE_LOOKBACK_DAYS) {
+            throw new BusinessException(
+                    MarketErrorCode.INVALID_MARKET_STOCK_PRICE,
+                    "일별 시세 조회 기간은 최대 %d일입니다.".formatted(MAX_DAILY_PRICE_LOOKBACK_DAYS)
+            );
+        }
     }
 
     private List<DailyPriceResponse> getDailyPricePage(UserKisTokenResponse credentials, String stockCode,

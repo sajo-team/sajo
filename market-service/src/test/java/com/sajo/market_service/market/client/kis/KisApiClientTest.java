@@ -349,6 +349,20 @@ class KisApiClientTest {
         server.verify();
     }
 
+    @Test
+    void rejectsDailyPricePeriodLongerThanMaximumLookback() {
+        KisApiClient client = new KisApiClient(RestClient.builder(), new KisApiProperties("https://kis.example"));
+
+        BusinessException exception = assertThrows(BusinessException.class, () -> client.getDailyPrices(
+                CREDENTIALS,
+                "005930",
+                LocalDate.of(2025, 1, 1),
+                LocalDate.of(2026, 1, 2)
+        ));
+
+        assertEquals(MarketErrorCode.INVALID_MARKET_STOCK_PRICE, exception.getErrorCode());
+    }
+
     private static String dailyPriceUrl(String startDate, String endDate) {
         return DAILY_PRICE_URL + "?FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=005930"
                 + "&FID_INPUT_DATE_1=" + startDate + "&FID_INPUT_DATE_2=" + endDate
