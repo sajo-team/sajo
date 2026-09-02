@@ -1,7 +1,5 @@
 package com.sajo.trading_service.ai_risk.service.analysis;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sajo.trading_service.ai_risk.client.backtest.dto.BacktestInternalResponse;
 import com.sajo.trading_service.ai_risk.client.strategy.dto.StrategyInternalResponse;
 import com.sajo.trading_service.ai_risk.domain.AiAnalysisFailureType;
@@ -9,14 +7,16 @@ import com.sajo.trading_service.ai_risk.exception.AiAnalysisException;
 import com.sajo.trading_service.ai_risk.service.analysis.dto.AiRiskAnalysisResult;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.converter.BeanOutputConverter;
 import org.springframework.stereotype.Component;
 
 @Component
 @RequiredArgsConstructor
 public class AiRiskAnalyzer {
 
+    private final  BeanOutputConverter<AiRiskAnalysisResult> outputConverter = new BeanOutputConverter<>(AiRiskAnalysisResult.class);
+
     private final ChatClient chatClient;
-    private final ObjectMapper objectMapper;
 
     private String createAnalysisData(
             StrategyInternalResponse strategy,
@@ -30,6 +30,8 @@ public class AiRiskAnalyzer {
                 매도 기준 가격: %s
                 손절률: %s
                 목표 수익률: %s
+                할당 금액: %s
+                1회 주문 금액: %s
                 PER 조건: %s
                 PBR 조건: %s
                 ROE 조건: %s
@@ -48,6 +50,8 @@ public class AiRiskAnalyzer {
                 strategy.sellConditionPrice(),
                 strategy.stopLossRate(),
                 strategy.targetReturnRate(),
+                strategy.allocatedAmount(),
+                strategy.orderAmount(),
                 strategy.perCondition(),
                 strategy.pbrCondition(),
                 strategy.roeCondition(),
@@ -75,7 +79,11 @@ public class AiRiskAnalyzer {
                 
                 반드시 제공된 데이터만 분석 근거로 사용하고,
                 제공되지 않은 수치나 사실을 임의로 생성하지 마세요.
-                """;
+                
+                반드시 다음 응답 형식을 준수하세요.
+                
+                %s
+                """.formatted(outputConverter.getFormat());
 
         String analysisData = createAnalysisData(strategy, backtest);
 
@@ -96,11 +104,9 @@ public class AiRiskAnalyzer {
         }
 
         try{
-            return objectMapper.readValue(
-                    rawResponse,
-                    AiRiskAnalysisResult.class
-            );
-        } catch (JsonProcessingException e){
+            return outputConverter.convert(rawResponse);
+
+        } catch (Exception e){
             throw new AiAnalysisException(
                     AiAnalysisFailureType.RESPONSE_PARSE_ERROR,
                     "AI 응답 변환에 실패했습니다.",
