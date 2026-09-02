@@ -78,14 +78,21 @@ jobs:
             - Explain why it can cause a problem.
             - Suggest a concrete fix.
             
-            IMPORTANT:
+            IMPORTANT (execution constraints):
+            - This is a single, non-interactive CI run. There is no follow-up turn.
+            - Do NOT delegate exploration or analysis to a background subagent/Task that you plan to "wait for" — if you spawn a background task and end
+            your turn, the session terminates immediately and the task's result will be lost. You must complete all analysis synchronously within this same turn.
+            - Use Read, Glob, and Grep directly yourself to check codebase conventions. Do not use the Task tool in background mode for this review.
+
+            IMPORTANT (publishing):
             - you MUST publish the final review to the pull request.
             - Use `gh pr comment` to post a summary review comment.
             - Do not only return the review as your final response
             - If specific changed lines require feedback, you may additionally use `mcp__github_inline_comment__create_inline_comment`.
             - Even if there are no important issues, post a short PR comment stating that no blocking or significant issues were found.
-            
+
             Write the review in Korean.
 
           claude_args: |
             --allowedTools "Read,Glob,Grep,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),mcp__github_inline_comment__create_inline_comment"
+            --disallowedTools "ScheduleWakeup,SendMessage,Monitor"
