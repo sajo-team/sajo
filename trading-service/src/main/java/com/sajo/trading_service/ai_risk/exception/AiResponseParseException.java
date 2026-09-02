@@ -18,6 +18,7 @@ public class AiResponseParseException extends AiAnalysisException {
                 message,
                 cause
         );
+
         this.rawResponse = rawResponse;
     }
 }

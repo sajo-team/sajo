@@ -2,6 +2,7 @@ package com.sajo.trading_service.ai_risk.service.command;
 
 import com.sajo.trading_service.ai_risk.client.backtest.dto.BacktestInternalResponse;
 import com.sajo.trading_service.ai_risk.client.strategy.dto.StrategyInternalResponse;
+import com.sajo.trading_service.ai_risk.domain.AiAnalysisStatus;
 import com.sajo.trading_service.ai_risk.domain.AiRiskAnalysis;
 import com.sajo.trading_service.ai_risk.event.AiRiskAnalysisRequestedEvent;
 import com.sajo.trading_service.ai_risk.repository.command.AiRiskAnalysisCommandRepository;
@@ -10,6 +11,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -27,6 +29,17 @@ public class AiRiskAnalysisPersistenceService {
             StrategyInternalResponse strategy,
             BacktestInternalResponse backtest
     ){
+        Optional<AiRiskAnalysis> pendingAnalysis = aiRiskAnalysisCommandRepository.findByUserIdAndStrategyIdAndBacktestIdAndStatus(
+                userId,
+                strategyId,
+                backtestId,
+                AiAnalysisStatus.PENDING
+        );
+
+        if(pendingAnalysis.isPresent()){
+            return pendingAnalysis.get();
+        }
+
         AiRiskAnalysis analysis = AiRiskAnalysis.create(
                 userId,
                 strategyId,

@@ -16,6 +16,7 @@ import com.sajo.trading_service.ai_risk.service.analysis.dto.AiRiskAnalysisOutpu
 import com.sajo.trading_service.ai_risk.service.analysis.dto.AiRiskAnalysisResult;
 import com.sajo.trading_service.ai_risk.service.command.AiRiskAnalysisResultService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.event.TransactionPhase;
@@ -25,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AiRiskAnalysisProcessor {
@@ -139,7 +141,12 @@ public class AiRiskAnalysisProcessor {
         try{
             historyCommandRepository.save(history);
         } catch(Exception e){
-            //TODO : Mongo Audit 저장 실패 로깅 및 모니터링 추가
+            log.error(
+                    "AI 분석 감사 이력 저장 실패. analysisId={}",
+                    history.getAnalysisId(),
+                    e
+            );
+            //TODO : 모니터링 추가
         }
     }
 
@@ -166,8 +173,6 @@ public class AiRiskAnalysisProcessor {
         saveHistorySafely(history);
     }
 
-    @Async("aiAnalysisExecutor")
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void process(AiRiskAnalysisRequestedEvent event){
 
         AiRiskAnalysisOutput output = null;
@@ -221,6 +226,12 @@ public class AiRiskAnalysisProcessor {
 
             saveLlmFailureHistory(event, e);
         } catch (Exception e){
+            log.error(
+                    "AI 위험 분석 처리 중 예상하지 못한 오류 발생. analysisId={}",
+                    event.analysisId(),
+                    e
+            );
+
             aiRiskAnalysisResultService.fail(
                     event.analysisId(),
                     AiAnalysisFailureType.INTERNAL_ERROR,
