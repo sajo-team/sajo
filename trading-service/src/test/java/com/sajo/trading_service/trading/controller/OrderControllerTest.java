@@ -1,5 +1,6 @@
 package com.sajo.trading_service.trading.controller;
 
+import com.sajo.common.config.CommonPageableAutoConfiguration;
 import com.sajo.common.exception.BusinessException;
 import com.sajo.common.exception.GlobalExceptionHandler;
 import com.sajo.trading_service.trading.controller.dto.response.OrderDetailResponse;
@@ -10,12 +11,11 @@ import com.sajo.trading_service.trading.exception.TradingErrorCode;
 import com.sajo.trading_service.trading.service.query.OrderQueryService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.*;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -23,15 +23,20 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(OrderController.class)
-@Import(GlobalExceptionHandler.class)
+@Import({
+        GlobalExceptionHandler.class,
+        CommonPageableAutoConfiguration.class
+})
 class OrderControllerTest {
 
     @Autowired
@@ -202,5 +207,45 @@ class OrderControllerTest {
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.errorCode")
                         .value("AUTO_TRADING_0011"));
+    }
+
+    @Test
+    @DisplayName("주문 목록 조회 시 정렬 조건이 없으면 생성일 기준 최신순으로 조회한다")
+    void getAllOrders_defaultSortCreatedAtDesc() throws Exception {
+        // given
+        UUID userId = UUID.randomUUID();
+
+        when(orderQueryService.findOrdersByUserId(
+                eq(userId),
+                any(Pageable.class)
+        )).thenReturn(Page.empty(PageRequest.of(0, 10)));
+
+        // when
+        mockMvc.perform(
+                        get("/api/v1/orders")
+                                .param("userId", userId.toString())
+                )
+                .andExpect(status().isOk());
+
+        // then
+        ArgumentCaptor<Pageable> pageableCaptor =
+                ArgumentCaptor.forClass(Pageable.class);
+
+        verify(orderQueryService).findOrdersByUserId(
+                eq(userId),
+                pageableCaptor.capture()
+        );
+
+        Pageable pageable = pageableCaptor.getValue();
+
+        assertThat(pageable.getPageNumber()).isEqualTo(0);
+        assertThat(pageable.getPageSize()).isEqualTo(10);
+
+        Sort.Order createdAtSort =
+                pageable.getSort().getOrderFor("createdAt");
+
+        assertThat(createdAtSort).isNotNull();
+        assertThat(createdAtSort.getDirection())
+                .isEqualTo(Sort.Direction.DESC);
     }
 }
