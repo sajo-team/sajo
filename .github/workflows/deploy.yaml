@@ -83,22 +83,23 @@ jobs:
 
             PREV_TAG=$(cat ~/sajo/.last_healthy_sha 2>/dev/null || echo "")
 
+            check_health() {
+              for i in $(seq 1 30); do
+                if curl -sf http://localhost:8080/actuator/health | grep -q '"status":"UP"'; then
+                  return 0
+                fi
+                echo "Not healthy yet, retrying ($i/30)..."
+                sleep 5
+              done
+              return 1
+            }
+
             export IMAGE_TAG=${{ github.event.workflow_run.head_sha }}
             docker compose -f docker-compose.prod.yaml pull
             docker compose -f docker-compose.prod.yaml up -d
 
             echo "Waiting for gateway health check..."
-            HEALTHY=false
-            for i in $(seq 1 30); do
-              if curl -sf http://localhost:8080/actuator/health | grep -q '"status":"UP"'; then
-                HEALTHY=true
-                break
-              fi
-              echo "Not healthy yet, retrying ($i/30)..."
-              sleep 5
-            done
-
-            if [ "$HEALTHY" = true ]; then
+            if check_health; then
               echo "$IMAGE_TAG" > ~/sajo/.last_healthy_sha
               echo "Deploy succeeded, gateway is healthy."
               exit 0
@@ -110,7 +111,13 @@ jobs:
               export IMAGE_TAG=$PREV_TAG
               docker compose -f docker-compose.prod.yaml pull
               docker compose -f docker-compose.prod.yaml up -d
-              echo "Rollback attempted. Marking this deploy as failed for visibility."
+
+              echo "Verifying rollback health..."
+              if check_health; then
+                echo "Rollback succeeded, service restored to previous version. Marking this deploy as failed for visibility."
+              else
+                echo "Rollback ALSO failed health check. Service may still be down. Immediate manual intervention required."
+              fi
             else
               echo "No previous known-good image recorded — cannot roll back automatically."
             fi
