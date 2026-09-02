@@ -170,6 +170,27 @@ class MarketQuoteQueryServiceTest {
     }
 
     @Test
+    @DisplayName("Redis lock 획득이 실패해도 KIS 현재가를 직접 조회해 반환한다")
+    void returnsKisQuoteWhenRedisLockAcquisitionFails() {
+        UUID userId = UUID.randomUUID();
+        UserKisTokenResponse credentials = new UserKisTokenResponse("token", "app-key", "secret-key");
+        QuoteResponse fetchedQuote = quoteResponse(70_000L);
+        given(valueOperations.get(CACHE_KEY)).willReturn(null);
+        given(marketQuoteCacheLock.tryLock(eq(STOCK_CODE), anyString(), any(Duration.class)))
+                .willThrow(new RedisConnectionFailureException("Redis unavailable"));
+        given(userAccountFeignClient.getKisToken(userId)).willReturn(credentials);
+        given(kisApiClient.getQuote(credentials, STOCK_CODE)).willReturn(fetchedQuote);
+        doThrow(new RedisConnectionFailureException("Redis unavailable"))
+                .when(valueOperations).set(CACHE_KEY, fetchedQuote, CACHE_TTL);
+
+        QuoteResponse response = marketQuoteQueryService.getQuote(userId, STOCK_CODE);
+
+        assertThat(response).isEqualTo(fetchedQuote);
+        verify(kisApiClient).getQuote(credentials, STOCK_CODE);
+        verify(marketQuoteCacheLock, never()).unlock(eq(STOCK_CODE), anyString());
+    }
+
+    @Test
     @DisplayName("동일 종목의 동시 캐시 MISS는 한 번만 KIS를 호출한다")
     void preventsDuplicateKisCallsForSameStockCode() throws Exception {
         Map<String, QuoteResponse> cache = new ConcurrentHashMap<>();
