@@ -10,6 +10,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.ResourceAccessException;
 
 import java.math.BigDecimal;
 
@@ -21,6 +22,8 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.queryParam;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withBadRequest;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 
 class KisApiClientTest {
 
@@ -102,6 +105,74 @@ class KisApiClientTest {
 
         assertEquals(MarketErrorCode.KIS_QUOTE_RESPONSE_INVALID, exception.getErrorCode());
         assertTrue(exception.getMessage().contains("응답이 비어 있습니다."));
+        server.verify();
+    }
+
+    @Test
+    void convertsKisHttp4xxToBusinessException() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        KisApiClient client = new KisApiClient(builder, new KisApiProperties("https://kis.example"));
+
+        server.expect(requestTo("https://kis.example/uapi/domestic-stock/v1/quotations/inquire-price?FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=005930"))
+                .andRespond(withBadRequest());
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> client.getQuote(
+                        new UserKisTokenResponse("access-token", "app-key", "secret-key"),
+                        "005930"
+                )
+        );
+
+        assertEquals(MarketErrorCode.KIS_QUOTE_RESPONSE_INVALID, exception.getErrorCode());
+        assertTrue(exception.getMessage().contains("httpStatus=400"));
+        server.verify();
+    }
+
+    @Test
+    void convertsKisHttp5xxToBusinessException() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        KisApiClient client = new KisApiClient(builder, new KisApiProperties("https://kis.example"));
+
+        server.expect(requestTo("https://kis.example/uapi/domestic-stock/v1/quotations/inquire-price?FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=005930"))
+                .andRespond(withServerError());
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> client.getQuote(
+                        new UserKisTokenResponse("access-token", "app-key", "secret-key"),
+                        "005930"
+                )
+        );
+
+        assertEquals(MarketErrorCode.KIS_QUOTE_RESPONSE_INVALID, exception.getErrorCode());
+        assertTrue(exception.getMessage().contains("httpStatus=500"));
+        server.verify();
+    }
+
+    @Test
+    void convertsKisConnectionFailureToBusinessException() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        KisApiClient client = new KisApiClient(builder, new KisApiProperties("https://kis.example"));
+
+        server.expect(requestTo("https://kis.example/uapi/domestic-stock/v1/quotations/inquire-price?FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=005930"))
+                .andRespond(request -> {
+                    throw new ResourceAccessException("KIS connection timed out");
+                });
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> client.getQuote(
+                        new UserKisTokenResponse("access-token", "app-key", "secret-key"),
+                        "005930"
+                )
+        );
+
+        assertEquals(MarketErrorCode.KIS_QUOTE_RESPONSE_INVALID, exception.getErrorCode());
+        assertTrue(exception.getMessage().contains("KIS 현재가 호출에 실패"));
         server.verify();
     }
 }

@@ -8,7 +8,7 @@ import org.springframework.web.client.RestClient;
 
 @Configuration
 @EnableFeignClients(basePackages = "com.sajo.market_service.market.client.user")
-@EnableConfigurationProperties(KisApiProperties.class)
+@EnableConfigurationProperties({KisApiProperties.class, MarketQuoteCacheProperties.class})
 public class MarketClientConfiguration {
 
     @Bean
