@@ -31,6 +31,25 @@ KafkaTemplate<String, Object> template;
 template.send("order-created", new OrderCreatedEvent(orderId, ...)); // value가 JSON으로 직렬화됨, 타입 그대로 복원 가능
 ```
 
+### 서비스 간 DTO가 다를 때 (`sajo.kafka.type-mappings`)
+
+기본 상태(아래 설정 없음)에서는 `__TypeId__` 헤더에 Producer 쪽 클래스의 FQCN이 그대로 실림 → Consumer가 그 FQCN을 `Class.forName`으로 찾아 복원 시도. 그래서 Producer/Consumer가 서로 다른 DTO 클래스(다른 FQCN)를 쓰면, Consumer 클래스패스에 그 클래스가 없거나 `trustedPackages` 밖이라 역직렬화가 실패함(`DeserializationException`으로 감싸져서 재시도 없이 스킵됨 - 아래 에러 핸들링 참고).
+
+서비스마다 독립된 DTO를 쓰고 싶으면, 양쪽이 같은 alias 문자열을 약속하고 각자 자기 클래스에 매핑함:
+
+```yaml
+sajo:
+  kafka:
+    type-mappings:
+      account.linked: com.sajo.f.dto.AccountLinkedConsumerDto
+      order.executed: com.sajo.f.dto.OrderExecutedConsumerDto
+```
+
+- `SajoKafkaProperties`(`@ConfigurationProperties(prefix = "sajo.kafka")`)가 이 중첩 YAML을 `Map<String, String>`으로 바인딩함
+- 헤더엔 FQCN 대신 alias(`account.linked` 등)만 실림 - Producer 클래스명이 와이어에 노출되지 않음
+- Consumer는 Producer의 클래스를 몰라도 됨 - 같은 alias에 자기 클래스를 매핑해두면 그걸로 복원됨(필드 구조는 Jackson이 이름 기준으로 매칭하므로 양쪽 DTO 모양은 계속 맞춰줘야 함)
+- Producer/Consumer가 각자 다른 서비스(다른 Spring Boot 앱)라 이 프로퍼티도 각 서비스 `application.yml`에 독립적으로 설정함 - 같은 alias만 맞으면 됨
+
 ## 에러 핸들링 (Retry / DLT)
 
 Retry(재시도)와 DLT는 성격이 다른 결정이라 나눠서 다룸:
@@ -44,7 +63,7 @@ Retry(재시도)와 DLT는 성격이 다른 결정이라 나눠서 다룸:
 
 - 재시도 3회, 간격 1초 (`FixedBackOff`)
 - recoverer 없음 (DLT 없음) — 재시도 다 실패하면 `ERROR` 레벨로 로그만 남기고 넘어감
-- `DeserializationException`(poison pill)은 `addNotRetryableExceptions`로 재시도 대상에서 제외해둠 — 역직렬화 실패는 재시도해도 매번 똑같이 실패할 게 뻔하니, 재시도 없이 바로 로그만 남기고 스킵(`KafkaErrorHandlers.withDlt()`를 쓰는 경우엔 바로 DLT로)
+- `DeserializationException`(poison pill), `BusinessException`(도메인 규칙 위반)은 `addNotRetryableExceptions`로 재시도 대상에서 제외해둠 — 둘 다 같은 입력이면 재시도해도 매번 똑같이 실패할 게 뻔하니, 재시도 없이 바로 로그만 남기고 스킵(`KafkaErrorHandlers.withDlt()`를 쓰는 경우엔 바로 DLT로)
 - 프로퍼티로 조정 가능:
 
 ```yaml
@@ -67,6 +86,8 @@ public CommonErrorHandler kafkaErrorHandler(KafkaTemplate<Object, Object> templa
     return KafkaErrorHandlers.withDlt(template); // 원본토픽 + ".DLT" 토픽으로 재발행, 재시도 3회/1초
 }
 ```
+
+`withDlt`도 기본 핸들러와 동일하게 `DeserializationException`/`BusinessException`은 재시도 없이 바로 DLT로 보냄.
 
 재시도 간격/횟수를 기본값(1초/3회)과 다르게 쓰고 싶으면 오버로드로 직접 넘기면 됨 — `defaultKafkaErrorHandler`와 같은 프로퍼티(`sajo.kafka.error.*`)를 그대로 재사용해도 되고, 완전히 다른 값을 써도 됨:
 

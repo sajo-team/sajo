@@ -1,5 +1,6 @@
 package com.sajo.common.kafka.config;
 
+import com.sajo.common.exception.BusinessException;
 import org.apache.kafka.common.TopicPartition;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
@@ -27,8 +28,8 @@ public final class KafkaErrorHandlers {
                 (record, ex) -> new TopicPartition(record.topic() + ".DLT", record.partition())
         );
         DefaultErrorHandler handler = new DefaultErrorHandler(recoverer, new FixedBackOff(retryIntervalMs, retryCount));
-        // poison pill(역직렬화 실패)은 재시도해도 매번 똑같이 실패하니 재시도 없이 바로 DLT로 보냄
-        handler.addNotRetryableExceptions(DeserializationException.class);
+        // poison pill(역직렬화 실패)과 BusinessException(도메인 규칙 위반)은 재시도해도 매번 똑같이 실패하니 재시도 없이 바로 DLT로 보냄
+        handler.addNotRetryableExceptions(DeserializationException.class, BusinessException.class);
         return handler;
     }
 }
