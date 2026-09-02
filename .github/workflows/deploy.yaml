@@ -51,7 +51,6 @@ jobs:
           file: ${{ matrix.service }}/Dockerfile
           push: true
           tags: |
-            ghcr.io/sajo-team/sajo-${{ matrix.service }}:latest
             ghcr.io/sajo-team/sajo-${{ matrix.service }}:${{ github.event.workflow_run.head_sha }}
 
   deploy:
@@ -79,6 +78,7 @@ jobs:
 
             cd ~/sajo
             git fetch origin main
+            git reset --hard origin/main
             git checkout ${{ github.event.workflow_run.head_sha }}
 
             PREV_TAG=$(cat ~/sajo/.last_healthy_sha 2>/dev/null || echo "")
