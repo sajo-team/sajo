@@ -2,16 +2,14 @@ package com.sajo.market_service.strategy.controller;
 
 import com.sajo.common.code.GeneralResponseCode;
 import com.sajo.common.response.GeneralResponse;
+import com.sajo.market_service.strategy.controller.dto.response.StrategyDetailResponse;
 import com.sajo.market_service.strategy.controller.dto.response.StrategyListResponse;
 import com.sajo.market_service.strategy.domain.StrategyStatus;
 import com.sajo.market_service.strategy.service.query.StrategyQueryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
 
@@ -36,6 +34,16 @@ public class StrategyQueryController {
                         stockCode,
                         pageable
                 );
+
+        return GeneralResponse.toResponseEntity(GeneralResponseCode.OK, response);
+    }
+
+    @GetMapping("/{strategyId}")
+    public ResponseEntity<GeneralResponse<StrategyDetailResponse>> getStrategy(
+            @RequestParam("userId") UUID userId,
+            @PathVariable UUID strategyId
+    ) {
+        StrategyDetailResponse response = strategyQueryService.getStrategy(userId, strategyId);
 
         return GeneralResponse.toResponseEntity(GeneralResponseCode.OK, response);
     }
