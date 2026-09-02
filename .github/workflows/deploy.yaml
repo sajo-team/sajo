@@ -114,17 +114,18 @@ jobs:
             }
 
             export IMAGE_TAG=${{ github.event.workflow_run.head_sha }}
-            docker compose -f docker-compose.prod.yaml pull
-            docker compose -f docker-compose.prod.yaml up -d
-
-            echo "Waiting for health checks (discovery-service, config-server, gateway, user-service, market-service, trading-service)..."
-            if check_health; then
-              echo "$IMAGE_TAG" > ~/sajo/.last_healthy_sha
-              echo "Deploy succeeded, all core services are healthy."
-              exit 0
+            if docker compose -f docker-compose.prod.yaml pull && docker compose -f docker-compose.prod.yaml up -d; then
+              echo "Waiting for health checks (discovery-service, config-server, gateway, user-service, market-service, trading-service)..."
+              if check_health; then
+                echo "$IMAGE_TAG" > ~/sajo/.last_healthy_sha
+                echo "Deploy succeeded, all core services are healthy."
+                exit 0
+              fi
+              echo "Services did not become healthy within timeout."
+            else
+              echo "docker compose pull/up failed — the deploy command itself did not succeed."
             fi
 
-            echo "Services did not become healthy within timeout."
             if [ -n "$PREV_TAG" ]; then
               echo "Rolling back to previous known-good commit: $PREV_TAG"
               git checkout $PREV_TAG
