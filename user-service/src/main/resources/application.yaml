@@ -67,6 +67,7 @@ sajo:
     account-salt: ${ACCOUNT_ENCRYPTION_SALT}
     account-hash-key: ${ACCOUNT_HASH_KEY}
 
+
 eureka:
   client:
     service-url:

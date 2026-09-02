@@ -24,7 +24,7 @@ public class AccountCreateFacade {
         accountQueryService.validateCreatable(userId, accountNo);
 
         // 2. appKey/secretKey 유효성 검증 - 트랜잭션 밖에서 실행
-        kisClient.getAccessToken(appKey, secretKey);
+        kisClient.getAccessToken(appKey, secretKey, accountType);
 
         // 3. 최종 재확인 + 저장
         return accountCommandService.createAccount(userId, appKey, secretKey, accountNo, accountType);

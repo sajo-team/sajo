@@ -4,6 +4,7 @@ import com.sajo.common.exception.BusinessException;
 import com.sajo.user_service.account.client.dto.request.AccessTokenRequest;
 import com.sajo.user_service.account.client.dto.response.AccessTokenResponse;
 import com.sajo.user_service.account.client.dto.response.KisErrorResponse;
+import com.sajo.user_service.account.domain.AccountType;
 import com.sajo.user_service.account.exception.AccountErrorCode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
@@ -18,14 +19,17 @@ public class KisClient {
     private static final String GRANT_TYPE = "client_credentials";
     private static final String ACCESS_TOKEN_PATH = "/oauth2/tokenP";
 
-    private final RestClient restClient;
+    private final RestClient virtualRestClient;
+    private final RestClient realRestClient;
 
     public KisClient(RestClient.Builder restClientBuilder, KisApiProperties properties) {
-        this.restClient = restClientBuilder.baseUrl(properties.baseUrl()).build();
+        this.virtualRestClient = restClientBuilder.clone().baseUrl(properties.virtualBaseUrl()).build();
+        this.realRestClient = restClientBuilder.clone().baseUrl(properties.realBaseUrl()).build();
     }
 
     // kis access token 발급 요청
-    public AccessTokenResponse getAccessToken(String appKey, String secretKey) {
+    public AccessTokenResponse getAccessToken(String appKey, String secretKey, AccountType accountType) {
+        RestClient restClient = selectRestClient(accountType);
         AccessTokenRequest request = new AccessTokenRequest(GRANT_TYPE, appKey, secretKey);
 
         AccessTokenResponse response;
@@ -57,6 +61,10 @@ public class KisClient {
             );
         }
         return response;
+    }
+
+    private RestClient selectRestClient(AccountType accountType) {
+        return accountType == AccountType.REAL ? realRestClient : virtualRestClient;
     }
 
 }

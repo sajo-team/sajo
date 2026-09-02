@@ -65,7 +65,7 @@ class AccountCreateFacadeTest {
 
         InOrder inOrder = inOrder(accountQueryService, kisClient, accountCommandService);
         inOrder.verify(accountQueryService).validateCreatable(userId, "123-456-789");
-        inOrder.verify(kisClient).getAccessToken("app-key", "secret-key");
+        inOrder.verify(kisClient).getAccessToken("app-key", "secret-key", AccountType.REAL);
         inOrder.verify(accountCommandService)
                 .createAccount(userId, "app-key", "secret-key", "123-456-789", AccountType.REAL);
     }
@@ -98,7 +98,7 @@ class AccountCreateFacadeTest {
     void createAccountFailsWhenKisCredentialsInvalid() {
         // given
         UUID userId = UUID.randomUUID();
-        given(kisClient.getAccessToken("app-key", "secret-key"))
+        given(kisClient.getAccessToken("app-key", "secret-key", AccountType.REAL))
                 .willThrow(new BusinessException(AccountErrorCode.INVALID_KIS_CREDENTIALS));
 
         // when & then
