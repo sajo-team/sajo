@@ -1,0 +1,32 @@
+package com.sajo.user_service.account.service.command;
+
+import com.sajo.user_service.account.client.KisClient;
+import com.sajo.user_service.account.domain.Account;
+import com.sajo.user_service.account.domain.AccountType;
+import com.sajo.user_service.account.service.query.AccountQueryService;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
+
+import java.util.UUID;
+
+@Component
+@RequiredArgsConstructor
+public class AccountCreateFacade {
+
+    private final KisClient kisClient;
+    private final AccountQueryService accountQueryService;
+    private final AccountCommandService accountCommandService;
+
+    public Account createAccount(
+            UUID userId, String appKey, String secretKey, String accountNo, AccountType accountType) {
+
+        // 1. 빠른 사전 중복 체크 - 어차피 실패할 요청이면 외부 API(KIS) 호출을 아낀다
+        accountQueryService.validateCreatable(userId, accountNo);
+
+        // 2. appKey/secretKey 유효성 검증 - 트랜잭션 밖에서 실행
+        kisClient.getAccessToken(appKey, secretKey);
+
+        // 3. 최종 재확인 + 저장
+        return accountCommandService.createAccount(userId, appKey, secretKey, accountNo, accountType);
+    }
+}
