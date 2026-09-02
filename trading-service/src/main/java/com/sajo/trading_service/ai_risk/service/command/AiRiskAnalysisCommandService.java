@@ -22,10 +22,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AiRiskAnalysisCommandService {
 
-    private final AiRiskAnalysisCommandRepository aiRiskAnalysisCommandRepository;
     private final StrategyFeignClient strategyFeignClient;
     private final BacktestFeignClient backtestFeignClient;
-    private final ApplicationEventPublisher eventPublisher;
+    private final AiRiskAnalysisPersistenceService persistenceService;
 
     private void validateAnalysisRequest(
             UUID userId,
@@ -49,7 +48,6 @@ public class AiRiskAnalysisCommandService {
         }
     }
 
-    @Transactional
     public AiRiskAnalysisCreateResponse create(
             UUID userId,
             AiRiskAnalysisCreateRequest request
@@ -60,22 +58,16 @@ public class AiRiskAnalysisCommandService {
 
         validateAnalysisRequest(userId, strategy, backtest);
 
-        AiRiskAnalysis analysis = AiRiskAnalysis.create(
+        //여기서부터 짧은 DB Transaction
+
+        AiRiskAnalysis analysis = persistenceService.create(
                 userId,
                 request.strategyId(),
-                request.backtestId()
+                request.backtestId(),
+                strategy,
+                backtest
         );
 
-        AiRiskAnalysis savedAnalysis = aiRiskAnalysisCommandRepository.save(analysis);
-
-        eventPublisher.publishEvent(
-                new AiRiskAnalysisRequestedEvent(
-                        savedAnalysis.getId(),
-                        strategy,
-                        backtest
-                )
-        );
-
-        return AiRiskAnalysisCreateResponse.from(savedAnalysis);
+        return AiRiskAnalysisCreateResponse.from(analysis);
     }
 }
