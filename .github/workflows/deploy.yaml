@@ -8,6 +8,10 @@ on:
     branches:
       - main
 
+concurrency:
+  group: cd-deploy-main
+  cancel-in-progress: false
+
 jobs:
   build-and-push:
     if: github.event.workflow_run.conclusion == 'success'
@@ -54,15 +58,40 @@ jobs:
     needs: build-and-push
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: read
+      packages: read
+
     steps:
       - name: Deploy to EC2 via SSH
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_ACTOR: ${{ github.actor }}
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
+          envs: GHCR_TOKEN,GHCR_ACTOR
           script: |
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_ACTOR" --password-stdin
+
             cd ~/sajo
-            git pull origin main
+            git fetch origin main
+            git checkout ${{ github.event.workflow_run.head_sha }}
+
+            export IMAGE_TAG=${{ github.event.workflow_run.head_sha }}
             docker compose -f docker-compose.prod.yaml pull
             docker compose -f docker-compose.prod.yaml up -d
+
+            echo "Waiting for gateway health check..."
+            for i in $(seq 1 30); do
+              if curl -sf http://localhost:8080/actuator/health | grep -q '"status":"UP"'; then
+                echo "Gateway is healthy"
+                exit 0
+              fi
+              echo "Not healthy yet, retrying ($i/30)..."
+              sleep 5
+            done
+            echo "Gateway did not become healthy within timeout"
+            exit 1
