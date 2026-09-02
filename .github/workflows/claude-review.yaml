@@ -29,6 +29,7 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          show_full_output: true
 
             # 코드 리뷰 기준
             # 1. 기능 정확성: 버그, 잘못된 비즈니스 로직, Edge Case 확인
@@ -66,8 +67,7 @@ jobs:
             - MSA service responsibility violations
             - Missing or insufficient tests
 
-            Review only the changed code and the surrounding context necessary
-            to understand the change.
+            Review only the changed code and the surrounding context necessary to understand the change.
 
             Prioritize issues that can cause actual bugs, failures, security problems, data consistency problems, or maintainability issues.
 
@@ -78,9 +78,21 @@ jobs:
             - Explain why it can cause a problem.
             - Suggest a concrete fix.
             
-            If there are no important issues, leave a short PR comment stating that no blocking or significant issues were found.
+            IMPORTANT (execution constraints):
+            - This is a single, non-interactive CI run. There is no follow-up turn.
+            - Do NOT delegate exploration or analysis to a background subagent/Task that you plan to "wait for" — if you spawn a background task and end
+            your turn, the session terminates immediately and the task's result will be lost. You must complete all analysis synchronously within this same turn.
+            - Use Read, Glob, and Grep directly yourself to check codebase conventions. Do not use the Task tool in background mode for this review.
+
+            IMPORTANT (publishing):
+            - you MUST publish the final review to the pull request.
+            - Use `gh pr comment` to post a summary review comment.
+            - Do not only return the review as your final response
+            - If specific changed lines require feedback, you may additionally use `mcp__github_inline_comment__create_inline_comment`.
+            - Even if there are no important issues, post a short PR comment stating that no blocking or significant issues were found.
 
             Write the review in Korean.
 
           claude_args: |
             --allowedTools "Read,Glob,Grep,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),mcp__github_inline_comment__create_inline_comment"
+            --disallowedTools "ScheduleWakeup,SendMessage,Monitor"

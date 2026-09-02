@@ -95,10 +95,13 @@ public class Item extends BaseUpdatableEntity {
 - `sort`: 안 넘기면 `createdAt DESC`가 기본 정렬. 넘기면 그 값 그대로 사용
   - `updatedAt`은 기본 정렬에 안 씀 — `BaseEntity`만 상속한(수정 없는) 엔티티엔 그 필드가 없어서
 
+응답 쪽은 `Page<T>`를 그대로 반환하지 말고 `PageResponse<T>`로 감싸서 내려줌 — `content`/`page`/`size`/`totalElements`/`totalPages`만 노출하고 Spring Data 타입(`Pageable`/`Sort` 등)이 API 응답에 새지 않게 함:
+
 ```java
 @GetMapping
-public GeneralResponse<Page<ItemDto>> list(Pageable pageable) {
-    return GeneralResponse.toResponseEntity(GeneralResponseCode.OK, itemService.findAll(pageable));
+public ResponseEntity<GeneralResponse<PageResponse<ItemDto>>> list(Pageable pageable) {
+    Page<ItemDto> page = itemService.findAll(pageable);
+    return GeneralResponse.toResponseEntity(GeneralResponseCode.OK, PageResponse.from(page));
 }
 ```
 
