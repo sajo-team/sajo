@@ -123,7 +123,7 @@ services:
     restart: unless-stopped
 
   discovery-service:
-    image: ghcr.io/sajo-team/sajo-discovery-service:latest
+    image: ghcr.io/sajo-team/sajo-discovery-service:${IMAGE_TAG:-latest}
     container_name: discovery-service
     environment:
       SPRING_PROFILES_ACTIVE: prod
@@ -140,7 +140,7 @@ services:
       start_period: 10s
 
   config-server:
-    image: ghcr.io/sajo-team/sajo-config-server:latest
+    image: ghcr.io/sajo-team/sajo-config-server:${IMAGE_TAG:-latest}
     container_name: config-server
     environment:
       SPRING_PROFILES_ACTIVE: prod
@@ -163,7 +163,7 @@ services:
       start_period: 15s
 
   gateway:
-    image: ghcr.io/sajo-team/sajo-gateway:latest
+    image: ghcr.io/sajo-team/sajo-gateway:${IMAGE_TAG:-latest}
     container_name: gateway
     environment:
       SPRING_PROFILES_ACTIVE: prod
@@ -180,7 +180,7 @@ services:
     restart: unless-stopped
 
   user-service:
-    image: ghcr.io/sajo-team/sajo-user-service:latest
+    image: ghcr.io/sajo-team/sajo-user-service:${IMAGE_TAG:-latest}
     container_name: user-service
     environment:
       SPRING_PROFILES_ACTIVE: prod
@@ -200,7 +200,7 @@ services:
     restart: unless-stopped
 
   market-service:
-    image: ghcr.io/sajo-team/sajo-market-service:latest
+    image: ghcr.io/sajo-team/sajo-market-service:${IMAGE_TAG:-latest}
     container_name: market-service
     environment:
       SPRING_PROFILES_ACTIVE: prod
@@ -220,7 +220,7 @@ services:
     restart: unless-stopped
 
   trading-service:
-    image: ghcr.io/sajo-team/sajo-trading-service:latest
+    image: ghcr.io/sajo-team/sajo-trading-service:${IMAGE_TAG:-latest}
     container_name: trading-service
     environment:
       SPRING_PROFILES_ACTIVE: prod
