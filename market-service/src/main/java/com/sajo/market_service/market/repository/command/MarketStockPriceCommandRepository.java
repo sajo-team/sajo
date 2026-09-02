@@ -6,16 +6,14 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDate;
-import java.time.LocalTime;
 import java.util.UUID;
 
 @Repository
 public interface MarketStockPriceCommandRepository extends JpaRepository<MarketStockPrice, UUID> {
 
-    boolean existsByStockIdAndDateAndTimeAndSource(
+    boolean existsByStockIdAndDateAndTimeIsNullAndSource(
             UUID stockId,
             LocalDate date,
-            LocalTime time,
             PriceSource source
     );
 }
