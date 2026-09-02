@@ -2,6 +2,7 @@ package com.sajo.market_service.strategy.service.query;
 
 import com.sajo.common.exception.BusinessException;
 import com.sajo.market_service.strategy.controller.dto.response.StrategyDetailResponse;
+import com.sajo.market_service.strategy.controller.dto.response.StrategyInternalResponse;
 import com.sajo.market_service.strategy.controller.dto.response.StrategyListResponse;
 import com.sajo.market_service.strategy.domain.Strategy;
 import com.sajo.market_service.strategy.domain.StrategyStatus;
@@ -43,5 +44,12 @@ public class StrategyQueryService {
                 .orElseThrow(() -> new BusinessException(StrategyErrorCode.STRATEGY_NOT_FOUND));
 
         return StrategyDetailResponse.from(strategy);
+    }
+
+    public StrategyInternalResponse getStrategyInternal(UUID strategyId) {
+        Strategy strategy = strategyQueryRepository.findByIdAndDeletedAtIsNull(strategyId)
+                .orElseThrow(() -> new BusinessException(StrategyErrorCode.STRATEGY_NOT_FOUND));
+
+        return StrategyInternalResponse.from(strategy);
     }
 }

@@ -30,4 +30,6 @@ public interface StrategyQueryRepository extends JpaRepository<Strategy, UUID> {
     );
 
     Optional<Strategy> findByIdAndUserIdAndDeletedAtIsNull(UUID id, UUID userId);
+
+    Optional<Strategy> findByIdAndDeletedAtIsNull(UUID id);
 }
