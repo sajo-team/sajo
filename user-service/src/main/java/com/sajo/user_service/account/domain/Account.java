@@ -21,6 +21,7 @@ import java.util.UUID;
 @Entity
 @Table(name = "p_accounts")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
+//Todo: DDL 작성 시 partial unique index 적용
 public class Account extends BaseUpdatableEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)

@@ -42,7 +42,13 @@ public class KisClient {
                     .retrieve()
                     .body(AccessTokenResponse.class);
         } catch (RestClientResponseException e) {
-            KisErrorResponse kisError = e.getResponseBodyAs(KisErrorResponse.class);
+            KisErrorResponse kisError;
+            try {
+                kisError = e.getResponseBodyAs(KisErrorResponse.class);
+            } catch (RestClientException parseEx) {
+                log.warn("KIS 에러 응답 파싱 실패. body={}", e.getResponseBodyAsString());
+                kisError = null;
+            }
             String message = kisError != null ? kisError.error_description() : e.getMessage();
 
             log.warn("KIS 토큰 발급 실패. status={}, errorCode={}, message={}",
