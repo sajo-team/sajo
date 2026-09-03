@@ -2,7 +2,9 @@ package com.sajo.user_service.account.service.query;
 
 import com.sajo.user_service.account.client.KisClient;
 import com.sajo.user_service.account.client.dto.response.KisAccessTokenResponse;
+import com.sajo.user_service.account.client.dto.response.KisApprovalKeyResponse;
 import com.sajo.user_service.account.controller.dto.response.AccessTokenResponse;
+import com.sajo.user_service.account.controller.dto.response.ApprovalKeyResponse;
 import com.sajo.user_service.account.domain.Account;
 import com.sajo.user_service.account.domain.AccountType;
 import org.junit.jupiter.api.DisplayName;
@@ -105,13 +107,60 @@ class AccountKisServiceCacheTest {
         verifyNoInteractions(kisClient);
     }
 
+    @Test
+    @DisplayName("같은 userId로 접속키를 두 번 조회하면 KIS와 계좌 조회는 한 번만 일어난다")
+    void getKisApprovalKeyIsCachedPerUserId() {
+        // given
+        UUID userId = UUID.randomUUID();
+        Account account = Account.createAccount(
+                userId, "app-key", "secret-key", "123-456-789", "hashed-account-no", AccountType.REAL);
+        KisApprovalKeyResponse kisResponse = new KisApprovalKeyResponse("issued-approval-key");
+
+        given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
+        given(kisClient.getApprovalKey("app-key", "secret-key", AccountType.REAL)).willReturn(kisResponse);
+
+        // when
+        ApprovalKeyResponse first = accountKisService.getKisApprovalKey(userId);
+        ApprovalKeyResponse second = accountKisService.getKisApprovalKey(userId);
+
+        // then
+        assertThat(second).isEqualTo(first);
+        verify(accountQueryService, times(1)).getAccountByUserId(userId);
+        verify(kisClient, times(1)).getApprovalKey("app-key", "secret-key", AccountType.REAL);
+    }
+
+    @Test
+    @DisplayName("접근토큰 캐시와 접속키 캐시는 서로 섞이지 않는다")
+    void accessTokenAndApprovalKeyCachesAreIndependent() {
+        // given
+        UUID userId = UUID.randomUUID();
+        Account account = Account.createAccount(
+                userId, "app-key", "secret-key", "123-456-789", "hashed-account-no", AccountType.REAL);
+
+        given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
+        given(kisClient.getAccessToken("app-key", "secret-key", AccountType.REAL))
+                .willReturn(new KisAccessTokenResponse("issued-token", "Bearer", 86400f, "2026-01-01 00:00:00"));
+        given(kisClient.getApprovalKey("app-key", "secret-key", AccountType.REAL))
+                .willReturn(new KisApprovalKeyResponse("issued-approval-key"));
+
+        // when
+        AccessTokenResponse accessToken = accountKisService.getKisAccessToken(userId);
+        ApprovalKeyResponse approvalKey = accountKisService.getKisApprovalKey(userId);
+
+        // then
+        assertThat(accessToken.accessToken()).isEqualTo("issued-token");
+        assertThat(approvalKey.approvalKey()).isEqualTo("issued-approval-key");
+        verify(kisClient, times(1)).getAccessToken("app-key", "secret-key", AccountType.REAL);
+        verify(kisClient, times(1)).getApprovalKey("app-key", "secret-key", AccountType.REAL);
+    }
+
     @Configuration
     @EnableCaching
     static class CacheTestConfig {
 
         @Bean
         CacheManager cacheManager() {
-            return new ConcurrentMapCacheManager("kis-access-token");
+            return new ConcurrentMapCacheManager("kis-access-token", "kis-approval-key");
         }
     }
 }

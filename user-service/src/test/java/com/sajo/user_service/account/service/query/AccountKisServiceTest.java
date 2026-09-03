@@ -3,7 +3,9 @@ package com.sajo.user_service.account.service.query;
 import com.sajo.common.exception.BusinessException;
 import com.sajo.user_service.account.client.KisClient;
 import com.sajo.user_service.account.client.dto.response.KisAccessTokenResponse;
+import com.sajo.user_service.account.client.dto.response.KisApprovalKeyResponse;
 import com.sajo.user_service.account.controller.dto.response.AccessTokenResponse;
+import com.sajo.user_service.account.controller.dto.response.ApprovalKeyResponse;
 import com.sajo.user_service.account.domain.Account;
 import com.sajo.user_service.account.domain.AccountType;
 import com.sajo.user_service.account.exception.AccountErrorCode;
@@ -105,5 +107,48 @@ class AccountKisServiceTest {
                     assertThat(businessException.getErrorCode())
                             .isEqualTo(AccountErrorCode.KIS_TOKEN_ISSUE_FAILED);
                 });
+    }
+
+    @Test
+    @DisplayName("계좌 조회와 KIS 접속키 발급에 성공하면 approvalKey를 반환한다")
+    void getKisApprovalKey() {
+        // given
+        UUID userId = UUID.randomUUID();
+        Account account = Account.createAccount(
+                userId, "app-key", "secret-key", "123-456-789", "hashed-account-no", AccountType.REAL);
+        KisApprovalKeyResponse kisResponse = new KisApprovalKeyResponse("issued-approval-key");
+
+        given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
+        given(kisClient.getApprovalKey("app-key", "secret-key", AccountType.REAL)).willReturn(kisResponse);
+
+        // when
+        ApprovalKeyResponse result = accountKisService.getKisApprovalKey(userId);
+
+        // then
+        assertThat(result.approvalKey()).isEqualTo("issued-approval-key");
+
+        InOrder inOrder = inOrder(accountQueryService, kisClient);
+        inOrder.verify(accountQueryService).getAccountByUserId(userId);
+        inOrder.verify(kisClient).getApprovalKey("app-key", "secret-key", AccountType.REAL);
+    }
+
+    @Test
+    @DisplayName("계좌가 없으면 접속키 발급도 ACCOUNT_NOT_FOUND 예외를 그대로 전파하고 KIS는 호출하지 않는다")
+    void getKisApprovalKeyFailsWhenAccountNotFound() {
+        // given
+        UUID userId = UUID.randomUUID();
+        given(accountQueryService.getAccountByUserId(userId))
+                .willThrow(new BusinessException(AccountErrorCode.ACCOUNT_NOT_FOUND));
+
+        // when & then
+        assertThatThrownBy(() -> accountKisService.getKisApprovalKey(userId))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(AccountErrorCode.ACCOUNT_NOT_FOUND);
+                });
+
+        verifyNoInteractions(kisClient);
     }
 }

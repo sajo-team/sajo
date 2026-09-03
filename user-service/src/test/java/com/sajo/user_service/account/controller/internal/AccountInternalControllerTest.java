@@ -3,6 +3,7 @@ package com.sajo.user_service.account.controller.internal;
 import com.sajo.common.exception.BusinessException;
 import com.sajo.common.exception.GlobalExceptionHandler;
 import com.sajo.user_service.account.controller.dto.response.AccessTokenResponse;
+import com.sajo.user_service.account.controller.dto.response.ApprovalKeyResponse;
 import com.sajo.user_service.account.exception.AccountErrorCode;
 import com.sajo.user_service.account.service.query.AccountKisService;
 import org.junit.jupiter.api.DisplayName;
@@ -56,6 +57,34 @@ class AccountInternalControllerTest {
 
         // when & then
         mockMvc.perform(post("/internal/v1/accounts/{userId}/token", userId))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.errorCode").value("ACCOUNT_0006"));
+    }
+
+    @Test
+    @DisplayName("KIS 접속키 발급에 성공하면 200과 접속키를 반환한다")
+    void getWsToken() throws Exception {
+        // given
+        UUID userId = UUID.randomUUID();
+        given(accountKisService.getKisApprovalKey(userId))
+                .willReturn(new ApprovalKeyResponse("issued-approval-key"));
+
+        // when & then
+        mockMvc.perform(post("/internal/v1/accounts/{userId}/ws-token", userId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.approvalKey").value("issued-approval-key"));
+    }
+
+    @Test
+    @DisplayName("계좌가 없으면 접속키 발급도 404를 반환한다")
+    void getWsTokenAccountNotFound() throws Exception {
+        // given
+        UUID userId = UUID.randomUUID();
+        given(accountKisService.getKisApprovalKey(userId))
+                .willThrow(new BusinessException(AccountErrorCode.ACCOUNT_NOT_FOUND));
+
+        // when & then
+        mockMvc.perform(post("/internal/v1/accounts/{userId}/ws-token", userId))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.errorCode").value("ACCOUNT_0006"));
     }
