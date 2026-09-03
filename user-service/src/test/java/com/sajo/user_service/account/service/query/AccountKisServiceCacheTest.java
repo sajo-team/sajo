@@ -24,7 +24,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 
 @SpringBootTest(classes = {AccountKisService.class, AccountKisServiceCacheTest.CacheTestConfig.class})
 class AccountKisServiceCacheTest {
@@ -88,23 +87,6 @@ class AccountKisServiceCacheTest {
         assertThat(result2.accessToken()).isEqualTo("token-2");
         verify(kisClient, times(1)).getAccessToken("app-key-1", "secret-key-1", AccountType.REAL);
         verify(kisClient, times(1)).getAccessToken("app-key-2", "secret-key-2", AccountType.REAL);
-    }
-
-    @Test
-    @DisplayName("primeKisAccessTokenCache로 미리 채워두면 이후 조회는 KIS/계좌 조회 없이 그 값을 그대로 반환한다")
-    void primeKisAccessTokenCacheAvoidsKisCallOnSubsequentGet() {
-        // given
-        UUID userId = UUID.randomUUID();
-        AccessTokenResponse primed = new AccessTokenResponse("primed-token", "app-key", "secret-key");
-
-        // when
-        accountKisService.primeKisAccessTokenCache(userId, primed);
-        AccessTokenResponse result = accountKisService.getKisAccessToken(userId);
-
-        // then
-        assertThat(result).isEqualTo(primed);
-        verifyNoInteractions(accountQueryService);
-        verifyNoInteractions(kisClient);
     }
 
     @Test

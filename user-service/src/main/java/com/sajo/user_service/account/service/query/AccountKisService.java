@@ -7,7 +7,6 @@ import com.sajo.user_service.account.controller.dto.response.AccessTokenResponse
 import com.sajo.user_service.account.controller.dto.response.ApprovalKeyResponse;
 import com.sajo.user_service.account.domain.Account;
 import lombok.RequiredArgsConstructor;
-import org.springframework.cache.annotation.CachePut;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
@@ -31,12 +30,6 @@ public class AccountKisService {
                 kisClient.getAccessToken(account.getAppKey(), account.getSecretKey(), account.getAccountType());
 
         return new AccessTokenResponse(accessToken.access_token(), account.getAppKey(), account.getSecretKey());
-    }
-
-    // 계좌 생성 시 검증차 이미 발급받은 토큰을 그대로 캐시에 채워 넣는다
-    @CachePut(cacheNames = "kis-access-token", key = "#userId")
-    public AccessTokenResponse primeKisAccessTokenCache(UUID userId, AccessTokenResponse response) {
-        return response;
     }
 
     // ToDo : 캐시 만료 시 kis 중복 요청 방지 위해 분산락 적용 (접근토큰과 동일한 이슈)

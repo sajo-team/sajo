@@ -5,7 +5,6 @@ import com.sajo.user_service.account.client.dto.response.KisAccessTokenResponse;
 import com.sajo.user_service.account.controller.dto.response.AccessTokenResponse;
 import com.sajo.user_service.account.domain.Account;
 import com.sajo.user_service.account.domain.AccountType;
-import com.sajo.user_service.account.service.query.AccountKisService;
 import com.sajo.user_service.account.service.query.AccountQueryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,7 +20,7 @@ public class AccountCreateFacade {
     private final KisClient kisClient;
     private final AccountQueryService accountQueryService;
     private final AccountCommandService accountCommandService;
-    private final AccountKisService accountKisService;
+    private final AccountKisCommandService accountKisCommandService;
 
     public Account createAccount(
             UUID userId, String appKey, String secretKey, String accountNo, AccountType accountType) {
@@ -39,7 +38,7 @@ public class AccountCreateFacade {
         //    (직후 내부 토큰 조회 API가 KIS를 재호출해 1분당 1회 제한에 걸리는 것을 방지)
         //    캐시 저장 실패해도 예외를 던지지 않고 성공 처리한다.
         try {
-            accountKisService.primeKisAccessTokenCache(
+            accountKisCommandService.primeKisAccessTokenCache(
                     userId, new AccessTokenResponse(kisResponse.access_token(), appKey, secretKey));
         } catch (Exception e) {
             log.warn("계좌 생성 시 KIS 토큰 캐시 프라이밍 실패. userId={}", userId, e);

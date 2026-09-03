@@ -7,7 +7,6 @@ import com.sajo.user_service.account.controller.dto.response.AccessTokenResponse
 import com.sajo.user_service.account.domain.Account;
 import com.sajo.user_service.account.domain.AccountType;
 import com.sajo.user_service.account.exception.AccountErrorCode;
-import com.sajo.user_service.account.service.query.AccountKisService;
 import com.sajo.user_service.account.service.query.AccountQueryService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -42,14 +41,14 @@ class AccountCreateFacadeTest {
     private AccountCommandService accountCommandService;
 
     @Mock
-    private AccountKisService accountKisService;
+    private AccountKisCommandService accountKisCommandService;
 
     private AccountCreateFacade accountCreateFacade;
 
     @BeforeEach
     void setUp() {
         accountCreateFacade =
-                new AccountCreateFacade(kisClient, accountQueryService, accountCommandService, accountKisService);
+                new AccountCreateFacade(kisClient, accountQueryService, accountCommandService, accountKisCommandService);
     }
 
     @Test
@@ -73,12 +72,12 @@ class AccountCreateFacadeTest {
         // then
         assertThat(result).isEqualTo(account);
 
-        InOrder inOrder = inOrder(accountQueryService, kisClient, accountCommandService, accountKisService);
+        InOrder inOrder = inOrder(accountQueryService, kisClient, accountCommandService, accountKisCommandService);
         inOrder.verify(accountQueryService).validateCreatable(userId, "123-456-789");
         inOrder.verify(kisClient).getAccessToken("app-key", "secret-key", AccountType.REAL);
         inOrder.verify(accountCommandService)
                 .createAccount(userId, "app-key", "secret-key", "123-456-789", AccountType.REAL);
-        inOrder.verify(accountKisService)
+        inOrder.verify(accountKisCommandService)
                 .primeKisAccessTokenCache(userId, new AccessTokenResponse("issued-token", "app-key", "secret-key"));
     }
 
@@ -103,7 +102,7 @@ class AccountCreateFacadeTest {
         verifyNoInteractions(kisClient);
         verify(accountCommandService, never())
                 .createAccount(any(), any(), any(), any(), any());
-        verifyNoInteractions(accountKisService);
+        verifyNoInteractions(accountKisCommandService);
     }
 
     @Test
@@ -126,7 +125,7 @@ class AccountCreateFacadeTest {
 
         verify(accountCommandService, never())
                 .createAccount(any(), any(), any(), any(), any());
-        verifyNoInteractions(accountKisService);
+        verifyNoInteractions(accountKisCommandService);
     }
 
     @Test
@@ -151,7 +150,7 @@ class AccountCreateFacadeTest {
                             .isEqualTo(AccountErrorCode.DUPLICATE_ACCOUNT_NO);
                 });
 
-        verifyNoInteractions(accountKisService);
+        verifyNoInteractions(accountKisCommandService);
     }
 
     @Test
@@ -168,7 +167,7 @@ class AccountCreateFacadeTest {
         given(accountCommandService.createAccount(userId, "app-key", "secret-key", "123-456-789", AccountType.REAL))
                 .willReturn(account);
         willThrow(new RuntimeException("Redis 연결 실패"))
-                .given(accountKisService).primeKisAccessTokenCache(any(), any());
+                .given(accountKisCommandService).primeKisAccessTokenCache(any(), any());
 
         // when
         Account result = accountCreateFacade.createAccount(
