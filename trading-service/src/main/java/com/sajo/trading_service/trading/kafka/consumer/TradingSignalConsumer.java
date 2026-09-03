@@ -20,7 +20,6 @@ import java.util.Set;
 public class TradingSignalConsumer {
 
     private static final Set<ErrorCode> SKIPPABLE_ERROR_CODES = Set.of(
-            TradingErrorCode.AUTO_TRADING_NOT_FOUND,
             TradingErrorCode.AUTO_TRADING_DISABLED,
             TradingErrorCode.ORDER_QUANTITY_NOT_AVAILABLE,
             TradingErrorCode.DAILY_ORDER_COUNT_LIMIT_EXCEEDED,
@@ -46,6 +45,19 @@ public class TradingSignalConsumer {
         try {
             tradingSignalCommandService.processSignal(event);
         } catch (BusinessException e) {
+
+            if (e.getErrorCode().equals(
+                    TradingErrorCode.AUTO_TRADING_NOT_FOUND
+            )) {
+                log.warn(
+                        "AutoTrading 설정을 찾을 수 없어 매매 Signal 주문 생성을 스킵합니다. signalId={}, userId={}, strategyId={}",
+                        event.payload().signalId(),
+                        event.payload().userId(),
+                        event.payload().strategyId()
+                );
+                return;
+            }
+
             if (SKIPPABLE_ERROR_CODES.contains(e.getErrorCode())) {
                 log.info(
                         "매매 Signal 주문 생성 스킵. signalId={}, errorCode={}",

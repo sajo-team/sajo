@@ -160,6 +160,51 @@ class TradingSignalConsumerTest {
         verify(tradingSignalCommandService).processSignal(event);
     }
 
+    @Test
+    @DisplayName("BusinessException이 아닌 예외는 그대로 전파한다")
+    void consume_shouldRethrowNonBusinessException() {
+        // given
+        TradingSignalGeneratedEvent event = createValidEvent();
+
+        when(validator.validate(event))
+                .thenReturn(Set.of());
+
+        doThrow(new RuntimeException("DB connection error"))
+                .when(tradingSignalCommandService)
+                .processSignal(event);
+
+        // when & then
+        assertThatThrownBy(() ->
+                tradingSignalConsumer.consume(event)
+        )
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("DB connection error");
+
+        verify(tradingSignalCommandService)
+                .processSignal(event);
+    }
+
+    @Test
+    @DisplayName("AutoTrading이 없으면 예외를 전파하지 않고 스킵한다")
+    void consume_shouldSkipWhenAutoTradingNotFound() {
+        TradingSignalGeneratedEvent event = createValidEvent();
+
+        when(validator.validate(event))
+                .thenReturn(Set.of());
+
+        doThrow(new BusinessException(
+                TradingErrorCode.AUTO_TRADING_NOT_FOUND
+        )).when(tradingSignalCommandService)
+                .processSignal(event);
+
+        assertThatCode(() ->
+                tradingSignalConsumer.consume(event)
+        ).doesNotThrowAnyException();
+
+        verify(tradingSignalCommandService)
+                .processSignal(event);
+    }
+
     private TradingSignalGeneratedEvent createValidEvent() {
         UUID userId = UUID.randomUUID();
 
