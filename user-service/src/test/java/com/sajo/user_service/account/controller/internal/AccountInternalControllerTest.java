@@ -4,8 +4,11 @@ import com.sajo.common.exception.BusinessException;
 import com.sajo.common.exception.GlobalExceptionHandler;
 import com.sajo.user_service.account.controller.dto.response.AccessTokenResponse;
 import com.sajo.user_service.account.controller.dto.response.ApprovalKeyResponse;
+import com.sajo.user_service.account.domain.Account;
+import com.sajo.user_service.account.domain.AccountType;
 import com.sajo.user_service.account.exception.AccountErrorCode;
 import com.sajo.user_service.account.service.query.AccountKisQueryService;
+import com.sajo.user_service.account.service.query.AccountQueryService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,6 +20,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.util.UUID;
 
 import static org.mockito.BDDMockito.given;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -30,6 +34,9 @@ class AccountInternalControllerTest {
 
     @MockitoBean
     private AccountKisQueryService accountKisQueryService;
+
+    @MockitoBean
+    private AccountQueryService accountQueryService;
 
     @Test
     @DisplayName("KIS 접근토큰 발급에 성공하면 200과 토큰 정보를 반환한다")
@@ -85,6 +92,37 @@ class AccountInternalControllerTest {
 
         // when & then
         mockMvc.perform(post("/internal/v1/accounts/{userId}/ws-token", userId))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.errorCode").value("ACCOUNT_0006"));
+    }
+
+    @Test
+    @DisplayName("주문용 계좌 정보 조회에 성공하면 200과 cano/accountProductCode/accountType을 반환한다")
+    void getAccountOrderInfo() throws Exception {
+        // given
+        UUID userId = UUID.randomUUID();
+        Account account = Account.createAccount(
+                userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
+        given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
+
+        // when & then
+        mockMvc.perform(get("/internal/v1/accounts/{userId}/order-info", userId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.cano").value("12345678"))
+                .andExpect(jsonPath("$.accountProductCode").value("01"))
+                .andExpect(jsonPath("$.accountType").value("REAL"));
+    }
+
+    @Test
+    @DisplayName("계좌가 없으면 주문용 계좌 정보 조회도 404를 반환한다")
+    void getAccountOrderInfoAccountNotFound() throws Exception {
+        // given
+        UUID userId = UUID.randomUUID();
+        given(accountQueryService.getAccountByUserId(userId))
+                .willThrow(new BusinessException(AccountErrorCode.ACCOUNT_NOT_FOUND));
+
+        // when & then
+        mockMvc.perform(get("/internal/v1/accounts/{userId}/order-info", userId))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.errorCode").value("ACCOUNT_0006"));
     }
