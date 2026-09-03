@@ -39,6 +39,9 @@ spring:
       ddl-auto: update
   mongodb:
     uri: mongodb://localhost:27017/ai_risk_db
+  ai:
+    openai:
+      api-key: ${OPENAI_API_KEY}
 
 eureka:
   client:

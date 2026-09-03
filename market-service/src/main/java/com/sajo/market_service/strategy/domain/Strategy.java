@@ -49,6 +49,9 @@ public class Strategy extends BaseUpdatableEntity {
     @Column(name = "allocated_amount", nullable = false)
     private Long allocatedAmount;
 
+    @Column(name = "order_amount")
+    private Long orderAmount;
+
     @Column(name = "per_condition", precision = 10, scale = 4)
     private BigDecimal perCondition;
 
@@ -88,6 +91,7 @@ public class Strategy extends BaseUpdatableEntity {
         this.stopLossRate = stopLossRate;
         this.targetReturnRate = targetReturnRate;
         this.allocatedAmount = allocatedAmount;
+        this.orderAmount = null;
         this.perCondition = perCondition;
         this.pbrCondition = pbrCondition;
         this.roeCondition = roeCondition;
