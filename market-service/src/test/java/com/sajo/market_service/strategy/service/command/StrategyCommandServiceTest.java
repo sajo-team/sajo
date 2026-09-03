@@ -511,4 +511,26 @@ class StrategyCommandServiceTest {
                     assertThat(businessException.getErrorCode()).isEqualTo(StrategyErrorCode.INVALID_STRATEGY);
                 });
     }
+
+    @Test
+    @DisplayName("활성화할 전략이 없으면 예외가 발생한다.")
+    void updateActivationStrategyNotFound() {
+        // given
+        UUID userId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+
+        StrategyActivationRequest request = new StrategyActivationRequest(true);
+
+        given(strategyCommandRepository.findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId))
+                .willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> strategyCommandService.updateActivation(userId, strategyId, request))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(StrategyErrorCode.STRATEGY_NOT_FOUND);
+                });
+    }
 }
