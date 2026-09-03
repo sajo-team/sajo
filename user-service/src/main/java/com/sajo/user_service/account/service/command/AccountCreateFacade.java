@@ -2,7 +2,6 @@ package com.sajo.user_service.account.service.command;
 
 import com.sajo.user_service.account.client.KisClient;
 import com.sajo.user_service.account.client.dto.response.KisAccessTokenResponse;
-import com.sajo.user_service.account.controller.dto.response.AccessTokenResponse;
 import com.sajo.user_service.account.domain.Account;
 import com.sajo.user_service.account.domain.AccountType;
 import com.sajo.user_service.account.service.query.AccountQueryService;
@@ -38,8 +37,7 @@ public class AccountCreateFacade {
         //    (직후 내부 토큰 조회 API가 KIS를 재호출해 1분당 1회 제한에 걸리는 것을 방지)
         //    캐시 저장 실패해도 예외를 던지지 않고 성공 처리한다.
         try {
-            accountKisCommandService.primeKisAccessTokenCache(
-                    userId, new AccessTokenResponse(kisResponse.access_token(), appKey, secretKey));
+            accountKisCommandService.primeKisAccessTokenCache(userId, kisResponse.access_token());
         } catch (Exception e) {
             log.warn("계좌 생성 시 KIS 토큰 캐시 프라이밍 실패. userId={}", userId, e);
         }

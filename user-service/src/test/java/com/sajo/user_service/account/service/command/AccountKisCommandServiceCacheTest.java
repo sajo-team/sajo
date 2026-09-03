@@ -1,6 +1,5 @@
 package com.sajo.user_service.account.service.command;
 
-import com.sajo.user_service.account.controller.dto.response.AccessTokenResponse;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -30,14 +29,14 @@ class AccountKisCommandServiceCacheTest {
     void primeKisAccessTokenCacheStoresValueInCache() {
         // given
         UUID userId = UUID.randomUUID();
-        AccessTokenResponse primed = new AccessTokenResponse("primed-token", "app-key", "secret-key");
+        String primed = "primed-token";
 
         // when
-        AccessTokenResponse result = accountKisCommandService.primeKisAccessTokenCache(userId, primed);
+        String result = accountKisCommandService.primeKisAccessTokenCache(userId, primed);
 
         // then
         assertThat(result).isEqualTo(primed);
-        assertThat(cacheManager.getCache("kis-access-token").get(userId, AccessTokenResponse.class))
+        assertThat(cacheManager.getCache("kis-access-token").get(userId, String.class))
                 .isEqualTo(primed);
     }
 

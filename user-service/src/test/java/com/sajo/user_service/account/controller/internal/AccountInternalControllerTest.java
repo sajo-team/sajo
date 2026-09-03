@@ -5,7 +5,7 @@ import com.sajo.common.exception.GlobalExceptionHandler;
 import com.sajo.user_service.account.controller.dto.response.AccessTokenResponse;
 import com.sajo.user_service.account.controller.dto.response.ApprovalKeyResponse;
 import com.sajo.user_service.account.exception.AccountErrorCode;
-import com.sajo.user_service.account.service.query.AccountKisService;
+import com.sajo.user_service.account.service.query.AccountKisQueryService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,14 +29,14 @@ class AccountInternalControllerTest {
     private MockMvc mockMvc;
 
     @MockitoBean
-    private AccountKisService accountKisService;
+    private AccountKisQueryService accountKisQueryService;
 
     @Test
     @DisplayName("KIS 접근토큰 발급에 성공하면 200과 토큰 정보를 반환한다")
     void getToken() throws Exception {
         // given
         UUID userId = UUID.randomUUID();
-        given(accountKisService.getKisAccessToken(userId))
+        given(accountKisQueryService.getKisAccessToken(userId))
                 .willReturn(new AccessTokenResponse("issued-token", "app-key", "secret-key"));
 
         // when & then
@@ -52,7 +52,7 @@ class AccountInternalControllerTest {
     void getTokenAccountNotFound() throws Exception {
         // given
         UUID userId = UUID.randomUUID();
-        given(accountKisService.getKisAccessToken(userId))
+        given(accountKisQueryService.getKisAccessToken(userId))
                 .willThrow(new BusinessException(AccountErrorCode.ACCOUNT_NOT_FOUND));
 
         // when & then
@@ -66,7 +66,7 @@ class AccountInternalControllerTest {
     void getWsToken() throws Exception {
         // given
         UUID userId = UUID.randomUUID();
-        given(accountKisService.getKisApprovalKey(userId))
+        given(accountKisQueryService.getKisApprovalKey(userId))
                 .willReturn(new ApprovalKeyResponse("issued-approval-key"));
 
         // when & then
@@ -80,7 +80,7 @@ class AccountInternalControllerTest {
     void getWsTokenAccountNotFound() throws Exception {
         // given
         UUID userId = UUID.randomUUID();
-        given(accountKisService.getKisApprovalKey(userId))
+        given(accountKisQueryService.getKisApprovalKey(userId))
                 .willThrow(new BusinessException(AccountErrorCode.ACCOUNT_NOT_FOUND));
 
         // when & then

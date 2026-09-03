@@ -2,7 +2,6 @@ package com.sajo.user_service.account.service.query;
 
 import com.sajo.common.exception.BusinessException;
 import com.sajo.user_service.account.client.KisClient;
-import com.sajo.user_service.account.client.dto.response.KisAccessTokenResponse;
 import com.sajo.user_service.account.client.dto.response.KisApprovalKeyResponse;
 import com.sajo.user_service.account.controller.dto.response.AccessTokenResponse;
 import com.sajo.user_service.account.controller.dto.response.ApprovalKeyResponse;
@@ -26,7 +25,7 @@ import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 @ExtendWith(MockitoExtension.class)
-class AccountKisServiceTest {
+class AccountKisQueryServiceTest {
 
     @Mock
     private AccountQueryService accountQueryService;
@@ -34,11 +33,14 @@ class AccountKisServiceTest {
     @Mock
     private KisClient kisClient;
 
-    private AccountKisService accountKisService;
+    @Mock
+    private KisAccessTokenCacheService kisAccessTokenCacheService;
+
+    private AccountKisQueryService accountKisQueryService;
 
     @BeforeEach
     void setUp() {
-        accountKisService = new AccountKisService(accountQueryService, kisClient);
+        accountKisQueryService = new AccountKisQueryService(accountQueryService, kisClient, kisAccessTokenCacheService);
     }
 
     @Test
@@ -48,23 +50,23 @@ class AccountKisServiceTest {
         UUID userId = UUID.randomUUID();
         Account account = Account.createAccount(
                 userId, "app-key", "secret-key", "123-456-789", "hashed-account-no", AccountType.REAL);
-        KisAccessTokenResponse kisResponse =
-                new KisAccessTokenResponse("issued-token", "Bearer", 86400f, "2026-01-01 00:00:00");
 
         given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
-        given(kisClient.getAccessToken("app-key", "secret-key", AccountType.REAL)).willReturn(kisResponse);
+        given(kisAccessTokenCacheService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL))
+                .willReturn("issued-token");
 
         // when
-        AccessTokenResponse result = accountKisService.getKisAccessToken(userId);
+        AccessTokenResponse result = accountKisQueryService.getKisAccessToken(userId);
 
         // then
         assertThat(result.accessToken()).isEqualTo("issued-token");
         assertThat(result.appKey()).isEqualTo("app-key");
         assertThat(result.secretKey()).isEqualTo("secret-key");
 
-        InOrder inOrder = inOrder(accountQueryService, kisClient);
+        InOrder inOrder = inOrder(accountQueryService, kisAccessTokenCacheService);
         inOrder.verify(accountQueryService).getAccountByUserId(userId);
-        inOrder.verify(kisClient).getAccessToken("app-key", "secret-key", AccountType.REAL);
+        inOrder.verify(kisAccessTokenCacheService).getAccessToken(userId, "app-key", "secret-key", AccountType.REAL);
+        verifyNoInteractions(kisClient);
     }
 
     @Test
@@ -76,7 +78,7 @@ class AccountKisServiceTest {
                 .willThrow(new BusinessException(AccountErrorCode.ACCOUNT_NOT_FOUND));
 
         // when & then
-        assertThatThrownBy(() -> accountKisService.getKisAccessToken(userId))
+        assertThatThrownBy(() -> accountKisQueryService.getKisAccessToken(userId))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(exception -> {
                     BusinessException businessException = (BusinessException) exception;
@@ -84,7 +86,7 @@ class AccountKisServiceTest {
                             .isEqualTo(AccountErrorCode.ACCOUNT_NOT_FOUND);
                 });
 
-        verifyNoInteractions(kisClient);
+        verifyNoInteractions(kisAccessTokenCacheService);
     }
 
     @Test
@@ -96,11 +98,11 @@ class AccountKisServiceTest {
                 userId, "app-key", "secret-key", "123-456-789", "hashed-account-no", AccountType.REAL);
 
         given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
-        given(kisClient.getAccessToken("app-key", "secret-key", AccountType.REAL))
+        given(kisAccessTokenCacheService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL))
                 .willThrow(new BusinessException(AccountErrorCode.KIS_TOKEN_ISSUE_FAILED));
 
         // when & then
-        assertThatThrownBy(() -> accountKisService.getKisAccessToken(userId))
+        assertThatThrownBy(() -> accountKisQueryService.getKisAccessToken(userId))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(exception -> {
                     BusinessException businessException = (BusinessException) exception;
@@ -122,7 +124,7 @@ class AccountKisServiceTest {
         given(kisClient.getApprovalKey("app-key", "secret-key", AccountType.REAL)).willReturn(kisResponse);
 
         // when
-        ApprovalKeyResponse result = accountKisService.getKisApprovalKey(userId);
+        ApprovalKeyResponse result = accountKisQueryService.getKisApprovalKey(userId);
 
         // then
         assertThat(result.approvalKey()).isEqualTo("issued-approval-key");
@@ -141,7 +143,7 @@ class AccountKisServiceTest {
                 .willThrow(new BusinessException(AccountErrorCode.ACCOUNT_NOT_FOUND));
 
         // when & then
-        assertThatThrownBy(() -> accountKisService.getKisApprovalKey(userId))
+        assertThatThrownBy(() -> accountKisQueryService.getKisApprovalKey(userId))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(exception -> {
                     BusinessException businessException = (BusinessException) exception;

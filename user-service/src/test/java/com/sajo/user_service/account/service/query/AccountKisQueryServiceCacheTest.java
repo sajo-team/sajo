@@ -25,11 +25,13 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-@SpringBootTest(classes = {AccountKisService.class, AccountKisServiceCacheTest.CacheTestConfig.class})
-class AccountKisServiceCacheTest {
+@SpringBootTest(classes = {
+        AccountKisQueryService.class, KisAccessTokenCacheService.class,
+        AccountKisQueryServiceCacheTest.CacheTestConfig.class})
+class AccountKisQueryServiceCacheTest {
 
     @Autowired
-    private AccountKisService accountKisService;
+    private AccountKisQueryService accountKisQueryService;
 
     @MockitoBean
     private AccountQueryService accountQueryService;
@@ -38,8 +40,9 @@ class AccountKisServiceCacheTest {
     private KisClient kisClient;
 
     @Test
-    @DisplayName("같은 userId로 두 번 호출하면 KIS와 계좌 조회는 한 번만 일어나고 캐시된 값을 그대로 반환한다")
-    void getKisAccessTokenIsCachedPerUserId() {
+    @DisplayName("같은 userId로 두 번 호출하면 KIS 호출은 캐시로 한 번만 일어나지만, "
+            + "appKey/secretKey는 캐시에 두지 않으므로 계좌 조회는 매번 일어난다")
+    void getKisAccessTokenCachesOnlyKisCallNotAccountLookup() {
         // given
         UUID userId = UUID.randomUUID();
         Account account = Account.createAccount(
@@ -51,13 +54,13 @@ class AccountKisServiceCacheTest {
         given(kisClient.getAccessToken("app-key", "secret-key", AccountType.REAL)).willReturn(kisResponse);
 
         // when
-        AccessTokenResponse first = accountKisService.getKisAccessToken(userId);
-        AccessTokenResponse second = accountKisService.getKisAccessToken(userId);
+        AccessTokenResponse first = accountKisQueryService.getKisAccessToken(userId);
+        AccessTokenResponse second = accountKisQueryService.getKisAccessToken(userId);
 
         // then
         assertThat(second).isEqualTo(first);
-        verify(accountQueryService, times(1)).getAccountByUserId(userId);
         verify(kisClient, times(1)).getAccessToken("app-key", "secret-key", AccountType.REAL);
+        verify(accountQueryService, times(2)).getAccountByUserId(userId);
     }
 
     @Test
@@ -79,8 +82,8 @@ class AccountKisServiceCacheTest {
                 .willReturn(new KisAccessTokenResponse("token-2", "Bearer", 86400f, "2026-01-01 00:00:00"));
 
         // when
-        AccessTokenResponse result1 = accountKisService.getKisAccessToken(userId1);
-        AccessTokenResponse result2 = accountKisService.getKisAccessToken(userId2);
+        AccessTokenResponse result1 = accountKisQueryService.getKisAccessToken(userId1);
+        AccessTokenResponse result2 = accountKisQueryService.getKisAccessToken(userId2);
 
         // then
         assertThat(result1.accessToken()).isEqualTo("token-1");
@@ -102,8 +105,8 @@ class AccountKisServiceCacheTest {
         given(kisClient.getApprovalKey("app-key", "secret-key", AccountType.REAL)).willReturn(kisResponse);
 
         // when
-        ApprovalKeyResponse first = accountKisService.getKisApprovalKey(userId);
-        ApprovalKeyResponse second = accountKisService.getKisApprovalKey(userId);
+        ApprovalKeyResponse first = accountKisQueryService.getKisApprovalKey(userId);
+        ApprovalKeyResponse second = accountKisQueryService.getKisApprovalKey(userId);
 
         // then
         assertThat(second).isEqualTo(first);
@@ -126,8 +129,8 @@ class AccountKisServiceCacheTest {
                 .willReturn(new KisApprovalKeyResponse("issued-approval-key"));
 
         // when
-        AccessTokenResponse accessToken = accountKisService.getKisAccessToken(userId);
-        ApprovalKeyResponse approvalKey = accountKisService.getKisApprovalKey(userId);
+        AccessTokenResponse accessToken = accountKisQueryService.getKisAccessToken(userId);
+        ApprovalKeyResponse approvalKey = accountKisQueryService.getKisApprovalKey(userId);
 
         // then
         assertThat(accessToken.accessToken()).isEqualTo("issued-token");

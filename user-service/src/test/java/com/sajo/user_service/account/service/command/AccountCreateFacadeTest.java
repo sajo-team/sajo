@@ -3,7 +3,6 @@ package com.sajo.user_service.account.service.command;
 import com.sajo.common.exception.BusinessException;
 import com.sajo.user_service.account.client.KisClient;
 import com.sajo.user_service.account.client.dto.response.KisAccessTokenResponse;
-import com.sajo.user_service.account.controller.dto.response.AccessTokenResponse;
 import com.sajo.user_service.account.domain.Account;
 import com.sajo.user_service.account.domain.AccountType;
 import com.sajo.user_service.account.exception.AccountErrorCode;
@@ -78,7 +77,7 @@ class AccountCreateFacadeTest {
         inOrder.verify(accountCommandService)
                 .createAccount(userId, "app-key", "secret-key", "123-456-789", AccountType.REAL);
         inOrder.verify(accountKisCommandService)
-                .primeKisAccessTokenCache(userId, new AccessTokenResponse("issued-token", "app-key", "secret-key"));
+                .primeKisAccessTokenCache(userId, "issued-token");
     }
 
     @Test
