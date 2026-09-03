@@ -22,7 +22,7 @@ public class StrategyQueryController {
 
     @GetMapping
     public ResponseEntity<GeneralResponse<StrategyListResponse>> getStrategies(
-            @RequestParam("userId") UUID userId,
+            @RequestHeader("X-User-Id") UUID userId,
             @RequestParam(required = false)StrategyStatus status,
             @RequestParam(required = false)String stockCode,
             Pageable pageable
@@ -40,7 +40,7 @@ public class StrategyQueryController {
 
     @GetMapping("/{strategyId}")
     public ResponseEntity<GeneralResponse<StrategyDetailResponse>> getStrategy(
-            @RequestParam("userId") UUID userId,
+            @RequestHeader("X-User-Id") UUID userId,
             @PathVariable UUID strategyId
     ) {
         StrategyDetailResponse response = strategyQueryService.getStrategy(userId, strategyId);

@@ -1,7 +1,5 @@
 package com.sajo.market_service.strategy.controller;
 
-import com.sajo.common.code.GeneralResponseCode;
-import com.sajo.common.response.GeneralResponse;
 import com.sajo.market_service.strategy.controller.dto.response.StrategyInternalResponse;
 import com.sajo.market_service.strategy.service.query.StrategyQueryService;
 import lombok.RequiredArgsConstructor;
@@ -22,11 +20,11 @@ public class StrategyInternalQueryController {
     private final StrategyQueryService strategyQueryService;
 
     @GetMapping("/{strategyId}")
-    public ResponseEntity<GeneralResponse<StrategyInternalResponse>> getStrategyInternal(
+    public ResponseEntity<StrategyInternalResponse> getStrategyInternal(
             @PathVariable("strategyId") UUID strategyId
     ) {
         StrategyInternalResponse response = strategyQueryService.getStrategyInternal(strategyId);
 
-        return GeneralResponse.toResponseEntity(GeneralResponseCode.OK, response);
+        return ResponseEntity.ok(response);
     }
 }

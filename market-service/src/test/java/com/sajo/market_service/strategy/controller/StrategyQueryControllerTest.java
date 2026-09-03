@@ -56,7 +56,7 @@ class StrategyQueryControllerTest {
                 .willReturn(response);
 
         // when & then
-        mockMvc.perform(get("/api/v1/strategies").param("userId", userId.toString()))
+        mockMvc.perform(get("/api/v1/strategies").header("X-User-Id", userId.toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.strategies[0].strategyId").value(strategyId.toString()))
@@ -76,7 +76,7 @@ class StrategyQueryControllerTest {
 
         // when & then
         mockMvc.perform(get("/api/v1/strategies")
-                        .param("userId", userId.toString())
+                        .header("X-User-Id", userId.toString())
                         .param("status", "ACTIVE")
                         .param("stockCode", "005930"))
                 .andExpect(status().isOk())
@@ -94,7 +94,7 @@ class StrategyQueryControllerTest {
 
         // when & then
         mockMvc.perform(get("/api/v1/strategies")
-                        .param("userId", userId.toString())
+                        .header("X-User-Id", userId.toString())
                         .param("page", "1")
                         .param("size", "5"))
                 .andExpect(status().isOk())
@@ -103,11 +103,11 @@ class StrategyQueryControllerTest {
     }
 
     @Test
-    @DisplayName("userId 파라미터가 없으면 요청이 실패한다")
+    @DisplayName("X-User-Id 헤더가 없으면 요청이 실패한다")
     // GlobalExceptionHandler(libs:common)가 MissingServletRequestParameterException을
     // 별도로 처리하지 않아 500으로 내려가는 현재 동작을 그대로 검증한다.
     // 원래는 400이 맞으므로, GlobalExceptionHandler에 핸들러 추가가 필요하다(별도 이슈 대상).
-    void getStrategiesWithoutUserId() throws Exception {
+    void getStrategiesWithoutUserHeader() throws Exception {
         // when & then
         mockMvc.perform(get("/api/v1/strategies"))
                 .andExpect(status().isInternalServerError());
@@ -140,7 +140,7 @@ class StrategyQueryControllerTest {
 
         // when & then
         mockMvc.perform(get("/api/v1/strategies/{strategyId}", strategyId)
-                .param("userId", userId.toString()))
+                .header("X-User-Id", userId.toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.strategyId").value(strategyId.toString()))
