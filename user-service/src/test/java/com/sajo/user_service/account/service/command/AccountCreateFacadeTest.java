@@ -153,4 +153,28 @@ class AccountCreateFacadeTest {
 
         verifyNoInteractions(accountKisService);
     }
+
+    @Test
+    @DisplayName("계좌 저장까지 성공한 뒤 캐시 프라이밍이 실패해도 계좌 생성 자체는 성공 처리한다")
+    void createAccountSucceedsEvenWhenCachePrimingFails() {
+        // given
+        UUID userId = UUID.randomUUID();
+        Account account = Account.createAccount(
+                userId, "app-key", "secret-key", "123-456-789", "hashed-account-no", AccountType.REAL);
+        KisAccessTokenResponse kisResponse =
+                new KisAccessTokenResponse("issued-token", "Bearer", 86400f, "2026-01-01 00:00:00");
+
+        given(kisClient.getAccessToken("app-key", "secret-key", AccountType.REAL)).willReturn(kisResponse);
+        given(accountCommandService.createAccount(userId, "app-key", "secret-key", "123-456-789", AccountType.REAL))
+                .willReturn(account);
+        willThrow(new RuntimeException("Redis 연결 실패"))
+                .given(accountKisService).primeKisAccessTokenCache(any(), any());
+
+        // when
+        Account result = accountCreateFacade.createAccount(
+                userId, "app-key", "secret-key", "123-456-789", AccountType.REAL);
+
+        // then
+        assertThat(result).isEqualTo(account);
+    }
 }
