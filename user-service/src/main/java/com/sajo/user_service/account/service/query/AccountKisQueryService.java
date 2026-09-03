@@ -13,11 +13,11 @@ import java.util.UUID;
 public class AccountKisQueryService {
 
     private final AccountQueryService accountQueryService;
-    private final KisTokenCacheService kisTokenCacheService;
+    private final KisTokenCacheQueryService kisTokenCacheQueryService;
 
     public AccessTokenResponse getKisAccessToken(UUID userId) {
         Account account = accountQueryService.getAccountByUserId(userId);
-        String accessToken = kisTokenCacheService.getAccessToken(
+        String accessToken = kisTokenCacheQueryService.getAccessToken(
                 userId, account.getAppKey(), account.getSecretKey(), account.getAccountType());
 
         return new AccessTokenResponse(accessToken, account.getAppKey(), account.getSecretKey());
@@ -25,7 +25,7 @@ public class AccountKisQueryService {
 
     public ApprovalKeyResponse getKisApprovalKey(UUID userId) {
         Account account = accountQueryService.getAccountByUserId(userId);
-        String approvalKey = kisTokenCacheService.getApprovalKey(
+        String approvalKey = kisTokenCacheQueryService.getApprovalKey(
                 userId, account.getAppKey(), account.getSecretKey(), account.getAccountType());
 
         return new ApprovalKeyResponse(approvalKey);

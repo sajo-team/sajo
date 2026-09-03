@@ -26,7 +26,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 @SpringBootTest(classes = {
-        AccountKisQueryService.class, KisTokenCacheService.class, AccountKisQueryServiceCacheTest.CacheTestConfig.class})
+        AccountKisQueryService.class, KisTokenCacheQueryService.class, AccountKisQueryServiceCacheTest.CacheTestConfig.class})
 class AccountKisQueryServiceCacheTest {
 
     @Autowired

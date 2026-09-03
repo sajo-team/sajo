@@ -15,11 +15,11 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(classes = {
-        AccountKisCommandService.class, AccountKisCommandServiceCacheTest.CacheTestConfig.class})
-class AccountKisCommandServiceCacheTest {
+        KisTokenCacheCommandService.class, KisTokenCacheCommandServiceCacheTest.CacheTestConfig.class})
+class KisTokenCacheCommandServiceCacheTest {
 
     @Autowired
-    private AccountKisCommandService accountKisCommandService;
+    private KisTokenCacheCommandService kisTokenCacheCommandService;
 
     @Autowired
     private CacheManager cacheManager;
@@ -32,7 +32,7 @@ class AccountKisCommandServiceCacheTest {
         String primed = "primed-token";
 
         // when
-        String result = accountKisCommandService.primeKisAccessTokenCache(userId, primed);
+        String result = kisTokenCacheCommandService.primeKisAccessTokenCache(userId, primed);
 
         // then
         assertThat(result).isEqualTo(primed);

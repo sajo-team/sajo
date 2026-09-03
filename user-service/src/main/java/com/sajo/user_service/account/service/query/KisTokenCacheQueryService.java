@@ -10,7 +10,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
-public class KisTokenCacheService {
+public class KisTokenCacheQueryService {
 
     private final KisClient kisClient;
 

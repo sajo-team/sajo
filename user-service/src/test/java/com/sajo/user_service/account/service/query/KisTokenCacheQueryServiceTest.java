@@ -20,16 +20,16 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
 
 @ExtendWith(MockitoExtension.class)
-class KisTokenCacheServiceTest {
+class KisTokenCacheQueryServiceTest {
 
     @Mock
     private KisClient kisClient;
 
-    private KisTokenCacheService kisTokenCacheService;
+    private KisTokenCacheQueryService kisTokenCacheQueryService;
 
     @BeforeEach
     void setUp() {
-        kisTokenCacheService = new KisTokenCacheService(kisClient);
+        kisTokenCacheQueryService = new KisTokenCacheQueryService(kisClient);
     }
 
     @Test
@@ -41,7 +41,7 @@ class KisTokenCacheServiceTest {
                 .willReturn(new KisAccessTokenResponse("issued-token", "Bearer", 86400f, "2026-01-01 00:00:00"));
 
         // when
-        String result = kisTokenCacheService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL);
+        String result = kisTokenCacheQueryService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL);
 
         // then
         assertThat(result).isEqualTo("issued-token");
@@ -57,7 +57,7 @@ class KisTokenCacheServiceTest {
 
         // when & then
         assertThatThrownBy(() ->
-                kisTokenCacheService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL))
+                kisTokenCacheQueryService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(exception -> {
                     BusinessException businessException = (BusinessException) exception;
@@ -75,7 +75,7 @@ class KisTokenCacheServiceTest {
                 .willReturn(new KisApprovalKeyResponse("issued-approval-key"));
 
         // when
-        String result = kisTokenCacheService.getApprovalKey(userId, "app-key", "secret-key", AccountType.REAL);
+        String result = kisTokenCacheQueryService.getApprovalKey(userId, "app-key", "secret-key", AccountType.REAL);
 
         // then
         assertThat(result).isEqualTo("issued-approval-key");
@@ -91,7 +91,7 @@ class KisTokenCacheServiceTest {
 
         // when & then
         assertThatThrownBy(() ->
-                kisTokenCacheService.getApprovalKey(userId, "app-key", "secret-key", AccountType.REAL))
+                kisTokenCacheQueryService.getApprovalKey(userId, "app-key", "secret-key", AccountType.REAL))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(exception -> {
                     BusinessException businessException = (BusinessException) exception;

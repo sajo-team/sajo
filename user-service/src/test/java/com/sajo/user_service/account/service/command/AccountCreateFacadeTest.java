@@ -40,14 +40,14 @@ class AccountCreateFacadeTest {
     private AccountCommandService accountCommandService;
 
     @Mock
-    private AccountKisCommandService accountKisCommandService;
+    private KisTokenCacheCommandService kisTokenCacheCommandService;
 
     private AccountCreateFacade accountCreateFacade;
 
     @BeforeEach
     void setUp() {
         accountCreateFacade =
-                new AccountCreateFacade(kisClient, accountQueryService, accountCommandService, accountKisCommandService);
+                new AccountCreateFacade(kisClient, accountQueryService, accountCommandService, kisTokenCacheCommandService);
     }
 
     @Test
@@ -71,12 +71,12 @@ class AccountCreateFacadeTest {
         // then
         assertThat(result).isEqualTo(account);
 
-        InOrder inOrder = inOrder(accountQueryService, kisClient, accountCommandService, accountKisCommandService);
+        InOrder inOrder = inOrder(accountQueryService, kisClient, accountCommandService, kisTokenCacheCommandService);
         inOrder.verify(accountQueryService).validateCreatable(userId, "123-456-789");
         inOrder.verify(kisClient).getAccessToken("app-key", "secret-key", AccountType.REAL);
         inOrder.verify(accountCommandService)
                 .createAccount(userId, "app-key", "secret-key", "123-456-789", AccountType.REAL);
-        inOrder.verify(accountKisCommandService)
+        inOrder.verify(kisTokenCacheCommandService)
                 .primeKisAccessTokenCache(userId, "issued-token");
     }
 
@@ -101,7 +101,7 @@ class AccountCreateFacadeTest {
         verifyNoInteractions(kisClient);
         verify(accountCommandService, never())
                 .createAccount(any(), any(), any(), any(), any());
-        verifyNoInteractions(accountKisCommandService);
+        verifyNoInteractions(kisTokenCacheCommandService);
     }
 
     @Test
@@ -124,7 +124,7 @@ class AccountCreateFacadeTest {
 
         verify(accountCommandService, never())
                 .createAccount(any(), any(), any(), any(), any());
-        verifyNoInteractions(accountKisCommandService);
+        verifyNoInteractions(kisTokenCacheCommandService);
     }
 
     @Test
@@ -149,7 +149,7 @@ class AccountCreateFacadeTest {
                             .isEqualTo(AccountErrorCode.DUPLICATE_ACCOUNT_NO);
                 });
 
-        verifyNoInteractions(accountKisCommandService);
+        verifyNoInteractions(kisTokenCacheCommandService);
     }
 
     @Test
@@ -166,7 +166,7 @@ class AccountCreateFacadeTest {
         given(accountCommandService.createAccount(userId, "app-key", "secret-key", "123-456-789", AccountType.REAL))
                 .willReturn(account);
         willThrow(new RuntimeException("Redis 연결 실패"))
-                .given(accountKisCommandService).primeKisAccessTokenCache(any(), any());
+                .given(kisTokenCacheCommandService).primeKisAccessTokenCache(any(), any());
 
         // when
         Account result = accountCreateFacade.createAccount(

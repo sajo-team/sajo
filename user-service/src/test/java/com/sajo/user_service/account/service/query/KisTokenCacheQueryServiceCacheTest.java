@@ -23,11 +23,11 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 @SpringBootTest(classes = {
-        KisTokenCacheService.class, KisTokenCacheServiceCacheTest.CacheTestConfig.class})
-class KisTokenCacheServiceCacheTest {
+        KisTokenCacheQueryService.class, KisTokenCacheQueryServiceCacheTest.CacheTestConfig.class})
+class KisTokenCacheQueryServiceCacheTest {
 
     @Autowired
-    private KisTokenCacheService kisTokenCacheService;
+    private KisTokenCacheQueryService kisTokenCacheQueryService;
 
     @MockitoBean
     private KisClient kisClient;
@@ -41,8 +41,8 @@ class KisTokenCacheServiceCacheTest {
                 .willReturn(new KisAccessTokenResponse("issued-token", "Bearer", 86400f, "2026-01-01 00:00:00"));
 
         // when
-        String first = kisTokenCacheService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL);
-        String second = kisTokenCacheService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL);
+        String first = kisTokenCacheQueryService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL);
+        String second = kisTokenCacheQueryService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL);
 
         // then
         assertThat(second).isEqualTo(first);
@@ -58,8 +58,8 @@ class KisTokenCacheServiceCacheTest {
                 .willReturn(new KisApprovalKeyResponse("issued-approval-key"));
 
         // when
-        String first = kisTokenCacheService.getApprovalKey(userId, "app-key", "secret-key", AccountType.REAL);
-        String second = kisTokenCacheService.getApprovalKey(userId, "app-key", "secret-key", AccountType.REAL);
+        String first = kisTokenCacheQueryService.getApprovalKey(userId, "app-key", "secret-key", AccountType.REAL);
+        String second = kisTokenCacheQueryService.getApprovalKey(userId, "app-key", "secret-key", AccountType.REAL);
 
         // then
         assertThat(second).isEqualTo(first);
@@ -77,8 +77,8 @@ class KisTokenCacheServiceCacheTest {
                 .willReturn(new KisApprovalKeyResponse("issued-approval-key"));
 
         // when
-        String accessToken = kisTokenCacheService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL);
-        String approvalKey = kisTokenCacheService.getApprovalKey(userId, "app-key", "secret-key", AccountType.REAL);
+        String accessToken = kisTokenCacheQueryService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL);
+        String approvalKey = kisTokenCacheQueryService.getApprovalKey(userId, "app-key", "secret-key", AccountType.REAL);
 
         // then
         assertThat(accessToken).isEqualTo("issued-token");
