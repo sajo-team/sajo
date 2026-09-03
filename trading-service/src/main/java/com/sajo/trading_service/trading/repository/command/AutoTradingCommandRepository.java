@@ -10,4 +10,6 @@ public interface AutoTradingCommandRepository extends JpaRepository<AutoTrading,
     boolean existsByUserIdAndStrategyIdAndDeletedAtIsNull(UUID userId, UUID strategyId);
 
     Optional<AutoTrading> findByIdAndUserIdAndDeletedAtIsNull(UUID autoTradingId, UUID userId);
+
+    Optional<AutoTrading> findByUserIdAndStrategyIdAndDeletedAtIsNull(UUID userId, UUID strategyId);
 }

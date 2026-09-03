@@ -9,5 +9,8 @@ import java.util.UUID;
 public interface TradingLimitCommandRepository extends JpaRepository<TradingLimit, UUID> {
 
     boolean existsByUserId(UUID userId);
+
     Optional<TradingLimit> findByUserId(UUID userId);
+
+
 }
