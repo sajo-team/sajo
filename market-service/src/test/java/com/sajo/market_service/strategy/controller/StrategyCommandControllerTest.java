@@ -3,7 +3,9 @@ package com.sajo.market_service.strategy.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sajo.common.exception.GlobalExceptionHandler;
 import com.sajo.market_service.strategy.controller.dto.request.StrategyCreateRequest;
+import com.sajo.market_service.strategy.controller.dto.request.StrategyUpdateRequest;
 import com.sajo.market_service.strategy.controller.dto.response.StrategyCreateResponse;
+import com.sajo.market_service.strategy.controller.dto.response.StrategyUpdateResponse;
 import com.sajo.market_service.strategy.domain.StrategyStatus;
 import com.sajo.market_service.strategy.service.command.StrategyCommandService;
 import org.junit.jupiter.api.DisplayName;
@@ -22,6 +24,7 @@ import java.util.UUID;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -66,7 +69,7 @@ class StrategyCommandControllerTest {
         // when & then
         mockMvc.perform(
                         post("/api/v1/strategies")
-                                .param("userId", userId.toString())
+                                .header("X-User-Id", userId.toString())
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request))
                 )
@@ -91,7 +94,7 @@ class StrategyCommandControllerTest {
         // when & then
         mockMvc.perform(
                         post("/api/v1/strategies")
-                                .param("userId", userId.toString())
+                                .header("X-User-Id", userId.toString())
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request))
                 )
@@ -113,11 +116,71 @@ class StrategyCommandControllerTest {
         // when & then
         mockMvc.perform(
                         post("/api/v1/strategies")
-                                .param("userId", userId.toString())
+                                .header("X-User-Id", userId.toString())
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request))
                 )
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
+    @DisplayName("전략을 수정하면 200과 변경된 전략 정보를 반환한다.")
+    void updateStrategy() throws Exception {
+        // given
+        UUID userId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+
+        StrategyUpdateRequest request = new StrategyUpdateRequest(
+                "수정된 전략",
+                71_000L,
+                82_000L,
+                new BigDecimal("4.0000"),
+                new BigDecimal("12.0000"),
+                4_000_000L,
+                new BigDecimal("15.0000"),
+                new BigDecimal("1.2000"),
+                new BigDecimal("10.0000")
+        );
+
+        StrategyUpdateResponse response = new StrategyUpdateResponse(
+                strategyId,
+                "005930",
+                "수정된 전략",
+                71_000L,
+                82_000L,
+                new BigDecimal("4.0000"),
+                new BigDecimal("12.0000"),
+                4_000_000L,
+                new BigDecimal("15.0000"),
+                new BigDecimal("1.2000"),
+                new BigDecimal("10.0000"),
+                StrategyStatus.INACTIVE
+        );
+
+        given(strategyCommandService.updateStrategy(
+                eq(userId),
+                eq(strategyId),
+                any(StrategyUpdateRequest.class)
+        )).willReturn(response);
+
+        // when & then
+        mockMvc.perform(patch("/api/v1/strategies/{strategyId}", strategyId)
+                        .header("X-User-Id", userId.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.strategyId").value(strategyId.toString()))
+                .andExpect(jsonPath("$.data.strategyName").value("수정된 전략"))
+                .andExpect(jsonPath("$.data.buyConditionPrice").value(71000))
+                .andExpect(jsonPath("$.data.sellConditionPrice").value(82000))
+                .andExpect(jsonPath("$.data.stopLossRate").value(4.0000))
+                .andExpect(jsonPath("$.data.targetReturnRate").value(12.0000))
+                .andExpect(jsonPath("$.data.allocatedAmount").value(4000000))
+                .andExpect(jsonPath("$.data.perCondition").value(15.0000))
+                .andExpect(jsonPath("$.data.pbrCondition").value(1.2000))
+                .andExpect(jsonPath("$.data.roeCondition").value(10.0000))
+                .andExpect(jsonPath("$.data.status").value("INACTIVE"));
     }
 }

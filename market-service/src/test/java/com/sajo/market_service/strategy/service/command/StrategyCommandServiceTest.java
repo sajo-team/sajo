@@ -1,25 +1,10 @@
 package com.sajo.market_service.strategy.service.command;
 
+import com.sajo.common.exception.BusinessException;
 import com.sajo.market_service.strategy.controller.dto.request.StrategyCreateRequest;
 import com.sajo.market_service.strategy.controller.dto.request.StrategyUpdateRequest;
 import com.sajo.market_service.strategy.controller.dto.response.StrategyCreateResponse;
 import com.sajo.market_service.strategy.controller.dto.response.StrategyUpdateResponse;
-import com.sajo.market_service.strategy.repository.command.StrategyCommandRepository;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.math.BigDecimal;
-import java.util.Optional;
-import java.util.UUID;
-
-import com.sajo.common.exception.BusinessException;
-import com.sajo.market_service.strategy.controller.dto.request.StrategyCreateRequest;
-import com.sajo.market_service.strategy.controller.dto.response.StrategyCreateResponse;
 import com.sajo.market_service.strategy.domain.Strategy;
 import com.sajo.market_service.strategy.domain.StrategyStatus;
 import com.sajo.market_service.strategy.exception.StrategyErrorCode;
@@ -33,6 +18,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -226,7 +212,13 @@ class StrategyCommandServiceTest {
         // then
         assertThat(response.strategyName()).isEqualTo("수정된 전략");
         assertThat(response.buyConditionPrice()).isEqualTo(71_000L);
+        assertThat(response.sellConditionPrice()).isEqualTo(82_000L);
         assertThat(response.stopLossRate()).isEqualByComparingTo("4.0000");
+        assertThat(response.targetReturnRate()).isEqualByComparingTo("12.0000");
+        assertThat(response.allocatedAmount()).isEqualTo(4_000_000L);
+        assertThat(response.perCondition()).isEqualByComparingTo("15.0000");
+        assertThat(response.pbrCondition()).isEqualByComparingTo("1.2000");
+        assertThat(response.roeCondition()).isEqualByComparingTo("10.0000");
     }
 
     @Test
@@ -248,7 +240,8 @@ class StrategyCommandServiceTest {
                 null
         );
 
-        given(strategyCommandRepository.findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId));
+        given(strategyCommandRepository.findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId))
+            .willReturn(Optional.empty());
 
         // when & then
         assertThatThrownBy(() -> strategyCommandService.updateStrategy(userId, strategyId, request))
@@ -303,6 +296,6 @@ class StrategyCommandServiceTest {
         // then
         assertThat(response.strategyName()).isEqualTo("수정된 전략");
         assertThat(response.buyConditionPrice()).isEqualTo(70_000L);
-        assertThat(response.stopLossRate()).isEqualTo("5.0000");
+        assertThat(response.stopLossRate()).isEqualByComparingTo("5.0000");
     }
 }
