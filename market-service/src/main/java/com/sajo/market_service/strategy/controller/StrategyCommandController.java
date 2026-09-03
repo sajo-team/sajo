@@ -24,7 +24,7 @@ public class StrategyCommandController {
     @PostMapping
     public ResponseEntity<GeneralResponse<StrategyCreateResponse>> createStrategy(
             @Valid @RequestBody StrategyCreateRequest request,
-            @RequestParam("userId") UUID userId // TODO: 로그인 사용자 ID 인증 방식 추후 변경
+            @RequestHeader("X-User-Id") UUID userId
     ) {
         StrategyCreateResponse response = strategyCommandService.createStrategy(userId, request);
 
@@ -34,7 +34,7 @@ public class StrategyCommandController {
     @PatchMapping("/{strategyId}")
     public ResponseEntity<GeneralResponse<StrategyUpdateResponse>> updateStrategy(
             @PathVariable("strategyId") UUID strategyId,
-            @RequestParam("userId") UUID userId,
+            @RequestHeader("X-User-Id") UUID userId,
             @Valid @RequestBody StrategyUpdateRequest request
     ) {
         StrategyUpdateResponse response = strategyCommandService.updateStrategy(userId, strategyId, request);
