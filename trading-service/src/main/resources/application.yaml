@@ -12,6 +12,10 @@ spring:
         max-attempts: 10
         initial-interval: 2000
 
+  ai:
+    openai:
+      api-key: ${OPENAI_API_KEY:dummy-key-for-tests}
+
 management:
   endpoints:
     web:

@@ -1,16 +1,18 @@
 package com.sajo.trading_service.trading.repository.command;
 
+import com.sajo.common.config.CommonJpaAuditingAutoConfiguration;
 import com.sajo.trading_service.trading.domain.TradingLimit;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 
 import java.math.BigDecimal;
 import java.util.UUID;
@@ -20,6 +22,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @Testcontainers
 @DataJpaTest
+@Import(CommonJpaAuditingAutoConfiguration.class)
 class TradingLimitCommandRepositoryTest {
 
     @Container
@@ -62,6 +65,8 @@ class TradingLimitCommandRepositoryTest {
         assertThat(saved.getDailyMaxOrderCount()).isEqualTo(10);
         assertThat(saved.getDailyLossLimitRate())
                 .isEqualByComparingTo("5.00");
+        assertThat(saved.getCreatedAt()).isNotNull();
+        assertThat(saved.getUpdatedAt()).isNotNull();
     }
 
     @Test
