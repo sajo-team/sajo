@@ -7,6 +7,8 @@ dependencies {
     implementation(project(':libs:common')) {
         exclude group: 'org.springframework.boot', module: 'spring-boot-starter-data-jpa'
     }
+    implementation project(':libs:common-kafka')
+
     implementation 'org.springframework.cloud:spring-cloud-starter-config'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-data-mongodb'
@@ -20,6 +22,7 @@ dependencies {
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
 
+    testImplementation 'org.springframework.kafka:spring-kafka-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-data-mongodb-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'

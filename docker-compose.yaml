@@ -259,4 +259,6 @@ services:
         condition: service_healthy
       mongo-ai-risk:
         condition: service_healthy
+      kafka:
+        condition: service_healthy
     restart: unless-stopped

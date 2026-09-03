@@ -3,11 +3,24 @@ spring:
     url: jdbc:postgresql://localhost:5432/sajo?currentSchema=trading
     username: postgres
     password: postgres
+
   jpa:
     hibernate:
       ddl-auto: update
+
   mongodb:
     uri: mongodb://localhost:27017/ai_risk_db
+
   cloud:
     config:
       enabled: false
+
+  kafka:
+    consumer:
+      group-id: trading-consumer-group
+    listener:
+      auto-startup: false
+
+  ai:
+    openai:
+      api-key: dummy-key-for-tests

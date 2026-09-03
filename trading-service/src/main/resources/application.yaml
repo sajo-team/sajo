@@ -12,6 +12,10 @@ spring:
         max-attempts: 10
         initial-interval: 2000
 
+  ai:
+    openai:
+      api-key: ${OPENAI_API_KEY}
+
 management:
   endpoints:
     web:
@@ -60,6 +64,15 @@ spring:
       ddl-auto: validate
   mongodb:
     uri: mongodb://mongo-ai-risk:27017/ai_risk_db
+  kafka:
+    bootstrap-servers: kafka:9092
+    consumer:
+      group-id: trading-consumer-group
+
+sajo:
+  kafka:
+    type-mappings:
+      trading.signal.generated: com.sajo.trading_service.trading.kafka.dto.TradingSignalGeneratedEvent
 
 eureka:
   client:
