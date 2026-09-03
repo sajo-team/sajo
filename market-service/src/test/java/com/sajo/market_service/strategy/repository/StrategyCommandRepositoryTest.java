@@ -4,6 +4,7 @@ import com.sajo.common.config.CommonJpaAuditingAutoConfiguration;
 import com.sajo.market_service.strategy.domain.Strategy;
 import com.sajo.market_service.strategy.domain.StrategyStatus;
 import com.sajo.market_service.strategy.repository.command.StrategyCommandRepository;
+import com.sajo.market_service.strategy.repository.query.StrategyQueryRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,6 +29,8 @@ class StrategyCommandRepositoryTest {
     @Container
     static PostgreSQLContainer postgres =
             new PostgreSQLContainer("postgres:16-alpine");
+    @Autowired
+    private StrategyQueryRepository strategyQueryRepository;
 
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
