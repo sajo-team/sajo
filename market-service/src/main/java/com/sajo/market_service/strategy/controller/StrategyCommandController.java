@@ -3,7 +3,9 @@ package com.sajo.market_service.strategy.controller;
 import com.sajo.common.code.GeneralResponseCode;
 import com.sajo.common.response.GeneralResponse;
 import com.sajo.market_service.strategy.controller.dto.request.StrategyCreateRequest;
+import com.sajo.market_service.strategy.controller.dto.request.StrategyUpdateRequest;
 import com.sajo.market_service.strategy.controller.dto.response.StrategyCreateResponse;
+import com.sajo.market_service.strategy.controller.dto.response.StrategyUpdateResponse;
 import com.sajo.market_service.strategy.service.command.StrategyCommandService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -27,5 +29,16 @@ public class StrategyCommandController {
         StrategyCreateResponse response = strategyCommandService.createStrategy(userId, request);
 
         return GeneralResponse.toResponseEntity(GeneralResponseCode.CREATED, response);
+    }
+
+    @PatchMapping("/{strategyId}")
+    public ResponseEntity<GeneralResponse<StrategyUpdateResponse>> updateStrategy(
+            @PathVariable("strategyId") UUID strategyId,
+            @RequestParam("userId") UUID userId,
+            @Valid @RequestBody StrategyUpdateRequest request
+    ) {
+        StrategyUpdateResponse response = strategyCommandService.updateStrategy(userId, strategyId, request);
+
+        return GeneralResponse.toResponseEntity(GeneralResponseCode.OK, response);
     }
 }
