@@ -66,6 +66,11 @@ spring:
     consumer:
       group-id: trading-consumer-group
 
+sajo:
+  kafka:
+    type-mappings:
+      trading.signal.generated: com.sajo.trading_service.trading.kafka.dto.TradingSignalGeneratedEvent
+
 eureka:
   client:
     service-url:
