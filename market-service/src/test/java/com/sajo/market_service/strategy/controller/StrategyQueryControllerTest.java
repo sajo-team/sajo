@@ -129,6 +129,9 @@ class StrategyQueryControllerTest {
                 new BigDecimal("5.0000"),
                 new BigDecimal("10.0000"),
                 3_000_000L,
+                new BigDecimal("15.0000"),
+                new BigDecimal("1.2000"),
+                new BigDecimal("10.0000"),
                 StrategyStatus.INACTIVE
         );
 
@@ -142,6 +145,15 @@ class StrategyQueryControllerTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.strategyId").value(strategyId.toString()))
                 .andExpect(jsonPath("$.data.stockCode").value("005930"))
+                .andExpect(jsonPath("$.data.strategyName").value("삼성전자 눌림목 전략"))
+                .andExpect(jsonPath("$.data.buyConditionPrice").value(70000))
+                .andExpect(jsonPath("$.data.sellConditionPrice").value(80000))
+                .andExpect(jsonPath("$.data.stopLossRate").value(5.0000))
+                .andExpect(jsonPath("$.data.targetReturnRate").value(10.0000))
+                .andExpect(jsonPath("$.data.allocatedAmount").value(3000000))
+                .andExpect(jsonPath("$.data.perCondition").value(15.0000))
+                .andExpect(jsonPath("$.data.pbrCondition").value(1.2000))
+                .andExpect(jsonPath("$.data.roeCondition").value(10.0000))
                 .andExpect(jsonPath("$.data.status").value("INACTIVE"));
     }
 }

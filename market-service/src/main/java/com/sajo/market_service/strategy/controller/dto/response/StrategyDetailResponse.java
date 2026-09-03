@@ -15,6 +15,9 @@ public record StrategyDetailResponse(
         BigDecimal stopLossRate,
         BigDecimal targetReturnRate,
         Long allocatedAmount,
+        BigDecimal perCondition,
+        BigDecimal pbrCondition,
+        BigDecimal roeCondition,
         StrategyStatus status
 ) {
     public static StrategyDetailResponse from(Strategy strategy) {
@@ -27,6 +30,9 @@ public record StrategyDetailResponse(
                 strategy.getStopLossRate(),
                 strategy.getTargetReturnRate(),
                 strategy.getAllocatedAmount(),
+                strategy.getPerCondition(),
+                strategy.getPbrCondition(),
+                strategy.getRoeCondition(),
                 strategy.getStatus()
         );
     }

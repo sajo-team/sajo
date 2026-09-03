@@ -125,9 +125,9 @@ class StrategyQueryServiceTest {
                 new BigDecimal("5.0000"),
                 new BigDecimal("10.0000"),
                 3_000_000L,
-                null,
-                null,
-                null
+                new BigDecimal("15.0000"),
+                new BigDecimal("1.2000"),
+                new BigDecimal("10.0000")
         );
 
         given(strategyQueryRepository
@@ -142,6 +142,9 @@ class StrategyQueryServiceTest {
         assertThat(response.strategyName()).isEqualTo("삼성전자 눌림목 전략");
         assertThat(response.buyConditionPrice()).isEqualTo(70_000L);
         assertThat(response.sellConditionPrice()).isEqualTo(80_000L);
+        assertThat(response.perCondition()).isEqualByComparingTo("15.0000");
+        assertThat(response.pbrCondition()).isEqualByComparingTo("1.2000");
+        assertThat(response.roeCondition()).isEqualByComparingTo("10.0000");
         assertThat(response.allocatedAmount()).isEqualTo(3_000_000L);
         assertThat(response.status()).isEqualTo(StrategyStatus.INACTIVE);
     }
