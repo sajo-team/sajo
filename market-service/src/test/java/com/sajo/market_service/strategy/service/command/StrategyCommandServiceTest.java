@@ -328,6 +328,7 @@ class StrategyCommandServiceTest {
         strategyCommandService.deleteStrategy(userId, strategyId);
 
         // then
+        assertThat(strategy.getStatus()).isEqualTo(StrategyStatus.DELETED);
         assertThat(strategy.isDeleted()).isTrue();
         assertThat(strategy.getDeletedBy()).isEqualTo(userId);
         assertThat(strategy.getDeletedAt()).isNotNull();

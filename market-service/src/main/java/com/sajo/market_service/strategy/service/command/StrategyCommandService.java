@@ -8,7 +8,6 @@ import com.sajo.market_service.strategy.controller.dto.response.StrategyUpdateRe
 import com.sajo.market_service.strategy.domain.Strategy;
 import com.sajo.market_service.strategy.exception.StrategyErrorCode;
 import com.sajo.market_service.strategy.repository.command.StrategyCommandRepository;
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,7 +48,7 @@ public class StrategyCommandService {
     public StrategyUpdateResponse updateStrategy(
             UUID userId,
             UUID strategyId,
-            @Valid StrategyUpdateRequest request
+            StrategyUpdateRequest request
     ) {
         Strategy strategy = strategyCommandRepository.findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId)
                 .orElseThrow(() -> new BusinessException(StrategyErrorCode.STRATEGY_NOT_FOUND));
@@ -74,6 +73,6 @@ public class StrategyCommandService {
         Strategy strategy = strategyCommandRepository.findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId)
                 .orElseThrow(() -> new BusinessException(StrategyErrorCode.STRATEGY_NOT_FOUND));
 
-        strategy.softDelete(userId);
+        strategy.delete(userId);
     }
 }

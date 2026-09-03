@@ -233,4 +233,9 @@ public class Strategy extends BaseUpdatableEntity {
             throw new BusinessException(StrategyErrorCode.INVALID_STRATEGY, message);
         }
     }
+
+    public void delete(UUID deletedBy) {
+        this.status = StrategyStatus.DELETED;
+        softDelete(deletedBy);
+    }
 }
