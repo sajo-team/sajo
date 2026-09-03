@@ -34,6 +34,13 @@ spring:
     hibernate:
       ddl-auto: update
 
+# 로컬 전용 값 - 실제 계정 데이터가 없는 로컬 DB에서만 쓰임, 운영 키와 무관
+sajo:
+  crypto:
+    account-key: local-dev-account-encryption-key
+    account-salt: e9f26d0f9854767f
+    account-hash-key: reM647WLMdaO/aIbzmDTKhOnJN0dcy00pcU2OKa4bq4=
+
 eureka:
   client:
     service-url:
@@ -52,7 +59,14 @@ spring:
       hibernate:
         default_schema: user_account
     hibernate:
-      ddl-auto: validate
+      ddl-auto: update
+
+sajo:
+  crypto:
+    account-key: ${ACCOUNT_ENCRYPTION_KEY}
+    account-salt: ${ACCOUNT_ENCRYPTION_SALT}
+    account-hash-key: ${ACCOUNT_HASH_KEY}
+
 
 eureka:
   client:

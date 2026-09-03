@@ -3,9 +3,8 @@ ext {
 }
 
 dependencies {
-    implementation(project(':libs:common')) {
-        exclude group: 'org.springframework.boot', module: 'spring-boot-starter-data-jpa'
-    }
+    implementation(project(':libs:common'))
+    implementation 'org.springframework.security:spring-security-crypto'
     implementation 'org.springframework.cloud:spring-cloud-starter-config'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-webmvc'
@@ -15,6 +14,10 @@ dependencies {
     runtimeOnly 'org.postgresql:postgresql'
     testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+    testCompileOnly 'org.projectlombok:lombok'
+    testAnnotationProcessor 'org.projectlombok:lombok'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
 

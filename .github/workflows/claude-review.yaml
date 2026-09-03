@@ -1,0 +1,98 @@
+name: Claude Code Review
+
+on:
+  pull_request:
+    branches:
+      - dev
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
+
+jobs:
+  claude-review:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: Claude Code Review
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          show_full_output: true
+
+            # 코드 리뷰 기준
+            # 1. 기능 정확성: 버그, 잘못된 비즈니스 로직, Edge Case 확인
+            # 2. 안정성: 예외 처리, 트랜잭션 경계, 데이터 정합성 확인
+            # 3. 보안: 인증/인가, 입력값 처리 등 보안 취약점 확인
+            # 4. 동시성: Race Condition 등 동시성 문제 확인
+            # 5. DB/JPA: N+1 및 비효율적인 쿼리 등 성능 문제 확인
+            # 6. Architecture: Spring Layered Architecture 의존성 및 책임 분리 확인
+            # 7. MSA: 다른 서비스의 책임 침범 및 서비스 간 결합도 확인
+            # 8. Test: 주요 로직에 대한 테스트 누락 여부 확인
+            #
+            # 단순 스타일 변경이나 불필요한 리팩토링 제안은 지양하고,
+            # 실제 장애·버그·유지보수 문제로 이어질 수 있는 사항을 우선 리뷰한다.
+
+          prompt: |
+            REPO: ${{ github.repository }}
+            PR NUMBER: ${{ github.event.pull_request.number }}
+
+            Review the code changes in this pull request.
+            
+             Before reviewing:
+             - Read the repository root `CLAUDE.md`.
+             - Treat `CLAUDE.md` as the project-specific architecture and code review guidelines.
+             - Review the changed code against both `CLAUDE.md` and the criteria below.
+             - Do not invent project conventions that are not defined in `CLAUDE.md` or supported by the existing codebase.
+
+            Focus on:
+            - Bugs and incorrect business logic
+            - Exception handling and edge cases
+            - Security vulnerabilities
+            - Transaction boundaries and data consistency
+            - Concurrency issues
+            - Database query and JPA performance issues such as N+1
+            - Spring dependency and layered architecture violations
+            - MSA service responsibility violations
+            - Missing or insufficient tests
+
+            Review only the changed code and the surrounding context necessary to understand the change.
+
+            Prioritize issues that can cause actual bugs, failures, security problems, data consistency problems, or maintainability issues.
+
+            Do not suggest unnecessary refactoring or stylistic changes.
+
+            For each important issue:
+            - Explain what the problem is.
+            - Explain why it can cause a problem.
+            - Suggest a concrete fix.
+            
+            IMPORTANT (execution constraints):
+            - This is a single, non-interactive CI run. There is no follow-up turn.
+            - Do NOT delegate exploration or analysis to a background subagent/Task that you plan to "wait for" — if you spawn a background task and end
+            your turn, the session terminates immediately and the task's result will be lost. You must complete all analysis synchronously within this same turn.
+            - Use Read, Glob, and Grep directly yourself to check codebase conventions. Do not use the Task tool in background mode for this review.
+
+            IMPORTANT (publishing):
+            - you MUST publish the final review to the pull request.
+            - Use `gh pr comment` to post a summary review comment.
+            - Do not only return the review as your final response
+            - If specific changed lines require feedback, you may additionally use `mcp__github_inline_comment__create_inline_comment`.
+            - Even if there are no important issues, post a short PR comment stating that no blocking or significant issues were found.
+
+            Write the review in Korean.
+
+          claude_args: |
+            --allowedTools "Read,Glob,Grep,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),mcp__github_inline_comment__create_inline_comment"
+            --disallowedTools "ScheduleWakeup,SendMessage,Monitor"
