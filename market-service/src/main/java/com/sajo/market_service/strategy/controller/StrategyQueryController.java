@@ -8,6 +8,8 @@ import com.sajo.market_service.strategy.domain.StrategyStatus;
 import com.sajo.market_service.strategy.service.query.StrategyQueryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -25,7 +27,7 @@ public class StrategyQueryController {
             @RequestHeader("X-User-Id") UUID userId,
             @RequestParam(required = false)StrategyStatus status,
             @RequestParam(required = false)String stockCode,
-            Pageable pageable
+            @PageableDefault(sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
     ) {
         StrategyListResponse response =
                 strategyQueryService.getStrategies(
