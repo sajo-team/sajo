@@ -93,14 +93,19 @@ public class TradingSignalCommandService {
         long calculatedQuantity =
                 payload.orderAmount() / payload.triggerPrice();
 
-        int orderQuantity = Math.toIntExact(calculatedQuantity);
-
-        if(orderQuantity <= 0){
+        if (calculatedQuantity <= 0) {
             throw new BusinessException(
                     TradingErrorCode.ORDER_QUANTITY_NOT_AVAILABLE
             );
         }
-        return orderQuantity;
+
+        if (calculatedQuantity > Integer.MAX_VALUE) {
+            throw new BusinessException(
+                    TradingErrorCode.ORDER_QUANTITY_OUT_OF_RANGE
+            );
+        }
+
+        return (int) calculatedQuantity;
     }
 
 

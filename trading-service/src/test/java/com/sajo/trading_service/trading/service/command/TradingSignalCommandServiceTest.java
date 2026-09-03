@@ -6,6 +6,7 @@ import com.sajo.trading_service.trading.domain.Order;
 import com.sajo.trading_service.trading.domain.TradingLimit;
 import com.sajo.trading_service.trading.domain.enums.OrderStatus;
 import com.sajo.trading_service.trading.domain.enums.OrderType;
+import com.sajo.trading_service.trading.exception.TradingErrorCode;
 import com.sajo.trading_service.trading.kafka.dto.TradingSignalGeneratedEvent;
 import com.sajo.trading_service.trading.kafka.dto.TradingSignalPayload;
 import com.sajo.trading_service.trading.repository.command.AutoTradingCommandRepository;
@@ -473,7 +474,15 @@ class TradingSignalCommandServiceTest {
         // when & then
         assertThatThrownBy(() ->
                 tradingSignalCommandService.processSignal(event)
-        ).isInstanceOf(ArithmeticException.class);
+        )
+                .isInstanceOf(BusinessException.class)
+                .satisfies(ex -> {
+                    BusinessException businessException =
+                            (BusinessException) ex;
+
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(TradingErrorCode.ORDER_QUANTITY_OUT_OF_RANGE);
+                });
 
         verify(orderCommandRepository, never())
                 .save(any(Order.class));
