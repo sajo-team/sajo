@@ -26,8 +26,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 @SpringBootTest(classes = {
-        AccountKisQueryService.class, KisAccessTokenCacheService.class,
-        AccountKisQueryServiceCacheTest.CacheTestConfig.class})
+        AccountKisQueryService.class, KisTokenCacheService.class, AccountKisQueryServiceCacheTest.CacheTestConfig.class})
 class AccountKisQueryServiceCacheTest {
 
     @Autowired
@@ -93,7 +92,7 @@ class AccountKisQueryServiceCacheTest {
     }
 
     @Test
-    @DisplayName("같은 userId로 접속키를 두 번 조회하면 KIS와 계좌 조회는 한 번만 일어난다")
+    @DisplayName("같은 userId로 접속키를 두 번 조회하면 KIS 호출은 캐시로 한 번만 일어난다")
     void getKisApprovalKeyIsCachedPerUserId() {
         // given
         UUID userId = UUID.randomUUID();
@@ -110,8 +109,8 @@ class AccountKisQueryServiceCacheTest {
 
         // then
         assertThat(second).isEqualTo(first);
-        verify(accountQueryService, times(1)).getAccountByUserId(userId);
         verify(kisClient, times(1)).getApprovalKey("app-key", "secret-key", AccountType.REAL);
+        verify(accountQueryService, times(2)).getAccountByUserId(userId);
     }
 
     @Test

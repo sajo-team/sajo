@@ -3,6 +3,7 @@ package com.sajo.user_service.account.service.query;
 import com.sajo.common.exception.BusinessException;
 import com.sajo.user_service.account.client.KisClient;
 import com.sajo.user_service.account.client.dto.response.KisAccessTokenResponse;
+import com.sajo.user_service.account.client.dto.response.KisApprovalKeyResponse;
 import com.sajo.user_service.account.domain.AccountType;
 import com.sajo.user_service.account.exception.AccountErrorCode;
 import org.junit.jupiter.api.BeforeEach;
@@ -19,16 +20,16 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
 
 @ExtendWith(MockitoExtension.class)
-class KisAccessTokenCacheServiceTest {
+class KisTokenCacheServiceTest {
 
     @Mock
     private KisClient kisClient;
 
-    private KisAccessTokenCacheService kisAccessTokenCacheService;
+    private KisTokenCacheService kisTokenCacheService;
 
     @BeforeEach
     void setUp() {
-        kisAccessTokenCacheService = new KisAccessTokenCacheService(kisClient);
+        kisTokenCacheService = new KisTokenCacheService(kisClient);
     }
 
     @Test
@@ -40,7 +41,7 @@ class KisAccessTokenCacheServiceTest {
                 .willReturn(new KisAccessTokenResponse("issued-token", "Bearer", 86400f, "2026-01-01 00:00:00"));
 
         // when
-        String result = kisAccessTokenCacheService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL);
+        String result = kisTokenCacheService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL);
 
         // then
         assertThat(result).isEqualTo("issued-token");
@@ -56,7 +57,41 @@ class KisAccessTokenCacheServiceTest {
 
         // when & then
         assertThatThrownBy(() ->
-                kisAccessTokenCacheService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL))
+                kisTokenCacheService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(AccountErrorCode.KIS_TOKEN_ISSUE_FAILED);
+                });
+    }
+
+    @Test
+    @DisplayName("KIS 접속키 발급에 성공하면 approvalKey 문자열만 반환한다")
+    void getApprovalKey() {
+        // given
+        UUID userId = UUID.randomUUID();
+        given(kisClient.getApprovalKey("app-key", "secret-key", AccountType.REAL))
+                .willReturn(new KisApprovalKeyResponse("issued-approval-key"));
+
+        // when
+        String result = kisTokenCacheService.getApprovalKey(userId, "app-key", "secret-key", AccountType.REAL);
+
+        // then
+        assertThat(result).isEqualTo("issued-approval-key");
+    }
+
+    @Test
+    @DisplayName("KIS 접속키 발급에 실패하면 예외를 그대로 전파한다")
+    void getApprovalKeyFailsWhenKisIssueFails() {
+        // given
+        UUID userId = UUID.randomUUID();
+        given(kisClient.getApprovalKey("app-key", "secret-key", AccountType.REAL))
+                .willThrow(new BusinessException(AccountErrorCode.KIS_TOKEN_ISSUE_FAILED));
+
+        // when & then
+        assertThatThrownBy(() ->
+                kisTokenCacheService.getApprovalKey(userId, "app-key", "secret-key", AccountType.REAL))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(exception -> {
                     BusinessException businessException = (BusinessException) exception;

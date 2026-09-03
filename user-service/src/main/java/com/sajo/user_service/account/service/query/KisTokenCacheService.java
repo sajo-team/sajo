@@ -10,7 +10,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
-public class KisAccessTokenCacheService {
+public class KisTokenCacheService {
 
     private final KisClient kisClient;
 
@@ -21,5 +21,11 @@ public class KisAccessTokenCacheService {
     @Cacheable(cacheNames = "kis-access-token", key = "#userId", sync = true)
     public String getAccessToken(UUID userId, String appKey, String secretKey, AccountType accountType) {
         return kisClient.getAccessToken(appKey, secretKey, accountType).access_token();
+    }
+
+    // ToDo : 캐시 만료 시 kis 중복 요청 방지 위해 분산락 적용 (접근토큰과 동일한 이슈)
+    @Cacheable(cacheNames = "kis-approval-key", key = "#userId", sync = true)
+    public String getApprovalKey(UUID userId, String appKey, String secretKey, AccountType accountType) {
+        return kisClient.getApprovalKey(appKey, secretKey, accountType).approval_key();
     }
 }

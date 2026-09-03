@@ -1,8 +1,6 @@
 package com.sajo.user_service.account.service.query;
 
 import com.sajo.common.exception.BusinessException;
-import com.sajo.user_service.account.client.KisClient;
-import com.sajo.user_service.account.client.dto.response.KisApprovalKeyResponse;
 import com.sajo.user_service.account.controller.dto.response.AccessTokenResponse;
 import com.sajo.user_service.account.controller.dto.response.ApprovalKeyResponse;
 import com.sajo.user_service.account.domain.Account;
@@ -31,16 +29,13 @@ class AccountKisQueryServiceTest {
     private AccountQueryService accountQueryService;
 
     @Mock
-    private KisClient kisClient;
-
-    @Mock
-    private KisAccessTokenCacheService kisAccessTokenCacheService;
+    private KisTokenCacheService kisTokenCacheService;
 
     private AccountKisQueryService accountKisQueryService;
 
     @BeforeEach
     void setUp() {
-        accountKisQueryService = new AccountKisQueryService(accountQueryService, kisClient, kisAccessTokenCacheService);
+        accountKisQueryService = new AccountKisQueryService(accountQueryService, kisTokenCacheService);
     }
 
     @Test
@@ -52,7 +47,7 @@ class AccountKisQueryServiceTest {
                 userId, "app-key", "secret-key", "123-456-789", "hashed-account-no", AccountType.REAL);
 
         given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
-        given(kisAccessTokenCacheService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL))
+        given(kisTokenCacheService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL))
                 .willReturn("issued-token");
 
         // when
@@ -63,10 +58,9 @@ class AccountKisQueryServiceTest {
         assertThat(result.appKey()).isEqualTo("app-key");
         assertThat(result.secretKey()).isEqualTo("secret-key");
 
-        InOrder inOrder = inOrder(accountQueryService, kisAccessTokenCacheService);
+        InOrder inOrder = inOrder(accountQueryService, kisTokenCacheService);
         inOrder.verify(accountQueryService).getAccountByUserId(userId);
-        inOrder.verify(kisAccessTokenCacheService).getAccessToken(userId, "app-key", "secret-key", AccountType.REAL);
-        verifyNoInteractions(kisClient);
+        inOrder.verify(kisTokenCacheService).getAccessToken(userId, "app-key", "secret-key", AccountType.REAL);
     }
 
     @Test
@@ -86,7 +80,7 @@ class AccountKisQueryServiceTest {
                             .isEqualTo(AccountErrorCode.ACCOUNT_NOT_FOUND);
                 });
 
-        verifyNoInteractions(kisAccessTokenCacheService);
+        verifyNoInteractions(kisTokenCacheService);
     }
 
     @Test
@@ -98,7 +92,7 @@ class AccountKisQueryServiceTest {
                 userId, "app-key", "secret-key", "123-456-789", "hashed-account-no", AccountType.REAL);
 
         given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
-        given(kisAccessTokenCacheService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL))
+        given(kisTokenCacheService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL))
                 .willThrow(new BusinessException(AccountErrorCode.KIS_TOKEN_ISSUE_FAILED));
 
         // when & then
@@ -118,10 +112,10 @@ class AccountKisQueryServiceTest {
         UUID userId = UUID.randomUUID();
         Account account = Account.createAccount(
                 userId, "app-key", "secret-key", "123-456-789", "hashed-account-no", AccountType.REAL);
-        KisApprovalKeyResponse kisResponse = new KisApprovalKeyResponse("issued-approval-key");
 
         given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
-        given(kisClient.getApprovalKey("app-key", "secret-key", AccountType.REAL)).willReturn(kisResponse);
+        given(kisTokenCacheService.getApprovalKey(userId, "app-key", "secret-key", AccountType.REAL))
+                .willReturn("issued-approval-key");
 
         // when
         ApprovalKeyResponse result = accountKisQueryService.getKisApprovalKey(userId);
@@ -129,9 +123,9 @@ class AccountKisQueryServiceTest {
         // then
         assertThat(result.approvalKey()).isEqualTo("issued-approval-key");
 
-        InOrder inOrder = inOrder(accountQueryService, kisClient);
+        InOrder inOrder = inOrder(accountQueryService, kisTokenCacheService);
         inOrder.verify(accountQueryService).getAccountByUserId(userId);
-        inOrder.verify(kisClient).getApprovalKey("app-key", "secret-key", AccountType.REAL);
+        inOrder.verify(kisTokenCacheService).getApprovalKey(userId, "app-key", "secret-key", AccountType.REAL);
     }
 
     @Test
@@ -151,6 +145,6 @@ class AccountKisQueryServiceTest {
                             .isEqualTo(AccountErrorCode.ACCOUNT_NOT_FOUND);
                 });
 
-        verifyNoInteractions(kisClient);
+        verifyNoInteractions(kisTokenCacheService);
     }
 }
