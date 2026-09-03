@@ -1,6 +1,5 @@
 package com.sajo.trading_service.ai_risk.client.backtest;
 
-import com.sajo.common.response.GeneralResponse;
 import com.sajo.trading_service.ai_risk.client.backtest.dto.BacktestInternalResponse;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -16,7 +15,7 @@ import java.util.UUID;
 public interface BacktestFeignClient {
 
     @GetMapping("/{backtestId}")
-    GeneralResponse<BacktestInternalResponse> getBacktest(
+    BacktestInternalResponse getBacktest(
             @PathVariable("backtestId") UUID backtestId
     );
 }

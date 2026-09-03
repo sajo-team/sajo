@@ -48,9 +48,9 @@ public class AiRiskAnalysisCommandService {
             UUID userId,
             AiRiskAnalysisCreateRequest request
     ) {
-        StrategyInternalResponse strategy = strategyFeignClient.getStrategy(request.strategyId()).data();
+        StrategyInternalResponse strategy = strategyFeignClient.getStrategy(request.strategyId());
 
-        BacktestInternalResponse backtest = backtestFeignClient.getBacktest(request.backtestId()).data();
+        BacktestInternalResponse backtest = backtestFeignClient.getBacktest(request.backtestId());
 
         validateAnalysisRequest(userId, strategy, backtest);
 

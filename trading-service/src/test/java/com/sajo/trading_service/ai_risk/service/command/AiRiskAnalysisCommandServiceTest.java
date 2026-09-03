@@ -67,18 +67,10 @@ class AiRiskAnalysisCommandServiceTest {
                 AiRiskAnalysis.create(userId, strategyId, backtestId);
 
         when(strategyFeignClient.getStrategy(strategyId))
-                .thenReturn(new GeneralResponse<>(
-                        true,
-                        "조회 성공",
-                        strategy
-                ));
+                .thenReturn(strategy);
 
         when(backtestFeignClient.getBacktest(backtestId))
-                .thenReturn(new GeneralResponse<>(
-                        true,
-                        "조회 성공",
-                        backtest
-                ));
+                .thenReturn(backtest);
 
         when(persistenceService.create(
                 userId,
@@ -114,18 +106,10 @@ class AiRiskAnalysisCommandServiceTest {
                 createBacktest(userId, strategyId, "COMPLETED");
 
         when(strategyFeignClient.getStrategy(strategyId))
-                .thenReturn(new GeneralResponse<>(
-                        true,
-                        "조회 성공",
-                        strategy
-                ));
+                .thenReturn(strategy);
 
         when(backtestFeignClient.getBacktest(backtestId))
-                .thenReturn(new GeneralResponse<>(
-                        true,
-                        "조회 성공",
-                        backtest
-                ));
+                .thenReturn(backtest);
 
         assertThatThrownBy(() ->
                 commandService.create(
@@ -150,18 +134,10 @@ class AiRiskAnalysisCommandServiceTest {
                 createBacktest(otherUserId, strategyId, "COMPLETED");
 
         when(strategyFeignClient.getStrategy(strategyId))
-                .thenReturn(new GeneralResponse<>(
-                        true,
-                        "조회 성공",
-                        strategy
-                ));
+                .thenReturn(strategy);
 
         when(backtestFeignClient.getBacktest(backtestId))
-                .thenReturn(new GeneralResponse<>(
-                        true,
-                        "조회 성공",
-                        backtest
-                ));
+                .thenReturn(backtest);
 
         assertThatThrownBy(() ->
                 commandService.create(
@@ -190,18 +166,10 @@ class AiRiskAnalysisCommandServiceTest {
                 );
 
         when(strategyFeignClient.getStrategy(strategyId))
-                .thenReturn(new GeneralResponse<>(
-                        true,
-                        "조회 성공",
-                        strategy
-                ));
+                .thenReturn(strategy);
 
         when(backtestFeignClient.getBacktest(backtestId))
-                .thenReturn(new GeneralResponse<>(
-                        true,
-                        "조회 성공",
-                        backtest
-                ));
+                .thenReturn(backtest);
 
         assertThatThrownBy(() ->
                 commandService.create(
@@ -224,18 +192,10 @@ class AiRiskAnalysisCommandServiceTest {
                 createBacktest(userId, strategyId, "RUNNING");
 
         when(strategyFeignClient.getStrategy(strategyId))
-                .thenReturn(new GeneralResponse<>(
-                        true,
-                        "조회 성공",
-                        strategy
-                ));
+                .thenReturn(strategy);
 
         when(backtestFeignClient.getBacktest(backtestId))
-                .thenReturn(new GeneralResponse<>(
-                        true,
-                        "조회 성공",
-                        backtest
-                ));
+                .thenReturn(backtest);
 
         assertThatThrownBy(() ->
                 commandService.create(
