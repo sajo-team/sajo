@@ -85,7 +85,7 @@ class TradingSignalCommandServiceTest {
         given(autoTrading.getEnabled())
                 .willReturn(true);
 
-        given(tradingLimitCommandRepository.findByUserId(userId))
+        given(tradingLimitCommandRepository.findByUserIdForUpdate(userId))
                 .willReturn(Optional.of(tradingLimit));
 
         given(tradingLimit.getDailyMaxOrderCount())
@@ -228,7 +228,7 @@ class TradingSignalCommandServiceTest {
         given(autoTrading.getEnabled())
                 .willReturn(true);
 
-        given(tradingLimitCommandRepository.findByUserId(userId))
+        given(tradingLimitCommandRepository.findByUserIdForUpdate(userId))
                 .willReturn(Optional.empty());
 
         // when & then
@@ -261,7 +261,7 @@ class TradingSignalCommandServiceTest {
         given(autoTrading.getEnabled())
                 .willReturn(true);
 
-        given(tradingLimitCommandRepository.findByUserId(userId))
+        given(tradingLimitCommandRepository.findByUserIdForUpdate(userId))
                 .willReturn(Optional.of(tradingLimit));
 
         // when & then
@@ -353,7 +353,7 @@ class TradingSignalCommandServiceTest {
         given(autoTrading.getEnabled())
                 .willReturn(true);
 
-        given(tradingLimitCommandRepository.findByUserId(userId))
+        given(tradingLimitCommandRepository.findByUserIdForUpdate(userId))
                 .willReturn(Optional.of(tradingLimit));
     }
 
@@ -377,7 +377,7 @@ class TradingSignalCommandServiceTest {
         given(autoTrading.getEnabled())
                 .willReturn(true);
 
-        given(tradingLimitCommandRepository.findByUserId(userId))
+        given(tradingLimitCommandRepository.findByUserIdForUpdate(userId))
                 .willReturn(Optional.of(tradingLimit));
 
         given(tradingLimit.getDailyMaxOrderCount())
@@ -444,5 +444,38 @@ class TradingSignalCommandServiceTest {
                 userId,
                 payload
         );
+    }
+
+    @Test
+    @DisplayName("주문 수량이 Integer 범위를 초과하면 주문 생성에 실패한다")
+    void orderQuantityOverflow() {
+        // given
+        TradingSignalGeneratedEvent event =
+                createEvent(
+                        Long.MAX_VALUE,
+                        1L,
+                        OrderType.BUY
+                );
+
+        given(orderCommandRepository.existsBySignalId(signalId))
+                .willReturn(false);
+
+        given(autoTradingCommandRepository
+                .findByUserIdAndStrategyIdAndDeletedAtIsNull(userId, strategyId))
+                .willReturn(Optional.of(autoTrading));
+
+        given(autoTrading.getEnabled())
+                .willReturn(true);
+
+        given(tradingLimitCommandRepository.findByUserIdForUpdate(userId))
+                .willReturn(Optional.of(tradingLimit));
+
+        // when & then
+        assertThatThrownBy(() ->
+                tradingSignalCommandService.processSignal(event)
+        ).isInstanceOf(ArithmeticException.class);
+
+        verify(orderCommandRepository, never())
+                .save(any(Order.class));
     }
 }

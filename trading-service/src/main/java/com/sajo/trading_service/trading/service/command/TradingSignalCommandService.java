@@ -57,7 +57,7 @@ public class TradingSignalCommandService {
         }
 
         TradingLimit tradingLimit =
-                tradingLimitCommandRepository.findByUserId(
+                tradingLimitCommandRepository.findByUserIdForUpdate(
                                 payload.userId()
                         )
                         .orElseThrow(()->
@@ -90,8 +90,10 @@ public class TradingSignalCommandService {
 
 
     private int calculateOrderQuantity(TradingSignalPayload payload){ // 주문 수량 계산
-        int orderQuantity =
-                (int) (payload.orderAmount() / payload.triggerPrice());
+        long calculatedQuantity =
+                payload.orderAmount() / payload.triggerPrice();
+
+        int orderQuantity = Math.toIntExact(calculatedQuantity);
 
         if(orderQuantity <= 0){
             throw new BusinessException(

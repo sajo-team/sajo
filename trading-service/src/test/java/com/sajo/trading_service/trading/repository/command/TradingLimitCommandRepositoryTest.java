@@ -96,4 +96,30 @@ class TradingLimitCommandRepositoryTest {
                 tradingLimitCommandRepository.saveAndFlush(second)
         ).isInstanceOf(DataIntegrityViolationException.class);
     }
+
+    @Test
+    @DisplayName("거래 한도를 비관적 락으로 조회할 수 있다")
+    void findByUserIdForUpdate() {
+        // given
+        UUID userId = UUID.randomUUID();
+
+        TradingLimit tradingLimit = TradingLimit.create(
+                userId,
+                3_000_000L,
+                10,
+                new BigDecimal("5.00")
+        );
+
+        tradingLimitCommandRepository.saveAndFlush(tradingLimit);
+
+        // when
+        TradingLimit found = tradingLimitCommandRepository
+                .findByUserIdForUpdate(userId)
+                .orElseThrow();
+
+        // then
+        assertThat(found.getUserId()).isEqualTo(userId);
+        assertThat(found.getDailyMaxOrderAmount()).isEqualTo(3_000_000L);
+        assertThat(found.getDailyMaxOrderCount()).isEqualTo(10);
+    }
 }
