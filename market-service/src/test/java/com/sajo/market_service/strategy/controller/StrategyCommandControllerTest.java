@@ -196,4 +196,24 @@ class StrategyCommandControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
     }
+
+
+    @Test
+    @DisplayName("활성화 여부가 null이면 요청이 실패한다.")
+    void updateActivationWithNullActive() throws Exception {
+        // given
+        UUID userId = UUID.randomUUID();
+        UUID strategyID = UUID.randomUUID();
+
+        // when & then
+        mockMvc.perform(patch("/api/v1/strategies/{strategyId}/activation", strategyID)
+                .header("X-User-Id", userId.toString())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                        {
+                            "active": null
+                        }
+                        """))
+                .andExpect(status().isBadRequest());
+    }
 }
