@@ -45,12 +45,12 @@ class AccountCommandControllerTest {
         // given
         UUID userId = UUID.randomUUID();
         AccountCreateRequest request =
-                new AccountCreateRequest("app-key", "secret-key", "123-456-789", AccountType.REAL);
+                new AccountCreateRequest("app-key", "secret-key", "12345678-01", AccountType.REAL);
         Account account = Account.createAccount(
-                userId, "app-key", "secret-key", "123-456-789", "hashed-account-no", AccountType.REAL);
+                userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
 
         given(accountCreateFacade.createAccount(
-                eq(userId), eq("app-key"), eq("secret-key"), eq("123-456-789"), eq(AccountType.REAL)))
+                eq(userId), eq("app-key"), eq("secret-key"), eq("12345678-01"), eq(AccountType.REAL)))
                 .willReturn(account);
 
         // when & then
@@ -62,7 +62,7 @@ class AccountCommandControllerTest {
                 )
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.accountNo").value("123-456-789"));
+                .andExpect(jsonPath("$.data.accountNo").value("12345678-01"));
     }
 
     @Test
@@ -71,7 +71,26 @@ class AccountCommandControllerTest {
         // given
         UUID userId = UUID.randomUUID();
         AccountCreateRequest request =
-                new AccountCreateRequest("", "secret-key", "123-456-789", AccountType.REAL);
+                new AccountCreateRequest("", "secret-key", "12345678-01", AccountType.REAL);
+
+        // when & then
+        mockMvc.perform(
+                        post("/api/v1/accounts")
+                                .param("userId", userId.toString())
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request))
+                )
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
+    @DisplayName("계좌번호가 12345678-01 형식이 아니면 400을 반환한다")
+    void createAccountInvalidAccountNoFormat() throws Exception {
+        // given
+        UUID userId = UUID.randomUUID();
+        AccountCreateRequest request =
+                new AccountCreateRequest("app-key", "secret-key", "123456789", AccountType.REAL);
 
         // when & then
         mockMvc.perform(
@@ -90,7 +109,7 @@ class AccountCommandControllerTest {
         // given
         UUID userId = UUID.randomUUID();
         AccountCreateRequest request =
-                new AccountCreateRequest("app-key", "secret-key", "123-456-789", AccountType.REAL);
+                new AccountCreateRequest("app-key", "secret-key", "12345678-01", AccountType.REAL);
 
         given(accountCreateFacade.createAccount(
                 eq(userId), any(), any(), any(), any()))
