@@ -33,6 +33,11 @@ spring:
         default_schema: user_account
     hibernate:
       ddl-auto: update
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password: redis
 
 # 로컬 전용 값 - 실제 계정 데이터가 없는 로컬 DB에서만 쓰임, 운영 키와 무관
 sajo:
@@ -40,6 +45,11 @@ sajo:
     account-key: local-dev-account-encryption-key
     account-salt: e9f26d0f9854767f
     account-hash-key: reM647WLMdaO/aIbzmDTKhOnJN0dcy00pcU2OKa4bq4=
+  redis:
+    cache:
+      ttl:
+        kis-access-token: 23h
+        kis-approval-key: 23h
 
 eureka:
   client:
@@ -60,12 +70,22 @@ spring:
         default_schema: user_account
     hibernate:
       ddl-auto: update
+  data:
+    redis:
+      host: redis
+      port: 6379
+      password: ${REDIS_PASSWORD}
 
 sajo:
   crypto:
     account-key: ${ACCOUNT_ENCRYPTION_KEY}
     account-salt: ${ACCOUNT_ENCRYPTION_SALT}
     account-hash-key: ${ACCOUNT_HASH_KEY}
+  redis:
+    cache:
+      ttl:
+        kis-access-token: 23h
+        kis-approval-key: 23h
 
 
 eureka:

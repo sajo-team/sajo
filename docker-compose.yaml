@@ -194,6 +194,7 @@ services:
       SPRING_PROFILES_ACTIVE: prod
       CONFIG_SERVER_URL: http://config-server:8888
       DB_PASSWORD: ${DB_PASSWORD}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
       ACCOUNT_ENCRYPTION_KEY: ${ACCOUNT_ENCRYPTION_KEY}
       ACCOUNT_ENCRYPTION_SALT: ${ACCOUNT_ENCRYPTION_SALT}
       ACCOUNT_HASH_KEY: ${ACCOUNT_HASH_KEY}
@@ -207,6 +208,8 @@ services:
       config-server:
         condition: service_healthy
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     restart: unless-stopped
 

@@ -1,22 +1,10 @@
 package com.sajo.market_service.strategy.service.command;
 
-import com.sajo.market_service.strategy.controller.dto.request.StrategyCreateRequest;
-import com.sajo.market_service.strategy.controller.dto.response.StrategyCreateResponse;
-import com.sajo.market_service.strategy.repository.command.StrategyCommandRepository;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
-
-import java.math.BigDecimal;
-import java.util.UUID;
-
 import com.sajo.common.exception.BusinessException;
 import com.sajo.market_service.strategy.controller.dto.request.StrategyCreateRequest;
+import com.sajo.market_service.strategy.controller.dto.request.StrategyUpdateRequest;
 import com.sajo.market_service.strategy.controller.dto.response.StrategyCreateResponse;
+import com.sajo.market_service.strategy.controller.dto.response.StrategyUpdateResponse;
 import com.sajo.market_service.strategy.domain.Strategy;
 import com.sajo.market_service.strategy.domain.StrategyStatus;
 import com.sajo.market_service.strategy.exception.StrategyErrorCode;
@@ -30,6 +18,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -176,5 +165,192 @@ class StrategyCommandServiceTest {
                 });
 
         verify(strategyCommandRepository, never()).save(any(Strategy.class));
+    }
+
+    @Test
+    @DisplayName("전략을 수정하면 변경된 전략 정보를 반환한다.")
+    void updateStrategy() {
+        // given
+        UUID userId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+
+        Strategy strategy = Strategy.create(
+                userId,
+                UUID.randomUUID(),
+                "005930",
+                "기존 전략",
+                70_000L,
+                80_000L,
+                new BigDecimal("5.0000"),
+                new BigDecimal("10.0000"),
+                3_000_000L,
+                null,
+                null,
+                null
+        );
+
+        StrategyUpdateRequest request = new StrategyUpdateRequest(
+                "수정된 전략",
+                71_000L,
+                82_000L,
+                new BigDecimal("4.0000"),
+                new BigDecimal("12.0000"),
+                4_000_000L,
+                new BigDecimal("15.0000"),
+                new BigDecimal("1.2000"),
+                new BigDecimal("10.0000")
+        );
+
+        given(strategyCommandRepository.findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId))
+                .willReturn(Optional.of(strategy));
+
+        // when
+        StrategyUpdateResponse response = strategyCommandService.updateStrategy(
+                userId, strategyId, request
+        );
+
+        // then
+        assertThat(response.strategyName()).isEqualTo("수정된 전략");
+        assertThat(response.buyConditionPrice()).isEqualTo(71_000L);
+        assertThat(response.sellConditionPrice()).isEqualTo(82_000L);
+        assertThat(response.stopLossRate()).isEqualByComparingTo("4.0000");
+        assertThat(response.targetReturnRate()).isEqualByComparingTo("12.0000");
+        assertThat(response.allocatedAmount()).isEqualTo(4_000_000L);
+        assertThat(response.perCondition()).isEqualByComparingTo("15.0000");
+        assertThat(response.pbrCondition()).isEqualByComparingTo("1.2000");
+        assertThat(response.roeCondition()).isEqualByComparingTo("10.0000");
+    }
+
+    @Test
+    @DisplayName("수정할 전략이 없는 겨우 예외 발생")
+    void updateStrategyNotFound() {
+        // given
+        UUID userId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+
+        StrategyUpdateRequest request = new StrategyUpdateRequest(
+                "수정된 전략",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+        );
+
+        given(strategyCommandRepository.findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId))
+            .willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> strategyCommandService.updateStrategy(userId, strategyId, request))
+        .isInstanceOf(BusinessException.class)
+        .satisfies(exception -> {
+            BusinessException businessException = (BusinessException) exception;
+            assertThat(businessException.getErrorCode())
+            .isEqualTo(StrategyErrorCode.STRATEGY_NOT_FOUND);
+        });
+    }
+
+    @Test
+    @DisplayName("전략 수정 시 전달된 필드만 반영")
+    void updateStrategyPartially() {
+        // given
+        UUID userId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+
+        Strategy strategy = Strategy.create(
+                userId,
+                UUID.randomUUID(),
+                "005930",
+                "기존 전략",
+                70_000L,
+                80_000L,
+                new BigDecimal("5.0000"),
+                null,
+                3_000_000L,
+                null,
+                null,
+                null
+        );
+
+        StrategyUpdateRequest request = new StrategyUpdateRequest(
+                "수정된 전략",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+        );
+
+        given(strategyCommandRepository.findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId))
+                .willReturn(Optional.of(strategy));
+
+        // when
+        StrategyUpdateResponse response = strategyCommandService.updateStrategy(userId, strategyId, request);
+
+        // then
+        assertThat(response.strategyName()).isEqualTo("수정된 전략");
+        assertThat(response.buyConditionPrice()).isEqualTo(70_000L);
+        assertThat(response.stopLossRate()).isEqualByComparingTo("5.0000");
+    }
+
+    @Test
+    @DisplayName("전략을 삭제하면 soft delete 처리된다.")
+    void deleteStrategy() {
+        // given
+        UUID userId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+
+        Strategy strategy = Strategy.create(
+                userId,
+                UUID.randomUUID(),
+                "005930",
+                "삭제할 전략",
+                70_000L,
+                80_000L,
+                new BigDecimal("5.0000"),
+                null,
+                3_000_000L,
+                null,
+                null,
+                null
+        );
+
+        given(strategyCommandRepository.findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId))
+                .willReturn(Optional.of(strategy));
+
+        // when
+        strategyCommandService.deleteStrategy(userId, strategyId);
+
+        // then
+        assertThat(strategy.getStatus()).isEqualTo(StrategyStatus.DELETED);
+        assertThat(strategy.isDeleted()).isTrue();
+        assertThat(strategy.getDeletedBy()).isEqualTo(userId);
+        assertThat(strategy.getDeletedAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("삭제할 전략이 없으면 예외가 발생한다")
+    void deleteStrategyNotFound() {
+        // given
+        UUID userId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+
+        given(strategyCommandRepository.findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId))
+                .willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> strategyCommandService.deleteStrategy(userId, strategyId))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(StrategyErrorCode.STRATEGY_NOT_FOUND);
+                });
     }
 }

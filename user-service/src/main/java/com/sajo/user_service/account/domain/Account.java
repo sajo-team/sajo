@@ -31,15 +31,15 @@ public class Account extends BaseUpdatableEntity {
     private UUID userId;
 
     @Convert(converter = AesGcmStringConverter.class)
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "text")
     private String appKey;
 
     @Convert(converter = AesGcmStringConverter.class)
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "text")
     private String secretKey;
 
     @Convert(converter = AesGcmStringConverter.class)
-    @Column(nullable = false)
+    @Column(nullable = false, columnDefinition = "text")
     private String accountNo;
 
     @Column(unique = true, nullable = false)
