@@ -68,4 +68,12 @@ public class StrategyCommandService {
 
         return StrategyUpdateResponse.from(strategy);
     }
+
+    @Transactional
+    public void deleteStrategy(UUID userId, UUID strategyId) {
+        Strategy strategy = strategyCommandRepository.findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId)
+                .orElseThrow(() -> new BusinessException(StrategyErrorCode.STRATEGY_NOT_FOUND));
+
+        strategy.softDelete(userId);
+    }
 }

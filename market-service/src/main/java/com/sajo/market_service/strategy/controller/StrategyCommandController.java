@@ -41,4 +41,14 @@ public class StrategyCommandController {
 
         return GeneralResponse.toResponseEntity(GeneralResponseCode.OK, response);
     }
+
+    @DeleteMapping("/{strategyId}")
+    public ResponseEntity<GeneralResponse<Void>> deleteStrategy(
+            @PathVariable("strategyId") UUID strategyId,
+            @RequestHeader("X-User-Id") UUID userId
+    ) {
+        strategyCommandService.deleteStrategy(userId, strategyId);
+
+        return GeneralResponse.toResponseEntity(GeneralResponseCode.OK, null);
+    }
 }
