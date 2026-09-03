@@ -2,7 +2,7 @@ package com.sajo.trading_service.ai_risk.service.query;
 
 import com.sajo.common.exception.BusinessException;
 import com.sajo.trading_service.ai_risk.controller.dto.response.AiRiskAnalysisDetailResponse;
-import com.sajo.trading_service.ai_risk.domain.AiRiskAnalysis;
+import com.sajo.trading_service.ai_risk.domain.*;
 import com.sajo.trading_service.ai_risk.repository.query.AiRiskAnalysisQueryRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -13,6 +13,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -60,9 +61,64 @@ class AiRiskAnalysisQueryServiceTest {
 
         assertThat(response.strategyId()).isEqualTo(strategyId);
         assertThat(response.backtestId()).isEqualTo(backtestId);
-        assertThat(response.status()).isEqualTo(analysis.getStatus());
+        assertThat(response.status()).isEqualTo(AiAnalysisStatus.PENDING);
+        assertThat(response.failureType()).isNull();
+        assertThat(response.message()).isEqualTo("AI 분석이 진행 중입니다.");
 
         verify(queryRepository).findByIdAndUserId(analysisId, userId);
+    }
+
+    @Test
+    @DisplayName("완료된 AI 위험 분석 조회 시 분석 결과와 완료 메시지를 반환한다")
+    void getAnalysis_completed() {
+        RiskFactor riskFactor = new RiskFactor(
+                RiskFactorType.MAX_DRAWDOWN,
+                "백테스트 결과 변동성이 높습니다."
+        );
+
+        AiRiskAnalysis analysis =
+                AiRiskAnalysis.create(userId, strategyId, backtestId);
+
+        analysis.complete(
+                RiskLevel.MEDIUM,
+                "중간 수준의 투자 위험이 있습니다.",
+                List.of(riskFactor),
+                "백테스트 결과 변동성이 확인되었습니다.",
+                List.of("손실 한도를 낮추는 것을 고려하세요.")
+        );
+
+        when(queryRepository.findByIdAndUserId(analysisId, userId))
+                .thenReturn(Optional.of(analysis));
+
+        AiRiskAnalysisDetailResponse response =
+                queryService.getAnalysis(analysisId, userId);
+
+        assertThat(response.status())
+                .isEqualTo(AiAnalysisStatus.COMPLETED);
+
+        assertThat(response.riskLevel())
+                .isEqualTo(RiskLevel.MEDIUM);
+
+        assertThat(response.summary())
+                .isEqualTo("중간 수준의 투자 위험이 있습니다.");
+
+        assertThat(response.riskFactors())
+                .containsExactly(riskFactor);
+
+        assertThat(response.reasoning())
+                .isEqualTo("백테스트 결과 변동성이 확인되었습니다.");
+
+        assertThat(response.recommendations())
+                .containsExactly("손실 한도를 낮추는 것을 고려하세요.");
+
+        assertThat(response.failureType())
+                .isNull();
+
+        assertThat(response.message())
+                .isEqualTo("AI 분석이 완료되었습니다.");
+
+        verify(queryRepository)
+                .findByIdAndUserId(analysisId, userId);
     }
 
     @Test
@@ -76,5 +132,34 @@ class AiRiskAnalysisQueryServiceTest {
         ).isInstanceOf(BusinessException.class);
 
         verify(queryRepository).findByIdAndUserId(analysisId, userId);
+    }
+
+    @Test
+    @DisplayName("실패한 AI 위험 분석 조회 시 실패 유형을 반환한다")
+    void getAnalysis_failed() {
+        AiRiskAnalysis analysis =
+                AiRiskAnalysis.create(userId, strategyId, backtestId);
+
+        analysis.fail(
+                AiAnalysisFailureType.LLM_API_ERROR,
+                "GPT API 호출 중 timeout 발생"
+        );
+
+        when(queryRepository.findByIdAndUserId(analysisId, userId))
+                .thenReturn(Optional.of(analysis));
+
+        AiRiskAnalysisDetailResponse response =
+                queryService.getAnalysis(analysisId, userId);
+
+        assertThat(response.status())
+                .isEqualTo(AiAnalysisStatus.FAILED);
+
+        assertThat(response.failureType())
+                .isEqualTo(AiAnalysisFailureType.LLM_API_ERROR);
+        assertThat(response.message())
+                .isEqualTo("AI 분석 요청 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.");
+
+        verify(queryRepository)
+                .findByIdAndUserId(analysisId, userId);
     }
 }
