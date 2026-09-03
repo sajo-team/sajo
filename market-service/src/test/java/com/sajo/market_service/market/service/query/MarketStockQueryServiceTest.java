@@ -61,6 +61,14 @@ class MarketStockQueryServiceTest {
     }
 
     @Test
+    void rejectsNullBlankAndTooLongKeywords() {
+        assertInvalidKeyword(null);
+        assertInvalidKeyword("");
+        assertInvalidKeyword("   ");
+        assertInvalidKeyword("가".repeat(101));
+    }
+
+    @Test
     void preservesOrdinaryKoreanNameAndPartialStockCodeSearches() {
         given(marketStockQueryRepository.searchByStockNameOrStockCode(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any()))
                 .willReturn(new PageImpl<>(List.of(stock("005930", "삼성전자", "KOSPI"))));
@@ -112,5 +120,12 @@ class MarketStockQueryServiceTest {
 
     private MarketStock stock(String stockCode, String stockName, String marketType) {
         return MarketStock.create(stockCode, stockName, marketType, "001", 1_000_000L, null);
+    }
+
+    private void assertInvalidKeyword(String keyword) {
+        assertThatThrownBy(() -> service.searchStocks(keyword, 0, 10, null))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> assertThat(((BusinessException) exception).getErrorCode())
+                        .isEqualTo(MarketErrorCode.INVALID_MARKET_STOCK));
     }
 }

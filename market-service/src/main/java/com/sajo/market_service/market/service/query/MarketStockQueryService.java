@@ -22,6 +22,7 @@ public class MarketStockQueryService {
     private static final int MAX_PAGE_SIZE = 50;
     private static final java.util.Set<String> ALLOWED_SORT_PROPERTIES =
             java.util.Set.of("stockCode", "stockName", "marketType");
+    private static final java.util.Set<String> ALLOWED_SORT_DIRECTIONS = java.util.Set.of("asc", "desc");
 
     private final MarketStockQueryRepository marketStockQueryRepository;
 
@@ -34,9 +35,10 @@ public class MarketStockQueryService {
     }
 
     public PageResponse<MarketStockResponse> searchStocks(String keyword, int page, int size, String sort) {
+        String normalizedKeyword = normalizeKeyword(keyword);
         Pageable pageable = createPageable(page, size, sort);
         return PageResponse.from(marketStockQueryRepository
-                .searchByStockNameOrStockCode(escapeLikeKeyword(keyword.trim()), pageable)
+                .searchByStockNameOrStockCode(escapeLikeKeyword(normalizedKeyword), pageable)
                 .map(MarketStockResponse::from));
     }
 
@@ -63,13 +65,28 @@ public class MarketStockQueryService {
             return Sort.by(Sort.Direction.ASC, "stockCode");
         }
         String[] tokens = sort.split(",", -1);
-        String property = tokens[0].trim();
+        String property = tokens[0];
         if (tokens.length > 2 || property.isBlank() || !ALLOWED_SORT_PROPERTIES.contains(property)) {
             throw new BusinessException(MarketErrorCode.INVALID_MARKET_STOCK, "정렬 기준이 유효하지 않습니다.");
         }
-        Sort.Direction direction = tokens.length == 1 ? Sort.Direction.ASC : Sort.Direction.fromOptionalString(tokens[1].trim())
-                .orElseThrow(() -> new BusinessException(MarketErrorCode.INVALID_MARKET_STOCK, "정렬 방향이 유효하지 않습니다."));
+        if (tokens.length == 2 && !ALLOWED_SORT_DIRECTIONS.contains(tokens[1])) {
+            throw new BusinessException(MarketErrorCode.INVALID_MARKET_STOCK, "정렬 방향이 유효하지 않습니다.");
+        }
+        Sort.Direction direction = tokens.length == 1 || "asc".equals(tokens[1])
+                ? Sort.Direction.ASC
+                : Sort.Direction.DESC;
         return Sort.by(direction, property);
+    }
+
+    private String normalizeKeyword(String keyword) {
+        if (keyword == null || keyword.isBlank()) {
+            throw new BusinessException(MarketErrorCode.INVALID_MARKET_STOCK, "검색어는 필수입니다.");
+        }
+        String normalized = keyword.trim();
+        if (normalized.length() > 100) {
+            throw new BusinessException(MarketErrorCode.INVALID_MARKET_STOCK, "검색어는 100자 이하여야 합니다.");
+        }
+        return normalized;
     }
 
     private String escapeLikeKeyword(String keyword) {

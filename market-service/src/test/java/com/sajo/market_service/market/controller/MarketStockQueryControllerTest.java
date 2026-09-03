@@ -74,10 +74,10 @@ class MarketStockQueryControllerTest {
     }
 
     @Test
-    void trimsStockCodeBeforeDetailLookup() throws Exception {
+    void delegatesAlreadyDecodedStockCodeToService() throws Exception {
         given(marketStockQueryService.getStock("005930")).willReturn(stockResponse());
 
-        mockMvc.perform(get("/api/v1/market/stocks/%20005930%20"))
+        mockMvc.perform(get("/api/v1/market/stocks/005930"))
                 .andExpect(status().isOk());
 
         verify(marketStockQueryService).getStock("005930");
@@ -90,6 +90,37 @@ class MarketStockQueryControllerTest {
         mockMvc.perform(get("/api/v1/market/stocks").param("size", "0"))
                 .andExpect(status().isBadRequest());
         mockMvc.perform(get("/api/v1/market/stocks").param("sort", "createdAt,desc"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void acceptsOnlyExactSortContractForListAndSearch() throws Exception {
+        given(marketStockQueryService.getStocks(eq(null), eq(0), eq(10), eq("stockCode,asc")))
+                .willReturn(pageResponse());
+        given(marketStockQueryService.searchStocks(eq("삼성"), eq(0), eq(10), eq("marketType,desc")))
+                .willReturn(pageResponse());
+
+        mockMvc.perform(get("/api/v1/market/stocks").param("sort", "stockCode,asc"))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/v1/market/stocks/search")
+                        .param("keyword", "삼성")
+                        .param("sort", "marketType,desc"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void rejectsSortWithWrongCaseOrUnsupportedFieldForListAndSearch() throws Exception {
+        mockMvc.perform(get("/api/v1/market/stocks").param("sort", "STOCKCODE"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/v1/market/stocks").param("sort", "stockName,DESC"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/v1/market/stocks/search")
+                        .param("keyword", "삼성")
+                        .param("sort", "stockname,desc"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/v1/market/stocks/search")
+                        .param("keyword", "삼성")
+                        .param("sort", "invalid,asc"))
                 .andExpect(status().isBadRequest());
     }
 
