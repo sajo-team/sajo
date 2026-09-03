@@ -1,6 +1,6 @@
 package com.sajo.user_service.account.client.dto.response;
 
-public record AccessTokenResponse (
+public record KISAccessTokenResponse(
         String access_token,
         String token_type,
         float expires_in,

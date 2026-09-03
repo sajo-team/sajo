@@ -1,7 +1,7 @@
 package com.sajo.user_service.account.client;
 
 import com.sajo.common.exception.BusinessException;
-import com.sajo.user_service.account.client.dto.response.AccessTokenResponse;
+import com.sajo.user_service.account.client.dto.response.KISAccessTokenResponse;
 import com.sajo.user_service.account.domain.AccountType;
 import com.sajo.user_service.account.exception.AccountErrorCode;
 import org.junit.jupiter.api.DisplayName;
@@ -48,7 +48,7 @@ class KisClientTest {
                         """, MediaType.APPLICATION_JSON));
 
         // when
-        AccessTokenResponse response = client.getAccessToken("app-key", "secret-key", AccountType.VIRTUAL);
+        KISAccessTokenResponse response = client.getAccessToken("app-key", "secret-key", AccountType.VIRTUAL);
 
         // then
         assertThat(response.access_token()).isEqualTo("issued-token");
