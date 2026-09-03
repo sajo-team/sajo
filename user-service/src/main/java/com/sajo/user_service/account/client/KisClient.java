@@ -69,7 +69,7 @@ public class KisClient {
             }
             String message = kisError != null ? kisError.error_description() : e.getMessage();
 
-            log.warn("KIS 토큰 발급 실패. status={}, errorCode={}, message={}",
+            log.warn("KIS 요청 실패. status={}, errorCode={}, message={}",
                     e.getStatusCode(), kisError != null ? kisError.error_code() : null, message);
 
             // rate limit은 자격증명 문제가 아니므로 별도로 구분
@@ -85,14 +85,14 @@ public class KisClient {
 
         } catch (RestClientException e) {
             // 타임아웃/연결 실패 등 HTTP 응답 자체를 못 받은 경우
-            log.warn("KIS 토큰 발급 중 네트워크 오류 발생. message={}", e.getMessage(), e);
+            log.warn("KIS 요청 중 네트워크 오류 발생. message={}", e.getMessage(), e);
             throw new BusinessException(AccountErrorCode.KIS_TOKEN_ISSUE_FAILED);
         }
 
         if (response == null) {
             throw new BusinessException(
                     AccountErrorCode.KIS_TOKEN_ISSUE_FAILED,
-                    "KIS 토큰 발급 응답이 비어 있습니다."
+                    "KIS 응답이 비어 있습니다."
             );
         }
         return response;
