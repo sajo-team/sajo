@@ -2,6 +2,7 @@ package com.sajo.trading_service.trading.kafka.consumer;
 
 import com.sajo.common.exception.BusinessException;
 import com.sajo.trading_service.trading.domain.enums.OrderType;
+import com.sajo.trading_service.trading.exception.TradingErrorCode;
 import com.sajo.trading_service.trading.kafka.dto.TradingSignalGeneratedEvent;
 import com.sajo.trading_service.trading.kafka.dto.TradingSignalPayload;
 import com.sajo.trading_service.trading.service.command.TradingSignalCommandService;
@@ -19,6 +20,8 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.AssertionsForClassTypes.assertThat;
+import static org.assertj.core.api.AssertionsForClassTypes.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.*;
@@ -108,5 +111,119 @@ class TradingSignalConsumerTest {
 
         verify(tradingSignalCommandService, never())
                 .processSignal(any());
+    }
+
+    @Test
+    void consume_shouldSkipWhenAutoTradingDisabled() {
+        // given
+        TradingSignalGeneratedEvent event = createValidEvent();
+
+        when(validator.validate(event))
+                .thenReturn(Set.of());
+
+        doThrow(new BusinessException(
+                TradingErrorCode.AUTO_TRADING_DISABLED
+        )).when(tradingSignalCommandService)
+                .processSignal(event);
+
+        // when & then
+        assertThatCode(() -> tradingSignalConsumer.consume(event))
+                .doesNotThrowAnyException();
+
+        verify(tradingSignalCommandService).processSignal(event);
+    }
+
+    @Test
+    void consume_shouldRethrowWhenTradingLimitNotFound() {
+        // given
+        TradingSignalGeneratedEvent event = createValidEvent();
+
+        when(validator.validate(event))
+                .thenReturn(Set.of());
+
+        doThrow(new BusinessException(
+                TradingErrorCode.TRADING_LIMIT_NOT_FOUND
+        )).when(tradingSignalCommandService)
+                .processSignal(event);
+
+        // when & then
+        assertThatThrownBy(() -> tradingSignalConsumer.consume(event))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception ->
+                        assertThat(
+                                ((BusinessException) exception).getErrorCode()
+                        ).isEqualTo(
+                                TradingErrorCode.TRADING_LIMIT_NOT_FOUND
+                        )
+                );
+
+        verify(tradingSignalCommandService).processSignal(event);
+    }
+
+    @Test
+    @DisplayName("BusinessException이 아닌 예외는 그대로 전파한다")
+    void consume_shouldRethrowNonBusinessException() {
+        // given
+        TradingSignalGeneratedEvent event = createValidEvent();
+
+        when(validator.validate(event))
+                .thenReturn(Set.of());
+
+        doThrow(new RuntimeException("DB connection error"))
+                .when(tradingSignalCommandService)
+                .processSignal(event);
+
+        // when & then
+        assertThatThrownBy(() ->
+                tradingSignalConsumer.consume(event)
+        )
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("DB connection error");
+
+        verify(tradingSignalCommandService)
+                .processSignal(event);
+    }
+
+    @Test
+    @DisplayName("AutoTrading이 없으면 예외를 전파하지 않고 스킵한다")
+    void consume_shouldSkipWhenAutoTradingNotFound() {
+        TradingSignalGeneratedEvent event = createValidEvent();
+
+        when(validator.validate(event))
+                .thenReturn(Set.of());
+
+        doThrow(new BusinessException(
+                TradingErrorCode.AUTO_TRADING_NOT_FOUND
+        )).when(tradingSignalCommandService)
+                .processSignal(event);
+
+        assertThatCode(() ->
+                tradingSignalConsumer.consume(event)
+        ).doesNotThrowAnyException();
+
+        verify(tradingSignalCommandService)
+                .processSignal(event);
+    }
+
+    private TradingSignalGeneratedEvent createValidEvent() {
+        UUID userId = UUID.randomUUID();
+
+        return new TradingSignalGeneratedEvent(
+                UUID.randomUUID(),
+                "TRADING_SIGNAL_GENERATED",
+                1,
+                Instant.now(),
+                userId,
+                new TradingSignalPayload(
+                        UUID.randomUUID(),
+                        UUID.randomUUID(),
+                        userId,
+                        "005930",
+                        OrderType.BUY,
+                        70_000L,
+                        300_000L,
+                        "RSI 조건 충족"
+                )
+        );
     }
 }
