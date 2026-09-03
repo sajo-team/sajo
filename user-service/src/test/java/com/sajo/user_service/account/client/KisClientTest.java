@@ -100,6 +100,30 @@ class KisClientTest {
     }
 
     @Test
+    @DisplayName("KIS rate limit(EGW00133) 응답이면 INVALID_KIS_CREDENTIALS가 아닌 KIS_RATE_LIMITED 예외를 던진다")
+    void convertsKisRateLimitToKisRateLimited() {
+        // given
+        setUp();
+        server.expect(requestTo("https://kis.example/oauth2/tokenP"))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("""
+                                {"error_code":"EGW00133","error_description":"접근토큰 발급 잠시 후 다시 시도하세요(1분당 1회)"}
+                                """));
+
+        // when & then
+        assertThatThrownBy(() -> client.getAccessToken("app-key", "secret-key", AccountType.VIRTUAL))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(AccountErrorCode.KIS_RATE_LIMITED);
+                });
+
+        server.verify();
+    }
+
+    @Test
     @DisplayName("5xx 응답이면 KIS_TOKEN_ISSUE_FAILED 예외를 던진다")
     void convertsKisHttp5xxToTokenIssueFailed() {
         // given

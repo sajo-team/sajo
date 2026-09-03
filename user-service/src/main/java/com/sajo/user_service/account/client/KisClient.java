@@ -19,6 +19,7 @@ public class KisClient {
 
     private static final String GRANT_TYPE = "client_credentials";
     private static final String ACCESS_TOKEN_PATH = "/oauth2/tokenP";
+    private static final String RATE_LIMIT_ERROR_CODE = "EGW00133";
 
     private final RestClient virtualRestClient;
     private final RestClient realRestClient;
@@ -53,6 +54,11 @@ public class KisClient {
 
             log.warn("KIS 토큰 발급 실패. status={}, errorCode={}, message={}",
                     e.getStatusCode(), kisError != null ? kisError.error_code() : null, message);
+
+            // rate limit은 자격증명 문제가 아니므로 별도로 구분
+            if (kisError != null && RATE_LIMIT_ERROR_CODE.equals(kisError.error_code())) {
+                throw new BusinessException(AccountErrorCode.KIS_RATE_LIMITED);
+            }
 
             // 4xx는 우리가 보낸 요청/자격증명 문제, 5xx(+그 외)는 KIS 쪽 장애
             if (e.getStatusCode().is4xxClientError()) {
