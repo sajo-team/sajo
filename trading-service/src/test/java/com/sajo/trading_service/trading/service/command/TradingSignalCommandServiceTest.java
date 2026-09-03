@@ -4,6 +4,7 @@ import com.sajo.common.exception.BusinessException;
 import com.sajo.trading_service.trading.domain.AutoTrading;
 import com.sajo.trading_service.trading.domain.Order;
 import com.sajo.trading_service.trading.domain.TradingLimit;
+import com.sajo.trading_service.trading.domain.enums.OrderStatus;
 import com.sajo.trading_service.trading.domain.enums.OrderType;
 import com.sajo.trading_service.trading.kafka.dto.TradingSignalGeneratedEvent;
 import com.sajo.trading_service.trading.kafka.dto.TradingSignalPayload;
@@ -25,7 +26,8 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.*;
 
@@ -68,7 +70,7 @@ class TradingSignalCommandServiceTest {
     void processSignalSuccess() {
         // given
         TradingSignalGeneratedEvent event =
-                createEvent(300_000L, 70_000L);
+                createEvent(300_000L, 70_000L, OrderType.BUY);
 
         given(orderCommandRepository.existsBySignalId(signalId))
                 .willReturn(false);
@@ -132,6 +134,9 @@ class TradingSignalCommandServiceTest {
         // 70,000 * 4 = 280,000원
         assertThat(savedOrder.getEstimatedOrderAmount())
                 .isEqualTo(280_000L);
+
+        assertThat(savedOrder.getStatus())
+                .isEqualTo(OrderStatus.REQUESTED);
     }
 
     @Test
@@ -139,7 +144,7 @@ class TradingSignalCommandServiceTest {
     void duplicateSignal() {
         // given
         TradingSignalGeneratedEvent event =
-                createEvent(300_000L, 70_000L);
+                createEvent(300_000L, 70_000L, OrderType.BUY);
 
         given(orderCommandRepository.existsBySignalId(signalId))
                 .willReturn(true);
@@ -162,7 +167,7 @@ class TradingSignalCommandServiceTest {
     void autoTradingNotFound() {
         // given
         TradingSignalGeneratedEvent event =
-                createEvent(300_000L, 70_000L);
+                createEvent(300_000L, 70_000L, OrderType.BUY);
 
         given(orderCommandRepository.existsBySignalId(signalId))
                 .willReturn(false);
@@ -185,7 +190,7 @@ class TradingSignalCommandServiceTest {
     void autoTradingDisabled() {
         // given
         TradingSignalGeneratedEvent event =
-                createEvent(300_000L, 70_000L);
+                createEvent(300_000L, 70_000L, OrderType.BUY);
 
         given(orderCommandRepository.existsBySignalId(signalId))
                 .willReturn(false);
@@ -211,7 +216,7 @@ class TradingSignalCommandServiceTest {
     void tradingLimitNotFound() {
         // given
         TradingSignalGeneratedEvent event =
-                createEvent(300_000L, 70_000L);
+                createEvent(300_000L, 70_000L, OrderType.BUY);
 
         given(orderCommandRepository.existsBySignalId(signalId))
                 .willReturn(false);
@@ -242,7 +247,8 @@ class TradingSignalCommandServiceTest {
         TradingSignalGeneratedEvent event =
                 createEvent(
                         30_000L,
-                        70_000L
+                        70_000L,
+                        OrderType.BUY
                 );
 
         given(orderCommandRepository.existsBySignalId(signalId))
@@ -272,7 +278,7 @@ class TradingSignalCommandServiceTest {
     void dailyOrderCountExceeded() {
         // given
         TradingSignalGeneratedEvent event =
-                createEvent(300_000L, 70_000L);
+                createEvent(300_000L, 70_000L, OrderType.BUY);
 
         prepareValidAutoTradingAndLimit();
 
@@ -302,7 +308,7 @@ class TradingSignalCommandServiceTest {
         // given
         // 이번 주문 예상 금액 = 70,000 * 4 = 280,000원
         TradingSignalGeneratedEvent event =
-                createEvent(300_000L, 70_000L);
+                createEvent(300_000L, 70_000L, OrderType.BUY);
 
         prepareValidAutoTradingAndLimit();
 
@@ -351,9 +357,72 @@ class TradingSignalCommandServiceTest {
                 .willReturn(Optional.of(tradingLimit));
     }
 
+    @Test
+    @DisplayName("SELL Signal을 수신하면 SELL Order를 생성한다")
+    void processSellSignalSuccess() {
+        // given
+        TradingSignalGeneratedEvent event =
+                createEvent(300_000L, 70_000L, OrderType.SELL);
+
+        given(orderCommandRepository.existsBySignalId(signalId))
+                .willReturn(false);
+
+        given(autoTradingCommandRepository
+                .findByUserIdAndStrategyIdAndDeletedAtIsNull(userId, strategyId))
+                .willReturn(Optional.of(autoTrading));
+
+        given(autoTrading.getId())
+                .willReturn(autoTradingId);
+
+        given(autoTrading.getEnabled())
+                .willReturn(true);
+
+        given(tradingLimitCommandRepository.findByUserId(userId))
+                .willReturn(Optional.of(tradingLimit));
+
+        given(tradingLimit.getDailyMaxOrderCount())
+                .willReturn(10);
+
+        given(tradingLimit.getDailyMaxOrderAmount())
+                .willReturn(3_000_000L);
+
+        given(orderCommandRepository.countOrdersByUserIdAndCreatedAtBetween(
+                eq(userId),
+                any(),
+                any(Instant.class),
+                any(Instant.class)
+        )).willReturn(0L);
+
+        given(orderCommandRepository.sumEstimatedOrderAmountByUserIdAndCreatedAtBetween(
+                eq(userId),
+                any(),
+                any(Instant.class),
+                any(Instant.class)
+        )).willReturn(0L);
+
+        // when
+        tradingSignalCommandService.processSignal(event);
+
+        // then
+        ArgumentCaptor<Order> orderCaptor =
+                ArgumentCaptor.forClass(Order.class);
+
+        verify(orderCommandRepository)
+                .save(orderCaptor.capture());
+
+        Order savedOrder = orderCaptor.getValue();
+
+        assertThat(savedOrder.getOrderType())
+                .isEqualTo(OrderType.SELL);
+
+        assertThat(savedOrder.getStatus())
+                .isEqualTo(OrderStatus.REQUESTED);
+    }
+
     private TradingSignalGeneratedEvent createEvent(
             long orderAmount,
-            long triggerPrice
+            long triggerPrice,
+            OrderType orderType
     ) {
         TradingSignalPayload payload =
                 new TradingSignalPayload(
@@ -361,7 +430,7 @@ class TradingSignalCommandServiceTest {
                         strategyId,
                         userId,
                         "005930",
-                        OrderType.BUY,
+                        orderType,
                         triggerPrice,
                         orderAmount,
                         "RSI 조건 충족"
