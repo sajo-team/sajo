@@ -17,7 +17,9 @@ public enum AccountErrorCode implements ErrorCode {
 
     KIS_TOKEN_ISSUE_FAILED(HttpStatus.BAD_GATEWAY, "ACCOUNT_0004", "KIS 토큰 발급에 실패했습니다"),
 
-    INVALID_KIS_CREDENTIALS(HttpStatus.BAD_REQUEST, "ACCOUNT_0005", "유효하지 않은 appKey/secretKey입니다");
+    INVALID_KIS_CREDENTIALS(HttpStatus.BAD_REQUEST, "ACCOUNT_0005", "유효하지 않은 appKey/secretKey입니다"),
+
+    ACCOUNT_NOT_FOUND(HttpStatus.NOT_FOUND,"ACCOUNT_0006" , "해당 계좌를 찾을 수 없습니다" );
 
     private final HttpStatus status;
     private final String errorCode;

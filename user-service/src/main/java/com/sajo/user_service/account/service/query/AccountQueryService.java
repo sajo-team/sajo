@@ -2,6 +2,7 @@ package com.sajo.user_service.account.service.query;
 
 import com.sajo.common.exception.BusinessException;
 import com.sajo.user_service.account.crypto.HmacSha256Hasher;
+import com.sajo.user_service.account.domain.Account;
 import com.sajo.user_service.account.exception.AccountErrorCode;
 import com.sajo.user_service.account.repository.query.AccountQueryRepository;
 import lombok.RequiredArgsConstructor;
@@ -28,5 +29,11 @@ public class AccountQueryService {
         if (accountQueryRepository.existsByAccountNoHashAndDeletedAtIsNull(accountNoHash)) {
             throw new BusinessException(AccountErrorCode.DUPLICATE_ACCOUNT_NO);
         }
+    }
+
+    @Transactional(readOnly = true)
+    public Account getAccountByUserId(UUID userId) {
+        return accountQueryRepository.findByUserId(userId)
+                .orElseThrow(() -> new BusinessException(AccountErrorCode.ACCOUNT_NOT_FOUND));
     }
 }
