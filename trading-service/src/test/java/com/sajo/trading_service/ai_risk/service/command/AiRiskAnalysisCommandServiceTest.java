@@ -1,6 +1,7 @@
 package com.sajo.trading_service.ai_risk.service.command;
 
 import com.sajo.common.exception.BusinessException;
+import com.sajo.common.response.GeneralResponse;
 import com.sajo.trading_service.ai_risk.client.backtest.BacktestFeignClient;
 import com.sajo.trading_service.ai_risk.client.backtest.dto.BacktestInternalResponse;
 import com.sajo.trading_service.ai_risk.client.strategy.StrategyFeignClient;
@@ -66,10 +67,18 @@ class AiRiskAnalysisCommandServiceTest {
                 AiRiskAnalysis.create(userId, strategyId, backtestId);
 
         when(strategyFeignClient.getStrategy(strategyId))
-                .thenReturn(strategy);
+                .thenReturn(new GeneralResponse<>(
+                        true,
+                        "조회 성공",
+                        strategy
+                ));
 
         when(backtestFeignClient.getBacktest(backtestId))
-                .thenReturn(backtest);
+                .thenReturn(new GeneralResponse<>(
+                        true,
+                        "조회 성공",
+                        backtest
+                ));
 
         when(persistenceService.create(
                 userId,
@@ -105,10 +114,18 @@ class AiRiskAnalysisCommandServiceTest {
                 createBacktest(userId, strategyId, "COMPLETED");
 
         when(strategyFeignClient.getStrategy(strategyId))
-                .thenReturn(strategy);
+                .thenReturn(new GeneralResponse<>(
+                        true,
+                        "조회 성공",
+                        strategy
+                ));
 
         when(backtestFeignClient.getBacktest(backtestId))
-                .thenReturn(backtest);
+                .thenReturn(new GeneralResponse<>(
+                        true,
+                        "조회 성공",
+                        backtest
+                ));
 
         assertThatThrownBy(() ->
                 commandService.create(
@@ -133,10 +150,18 @@ class AiRiskAnalysisCommandServiceTest {
                 createBacktest(otherUserId, strategyId, "COMPLETED");
 
         when(strategyFeignClient.getStrategy(strategyId))
-                .thenReturn(strategy);
+                .thenReturn(new GeneralResponse<>(
+                        true,
+                        "조회 성공",
+                        strategy
+                ));
 
         when(backtestFeignClient.getBacktest(backtestId))
-                .thenReturn(backtest);
+                .thenReturn(new GeneralResponse<>(
+                        true,
+                        "조회 성공",
+                        backtest
+                ));
 
         assertThatThrownBy(() ->
                 commandService.create(
@@ -165,10 +190,18 @@ class AiRiskAnalysisCommandServiceTest {
                 );
 
         when(strategyFeignClient.getStrategy(strategyId))
-                .thenReturn(strategy);
+                .thenReturn(new GeneralResponse<>(
+                        true,
+                        "조회 성공",
+                        strategy
+                ));
 
         when(backtestFeignClient.getBacktest(backtestId))
-                .thenReturn(backtest);
+                .thenReturn(new GeneralResponse<>(
+                        true,
+                        "조회 성공",
+                        backtest
+                ));
 
         assertThatThrownBy(() ->
                 commandService.create(
@@ -191,10 +224,18 @@ class AiRiskAnalysisCommandServiceTest {
                 createBacktest(userId, strategyId, "RUNNING");
 
         when(strategyFeignClient.getStrategy(strategyId))
-                .thenReturn(strategy);
+                .thenReturn(new GeneralResponse<>(
+                        true,
+                        "조회 성공",
+                        strategy
+                ));
 
         when(backtestFeignClient.getBacktest(backtestId))
-                .thenReturn(backtest);
+                .thenReturn(new GeneralResponse<>(
+                        true,
+                        "조회 성공",
+                        backtest
+                ));
 
         assertThatThrownBy(() ->
                 commandService.create(

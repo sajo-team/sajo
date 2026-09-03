@@ -1,6 +1,7 @@
 package com.sajo.trading_service.ai_risk.client.strategy;
 
 
+import com.sajo.common.response.GeneralResponse;
 import com.sajo.trading_service.ai_risk.client.strategy.dto.StrategyInternalResponse;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,9 +16,8 @@ import java.util.UUID;
 )
 public interface StrategyFeignClient {
 
-    //TODO: URL은 확정 후 수정
     @GetMapping("/{strategyId}")
-    StrategyInternalResponse getStrategy(
+    GeneralResponse<StrategyInternalResponse> getStrategy(
             @PathVariable("strategyId") UUID strategyId
     );
 }
