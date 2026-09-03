@@ -16,6 +16,7 @@ import java.util.UUID;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/internal/v1/strategies")
+// TODO: Gateway 또는 네트워크 레벨에서 /internal/v1/** 외부 직접 호출 차단 필요
 public class StrategyInternalQueryController {
 
     private final StrategyQueryService strategyQueryService;
