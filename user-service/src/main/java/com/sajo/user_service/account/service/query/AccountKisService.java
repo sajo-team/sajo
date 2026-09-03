@@ -1,7 +1,7 @@
 package com.sajo.user_service.account.service.query;
 
 import com.sajo.user_service.account.client.KisClient;
-import com.sajo.user_service.account.client.dto.response.KISAccessTokenResponse;
+import com.sajo.user_service.account.client.dto.response.KisAccessTokenResponse;
 import com.sajo.user_service.account.controller.dto.response.AccessTokenResponse;
 import com.sajo.user_service.account.domain.Account;
 import lombok.RequiredArgsConstructor;
@@ -24,7 +24,7 @@ public class AccountKisService {
     @Cacheable(cacheNames = "kis-access-token", key = "#userId", sync = true)
     public AccessTokenResponse getKisAccessToken(UUID userId) {
         Account account = accountQueryService.getAccountByUserId(userId);
-        KISAccessTokenResponse accessToken =
+        KisAccessTokenResponse accessToken =
                 kisClient.getAccessToken(account.getAppKey(), account.getSecretKey(), account.getAccountType());
 
         return new AccessTokenResponse(accessToken.access_token(), account.getAppKey(), account.getSecretKey());

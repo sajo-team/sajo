@@ -2,7 +2,7 @@ package com.sajo.user_service.account.service.query;
 
 import com.sajo.common.exception.BusinessException;
 import com.sajo.user_service.account.client.KisClient;
-import com.sajo.user_service.account.client.dto.response.KISAccessTokenResponse;
+import com.sajo.user_service.account.client.dto.response.KisAccessTokenResponse;
 import com.sajo.user_service.account.controller.dto.response.AccessTokenResponse;
 import com.sajo.user_service.account.domain.Account;
 import com.sajo.user_service.account.domain.AccountType;
@@ -46,8 +46,8 @@ class AccountKisServiceTest {
         UUID userId = UUID.randomUUID();
         Account account = Account.createAccount(
                 userId, "app-key", "secret-key", "123-456-789", "hashed-account-no", AccountType.REAL);
-        KISAccessTokenResponse kisResponse =
-                new KISAccessTokenResponse("issued-token", "Bearer", 86400f, "2026-01-01 00:00:00");
+        KisAccessTokenResponse kisResponse =
+                new KisAccessTokenResponse("issued-token", "Bearer", 86400f, "2026-01-01 00:00:00");
 
         given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
         given(kisClient.getAccessToken("app-key", "secret-key", AccountType.REAL)).willReturn(kisResponse);

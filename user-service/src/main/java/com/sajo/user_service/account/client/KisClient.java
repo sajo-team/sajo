@@ -2,8 +2,8 @@ package com.sajo.user_service.account.client;
 
 import com.sajo.common.exception.BusinessException;
 import com.sajo.user_service.account.client.dto.request.AccessTokenRequest;
-import com.sajo.user_service.account.client.dto.response.KISAccessTokenResponse;
-import com.sajo.user_service.account.client.dto.response.KISErrorResponse;
+import com.sajo.user_service.account.client.dto.response.KisAccessTokenResponse;
+import com.sajo.user_service.account.client.dto.response.KisErrorResponse;
 import com.sajo.user_service.account.domain.AccountType;
 import com.sajo.user_service.account.exception.AccountErrorCode;
 import lombok.extern.slf4j.Slf4j;
@@ -30,22 +30,22 @@ public class KisClient {
     }
 
     // kis access token 발급 요청
-    public KISAccessTokenResponse getAccessToken(String appKey, String secretKey, AccountType accountType) {
+    public KisAccessTokenResponse getAccessToken(String appKey, String secretKey, AccountType accountType) {
         RestClient restClient = selectRestClient(accountType);
         AccessTokenRequest request = new AccessTokenRequest(GRANT_TYPE, appKey, secretKey);
 
-        KISAccessTokenResponse response;
+        KisAccessTokenResponse response;
         try {
             response = restClient.post()
                     .uri(ACCESS_TOKEN_PATH)
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(request)
                     .retrieve()
-                    .body(KISAccessTokenResponse.class);
+                    .body(KisAccessTokenResponse.class);
         } catch (RestClientResponseException e) {
-            KISErrorResponse kisError;
+            KisErrorResponse kisError;
             try {
-                kisError = e.getResponseBodyAs(KISErrorResponse.class);
+                kisError = e.getResponseBodyAs(KisErrorResponse.class);
             } catch (RestClientException parseEx) {
                 log.warn("KIS 에러 응답 파싱 실패. body={}", e.getResponseBodyAsString());
                 kisError = null;
