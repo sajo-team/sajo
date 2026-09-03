@@ -2,7 +2,9 @@ package com.sajo.user_service.account.client;
 
 import com.sajo.common.exception.BusinessException;
 import com.sajo.user_service.account.client.dto.request.AccessTokenRequest;
+import com.sajo.user_service.account.client.dto.request.AccessTokenRevokeRequest;
 import com.sajo.user_service.account.client.dto.request.ApprovalKeyRequest;
+import com.sajo.user_service.account.client.dto.response.AccessTokenRevokeResponse;
 import com.sajo.user_service.account.client.dto.response.KisAccessTokenResponse;
 import com.sajo.user_service.account.client.dto.response.KisApprovalKeyResponse;
 import com.sajo.user_service.account.client.dto.response.KisErrorResponse;
@@ -24,6 +26,8 @@ public class KisClient {
     private static final String GRANT_TYPE = "client_credentials";
     private static final String ACCESS_TOKEN_PATH = "/oauth2/tokenP";
     private static final String APPROVAL_KEY_PATH = "/oauth2/Approval";
+    private static final String ACCESS_TOKEN_REVOKE = "/oauth2/revokeP";
+
     // EGW00133: 접근토큰 발급 rate limit(1분당 1회), EGW00201: 초당 거래건수 초과
     private static final Set<String> RATE_LIMIT_ERROR_CODES = Set.of("EGW00133", "EGW00201");
 
@@ -47,6 +51,17 @@ public class KisClient {
         RestClient restClient = selectRestClient(accountType);
         ApprovalKeyRequest request = new ApprovalKeyRequest(GRANT_TYPE, appKey, secretKey);
         return issue(restClient, APPROVAL_KEY_PATH, request, KisApprovalKeyResponse.class);
+    }
+
+    // kis access token 폐기 요청
+    public AccessTokenRevokeResponse revokeAccessToken(
+            String appKey, String secretKey, String token, AccountType accountType
+    ) {
+
+        RestClient restClient = selectRestClient(accountType);
+        AccessTokenRevokeRequest request = new AccessTokenRevokeRequest(appKey, secretKey, token);
+        return issue(restClient, ACCESS_TOKEN_REVOKE, request, AccessTokenRevokeResponse.class);
+
     }
 
     private <T> T issue(RestClient restClient, String path, Object request, Class<T> responseType) {

@@ -1,5 +1,7 @@
 package com.sajo.user_service.account.service.command;
 
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.cache.annotation.CachePut;
 import org.springframework.stereotype.Service;
 
@@ -12,5 +14,13 @@ public class KisTokenCacheCommandService {
     @CachePut(cacheNames = "kis-access-token", key = "#userId")
     public String primeKisAccessTokenCache(UUID userId, String accessToken) {
         return accessToken;
+    }
+
+    // 계좌 삭제 시 접근토큰/접속키 캐시를 함께 제거한다
+    @Caching(evict = {
+            @CacheEvict(cacheNames = "kis-access-token", key = "#userId"),
+            @CacheEvict(cacheNames = "kis-approval-key", key = "#userId")
+    })
+    public void evictKisTokenCaches(UUID userId) {
     }
 }
