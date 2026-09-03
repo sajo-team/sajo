@@ -1,7 +1,8 @@
 package com.sajo.user_service.account.client;
 
 import com.sajo.common.exception.BusinessException;
-import com.sajo.user_service.account.client.dto.response.AccessTokenResponse;
+import com.sajo.user_service.account.client.dto.response.KisAccessTokenResponse;
+import com.sajo.user_service.account.client.dto.response.KisApprovalKeyResponse;
 import com.sajo.user_service.account.domain.AccountType;
 import com.sajo.user_service.account.exception.AccountErrorCode;
 import org.junit.jupiter.api.DisplayName;
@@ -48,7 +49,7 @@ class KisClientTest {
                         """, MediaType.APPLICATION_JSON));
 
         // when
-        AccessTokenResponse response = client.getAccessToken("app-key", "secret-key", AccountType.VIRTUAL);
+        KisAccessTokenResponse response = client.getAccessToken("app-key", "secret-key", AccountType.VIRTUAL);
 
         // then
         assertThat(response.access_token()).isEqualTo("issued-token");
@@ -100,6 +101,54 @@ class KisClientTest {
     }
 
     @Test
+    @DisplayName("KIS rate limit(EGW00133) 응답이면 INVALID_KIS_CREDENTIALS가 아닌 KIS_RATE_LIMITED 예외를 던진다")
+    void convertsKisRateLimitToKisRateLimited() {
+        // given
+        setUp();
+        server.expect(requestTo("https://kis.example/oauth2/tokenP"))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("""
+                                {"error_code":"EGW00133","error_description":"접근토큰 발급 잠시 후 다시 시도하세요(1분당 1회)"}
+                                """));
+
+        // when & then
+        assertThatThrownBy(() -> client.getAccessToken("app-key", "secret-key", AccountType.VIRTUAL))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(AccountErrorCode.KIS_RATE_LIMITED);
+                });
+
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("KIS rate limit(EGW00201, 초당 거래건수 초과) 응답이면 KIS_RATE_LIMITED 예외를 던진다")
+    void convertsKisPerSecondRateLimitToKisRateLimited() {
+        // given
+        setUp();
+        server.expect(requestTo("https://kis.example/oauth2/tokenP"))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("""
+                                {"error_code":"EGW00201","error_description":"초당 거래건수를 초과하였습니다."}
+                                """));
+
+        // when & then
+        assertThatThrownBy(() -> client.getAccessToken("app-key", "secret-key", AccountType.VIRTUAL))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(AccountErrorCode.KIS_RATE_LIMITED);
+                });
+
+        server.verify();
+    }
+
+    @Test
     @DisplayName("5xx 응답이면 KIS_TOKEN_ISSUE_FAILED 예외를 던진다")
     void convertsKisHttp5xxToTokenIssueFailed() {
         // given
@@ -134,6 +183,52 @@ class KisClientTest {
                     BusinessException businessException = (BusinessException) exception;
                     assertThat(businessException.getErrorCode())
                             .isEqualTo(AccountErrorCode.KIS_TOKEN_ISSUE_FAILED);
+                });
+
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("접속키 발급 - 정상 응답이면 approval_key를 반환하고, 접근토큰과 다른 body 필드명(secretkey)을 사용한다")
+    void getsApprovalKeySuccessfully() {
+        // given
+        setUp();
+        server.expect(requestTo("https://kis.example/oauth2/Approval"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(jsonPath("$.grant_type").value("client_credentials"))
+                .andExpect(jsonPath("$.appkey").value("app-key"))
+                .andExpect(jsonPath("$.secretkey").value("secret-key"))
+                .andRespond(withSuccess("""
+                        {"approval_key":"issued-approval-key"}
+                        """, MediaType.APPLICATION_JSON));
+
+        // when
+        KisApprovalKeyResponse response = client.getApprovalKey("app-key", "secret-key", AccountType.VIRTUAL);
+
+        // then
+        assertThat(response.approval_key()).isEqualTo("issued-approval-key");
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("접속키 발급 - 4xx 응답이면 INVALID_KIS_CREDENTIALS 예외를 던진다")
+    void convertsApprovalKeyHttp4xxToInvalidCredentials() {
+        // given
+        setUp();
+        server.expect(requestTo("https://kis.example/oauth2/Approval"))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("""
+                                {"error_code":"EGW00103","error_description":"유효하지 않은 AppKey입니다."}
+                                """));
+
+        // when & then
+        assertThatThrownBy(() -> client.getApprovalKey("app-key", "secret-key", AccountType.VIRTUAL))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(AccountErrorCode.INVALID_KIS_CREDENTIALS);
                 });
 
         server.verify();
