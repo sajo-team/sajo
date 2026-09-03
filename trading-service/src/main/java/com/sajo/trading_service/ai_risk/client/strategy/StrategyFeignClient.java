@@ -15,7 +15,6 @@ import java.util.UUID;
 )
 public interface StrategyFeignClient {
 
-    //TODO: URL은 확정 후 수정
     @GetMapping("/{strategyId}")
     StrategyInternalResponse getStrategy(
             @PathVariable("strategyId") UUID strategyId
