@@ -10,5 +10,5 @@ public interface AccountQueryRepository extends JpaRepository<Account, UUID> {
     boolean existsByAccountNoHashAndDeletedAtIsNull(String accountNoHash);
     boolean existsByUserIdAndDeletedAtIsNull(UUID userId);
 
-    Optional<Account> findByUserId(UUID userId);
+    Optional<Account> findByUserIdAndDeletedAtIsNull(UUID userId);
 }

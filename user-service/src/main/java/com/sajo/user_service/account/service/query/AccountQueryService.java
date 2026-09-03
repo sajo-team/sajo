@@ -33,7 +33,7 @@ public class AccountQueryService {
 
     @Transactional(readOnly = true)
     public Account getAccountByUserId(UUID userId) {
-        return accountQueryRepository.findByUserId(userId)
+        return accountQueryRepository.findByUserIdAndDeletedAtIsNull(userId)
                 .orElseThrow(() -> new BusinessException(AccountErrorCode.ACCOUNT_NOT_FOUND));
     }
 }
