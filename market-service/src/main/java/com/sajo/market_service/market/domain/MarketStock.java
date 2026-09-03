@@ -9,6 +9,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -20,6 +21,8 @@ import java.util.UUID;
 @Table(name = "m_market_stocks")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class MarketStock extends BaseUpdatableEntity {
+
+    private static final Set<String> ALLOWED_MARKET_TYPES = Set.of("KOSPI", "KOSDAQ", "KONEX");
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -67,31 +70,74 @@ public class MarketStock extends BaseUpdatableEntity {
             Long listedShares,
             BigDecimal marketCap
     ) {
+        String normalizedStockCode = normalizeStockCode(stockCode);
+        String normalizedStockName = normalizeStockName(stockName);
+        String normalizedMarketType = normalizeMarketType(marketType);
+        return new MarketStock(
+                normalizedStockCode,
+                normalizedStockName,
+                normalizedMarketType,
+                industryCode,
+                listedShares,
+                marketCap
+        );
+    }
+
+    public void updateBasicInfo(
+            String stockName,
+            String marketType,
+            String industryCode,
+            Long listedShares,
+            BigDecimal marketCap
+    ) {
+        this.stockName = normalizeStockName(stockName);
+        this.marketType = normalizeMarketType(marketType);
+        this.industryCode = industryCode;
+        this.listedShares = listedShares;
+        this.marketCap = marketCap;
+    }
+
+    public static String normalizeStockCode(String stockCode) {
         if (stockCode == null || stockCode.isBlank()) {
             throw new BusinessException(
                     MarketErrorCode.INVALID_MARKET_STOCK,
                     "종목코드는 필수입니다."
             );
         }
+
+        //종목코드 형식 자체가 잘못됨 6자리가 아님 > 400
+        String normalized = stockCode.trim();
+        if (!normalized.matches("\\d{6}")) {
+            throw new BusinessException(MarketErrorCode.INVALID_MARKET_STOCK, "종목코드는 6자리 숫자여야 합니다.");
+        }
+        return normalized;
+    }
+
+    public static String normalizeStockName(String stockName) {
         if (stockName == null || stockName.isBlank()) {
             throw new BusinessException(
                     MarketErrorCode.INVALID_MARKET_STOCK,
                     "종목명은 필수입니다."
             );
         }
+        String normalized = stockName.trim();
+        if (normalized.length() > 100) {
+            throw new BusinessException(MarketErrorCode.INVALID_MARKET_STOCK, "종목명은 100자 이하여야 합니다.");
+        }
+        return normalized;
+    }
+
+    public static String normalizeMarketType(String marketType) {
         if (marketType == null || marketType.isBlank()) {
             throw new BusinessException(
                     MarketErrorCode.INVALID_MARKET_STOCK,
                     "시장구분은 필수입니다."
             );
         }
-        return new MarketStock(
-                stockCode,
-                stockName,
-                marketType,
-                industryCode,
-                listedShares,
-                marketCap
-        );
+        String normalized = marketType.trim().toUpperCase(java.util.Locale.ROOT);
+        if (!ALLOWED_MARKET_TYPES.contains(normalized)) {
+            throw new BusinessException(MarketErrorCode.INVALID_MARKET_STOCK, "지원하지 않는 시장구분입니다.");
+        }
+        return normalized;
     }
 }
