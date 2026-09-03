@@ -298,4 +298,58 @@ class StrategyCommandServiceTest {
         assertThat(response.buyConditionPrice()).isEqualTo(70_000L);
         assertThat(response.stopLossRate()).isEqualByComparingTo("5.0000");
     }
+
+    @Test
+    @DisplayName("전략을 삭제하면 soft delete 처리된다.")
+    void deleteStrategy() {
+        // given
+        UUID userId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+
+        Strategy strategy = Strategy.create(
+                userId,
+                UUID.randomUUID(),
+                "005930",
+                "삭제할 전략",
+                70_000L,
+                80_000L,
+                new BigDecimal("5.0000"),
+                null,
+                3_000_000L,
+                null,
+                null,
+                null
+        );
+
+        given(strategyCommandRepository.findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId))
+                .willReturn(Optional.of(strategy));
+
+        // when
+        strategyCommandService.deleteStrategy(userId, strategyId);
+
+        // then
+        assertThat(strategy.isDeleted()).isTrue();
+        assertThat(strategy.getDeletedBy()).isEqualTo(userId);
+        assertThat(strategy.getDeletedAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("삭제할 전략이 없으면 예외가 발생한다")
+    void deleteStrategyNotFound() {
+        // given
+        UUID userId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+
+        given(strategyCommandRepository.findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId))
+                .willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> strategyCommandService.deleteStrategy(userId, strategyId))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(StrategyErrorCode.STRATEGY_NOT_FOUND);
+                });
+    }
 }
