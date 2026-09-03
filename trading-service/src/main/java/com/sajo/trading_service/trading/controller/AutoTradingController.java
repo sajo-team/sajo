@@ -2,6 +2,7 @@ package com.sajo.trading_service.trading.controller;
 
 import com.sajo.common.code.GeneralResponseCode;
 import com.sajo.common.response.GeneralResponse;
+import com.sajo.common.response.PageResponse;
 import com.sajo.trading_service.trading.controller.dto.request.AutoTradingCreateRequest;
 import com.sajo.trading_service.trading.controller.dto.request.AutoTradingUpdateRequest;
 import com.sajo.trading_service.trading.controller.dto.response.AutoTradingCreateResponse;
@@ -61,15 +62,18 @@ public class AutoTradingController {
     }
 
     @GetMapping
-    public ResponseEntity<GeneralResponse<Page<AutoTradingQueryResponse>>> getAllAutoTradings(
+    public ResponseEntity<GeneralResponse<PageResponse<AutoTradingQueryResponse>>> getAllAutoTradings(
             @RequestParam("userId") UUID userId, // TODO: Gateway에서 JWT 검증 후 전달하는 X-User-Id 헤더를 사용하도록 변경
             Pageable pageable
     ){
-        Page<AutoTradingQueryResponse> response =
+        Page<AutoTradingQueryResponse> page =
                 autoTradingQueryService.findAllByUserId(
                         userId,
                         pageable
                 );
+
+        PageResponse<AutoTradingQueryResponse> response =
+                PageResponse.from(page);
 
         return GeneralResponse.toResponseEntity(
                 GeneralResponseCode.OK,

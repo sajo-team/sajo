@@ -17,6 +17,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -219,11 +220,17 @@ class AutoTradingControllerTest {
                         Instant.now()
                 );
 
+        PageRequest pageable = PageRequest.of(0, 10);
+
         when(autoTradingQueryService.findAllByUserId(
                 eq(userId),
                 any()
         )).thenReturn(
-                new PageImpl<>(List.of(response))
+                new PageImpl<>(
+                        List.of(response),
+                        pageable,
+                        1
+                )
         );
 
         // when & then
@@ -244,7 +251,11 @@ class AutoTradingControllerTest {
                 .andExpect(
                         jsonPath("$.data.content[0].enabled")
                                 .value(true)
-                );
+                )
+                .andExpect(jsonPath("$.data.page").value(0))
+                .andExpect(jsonPath("$.data.size").value(10))
+                .andExpect(jsonPath("$.data.totalElements").value(1))
+                .andExpect(jsonPath("$.data.totalPages").value(1));
     }
 
     @Test
