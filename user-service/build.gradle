@@ -4,6 +4,7 @@ ext {
 
 dependencies {
     implementation(project(':libs:common'))
+    implementation(project(':libs:common-redis'))
     implementation 'org.springframework.security:spring-security-crypto'
     implementation 'org.springframework.cloud:spring-cloud-starter-config'
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
