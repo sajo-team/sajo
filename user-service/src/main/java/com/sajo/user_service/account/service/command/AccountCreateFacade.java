@@ -1,8 +1,11 @@
 package com.sajo.user_service.account.service.command;
 
 import com.sajo.user_service.account.client.KisClient;
+import com.sajo.user_service.account.client.dto.response.KisAccessTokenResponse;
+import com.sajo.user_service.account.controller.dto.response.AccessTokenResponse;
 import com.sajo.user_service.account.domain.Account;
 import com.sajo.user_service.account.domain.AccountType;
+import com.sajo.user_service.account.service.query.AccountKisService;
 import com.sajo.user_service.account.service.query.AccountQueryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -16,6 +19,7 @@ public class AccountCreateFacade {
     private final KisClient kisClient;
     private final AccountQueryService accountQueryService;
     private final AccountCommandService accountCommandService;
+    private final AccountKisService accountKisService;
 
     public Account createAccount(
             UUID userId, String appKey, String secretKey, String accountNo, AccountType accountType) {
@@ -24,9 +28,16 @@ public class AccountCreateFacade {
         accountQueryService.validateCreatable(userId, accountNo);
 
         // 2. appKey/secretKey 유효성 검증 - 트랜잭션 밖에서 실행
-        kisClient.getAccessToken(appKey, secretKey, accountType);
+        KisAccessTokenResponse kisResponse = kisClient.getAccessToken(appKey, secretKey, accountType);
 
         // 3. 최종 재확인 + 저장
-        return accountCommandService.createAccount(userId, appKey, secretKey, accountNo, accountType);
+        Account account = accountCommandService.createAccount(userId, appKey, secretKey, accountNo, accountType);
+
+        // 4. 저장까지 성공한 경우에만, 검증 시 이미 발급받은 토큰을 캐시에 채워 넣는다
+        //    (직후 내부 토큰 조회 API가 KIS를 재호출해 1분당 1회 제한에 걸리는 것을 방지)
+        accountKisService.primeKisAccessTokenCache(
+                userId, new AccessTokenResponse(kisResponse.access_token(), appKey, secretKey));
+
+        return account;
     }
 }

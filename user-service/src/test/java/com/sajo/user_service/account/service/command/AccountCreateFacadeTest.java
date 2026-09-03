@@ -2,9 +2,12 @@ package com.sajo.user_service.account.service.command;
 
 import com.sajo.common.exception.BusinessException;
 import com.sajo.user_service.account.client.KisClient;
+import com.sajo.user_service.account.client.dto.response.KisAccessTokenResponse;
+import com.sajo.user_service.account.controller.dto.response.AccessTokenResponse;
 import com.sajo.user_service.account.domain.Account;
 import com.sajo.user_service.account.domain.AccountType;
 import com.sajo.user_service.account.exception.AccountErrorCode;
+import com.sajo.user_service.account.service.query.AccountKisService;
 import com.sajo.user_service.account.service.query.AccountQueryService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -38,21 +41,28 @@ class AccountCreateFacadeTest {
     @Mock
     private AccountCommandService accountCommandService;
 
+    @Mock
+    private AccountKisService accountKisService;
+
     private AccountCreateFacade accountCreateFacade;
 
     @BeforeEach
     void setUp() {
-        accountCreateFacade = new AccountCreateFacade(kisClient, accountQueryService, accountCommandService);
+        accountCreateFacade =
+                new AccountCreateFacade(kisClient, accountQueryService, accountCommandService, accountKisService);
     }
 
     @Test
-    @DisplayName("사전 체크와 KIS 검증을 통과하면 계좌 생성을 위임한다")
+    @DisplayName("사전 체크, KIS 검증, 계좌 생성을 통과하면 검증 시 받은 토큰을 캐시에 채워 넣는다")
     void createAccount() {
         // given
         UUID userId = UUID.randomUUID();
         Account account = Account.createAccount(
                 userId, "app-key", "secret-key", "123-456-789", "hashed-account-no", AccountType.REAL);
+        KisAccessTokenResponse kisResponse =
+                new KisAccessTokenResponse("issued-token", "Bearer", 86400f, "2026-01-01 00:00:00");
 
+        given(kisClient.getAccessToken("app-key", "secret-key", AccountType.REAL)).willReturn(kisResponse);
         given(accountCommandService.createAccount(userId, "app-key", "secret-key", "123-456-789", AccountType.REAL))
                 .willReturn(account);
 
@@ -63,15 +73,17 @@ class AccountCreateFacadeTest {
         // then
         assertThat(result).isEqualTo(account);
 
-        InOrder inOrder = inOrder(accountQueryService, kisClient, accountCommandService);
+        InOrder inOrder = inOrder(accountQueryService, kisClient, accountCommandService, accountKisService);
         inOrder.verify(accountQueryService).validateCreatable(userId, "123-456-789");
         inOrder.verify(kisClient).getAccessToken("app-key", "secret-key", AccountType.REAL);
         inOrder.verify(accountCommandService)
                 .createAccount(userId, "app-key", "secret-key", "123-456-789", AccountType.REAL);
+        inOrder.verify(accountKisService)
+                .primeKisAccessTokenCache(userId, new AccessTokenResponse("issued-token", "app-key", "secret-key"));
     }
 
     @Test
-    @DisplayName("사전 중복 체크에서 실패하면 KIS 호출도, 계좌 생성도 하지 않는다")
+    @DisplayName("사전 중복 체크에서 실패하면 KIS 호출도, 계좌 생성도, 캐시 채우기도 하지 않는다")
     void createAccountFailsWhenPreCheckFails() {
         // given
         UUID userId = UUID.randomUUID();
@@ -91,10 +103,11 @@ class AccountCreateFacadeTest {
         verifyNoInteractions(kisClient);
         verify(accountCommandService, never())
                 .createAccount(any(), any(), any(), any(), any());
+        verifyNoInteractions(accountKisService);
     }
 
     @Test
-    @DisplayName("KIS 자격증명 검증에 실패하면 계좌 생성을 시도하지 않는다")
+    @DisplayName("KIS 자격증명 검증에 실패하면 계좌 생성도, 캐시 채우기도 하지 않는다")
     void createAccountFailsWhenKisCredentialsInvalid() {
         // given
         UUID userId = UUID.randomUUID();
@@ -113,5 +126,31 @@ class AccountCreateFacadeTest {
 
         verify(accountCommandService, never())
                 .createAccount(any(), any(), any(), any(), any());
+        verifyNoInteractions(accountKisService);
+    }
+
+    @Test
+    @DisplayName("KIS 검증 후 계좌 저장에 실패하면 캐시를 채우지 않는다")
+    void createAccountDoesNotPrimeCacheWhenSaveFails() {
+        // given
+        UUID userId = UUID.randomUUID();
+        KisAccessTokenResponse kisResponse =
+                new KisAccessTokenResponse("issued-token", "Bearer", 86400f, "2026-01-01 00:00:00");
+
+        given(kisClient.getAccessToken("app-key", "secret-key", AccountType.REAL)).willReturn(kisResponse);
+        given(accountCommandService.createAccount(userId, "app-key", "secret-key", "123-456-789", AccountType.REAL))
+                .willThrow(new BusinessException(AccountErrorCode.DUPLICATE_ACCOUNT_NO));
+
+        // when & then
+        assertThatThrownBy(() -> accountCreateFacade.createAccount(
+                userId, "app-key", "secret-key", "123-456-789", AccountType.REAL))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(AccountErrorCode.DUPLICATE_ACCOUNT_NO);
+                });
+
+        verifyNoInteractions(accountKisService);
     }
 }
