@@ -49,6 +49,7 @@ sajo:
     cache:
       ttl:
         kis-access-token: 23h
+        kis-approval-key: 23h
 
 eureka:
   client:
@@ -84,6 +85,7 @@ sajo:
     cache:
       ttl:
         kis-access-token: 23h
+        kis-approval-key: 23h
 
 
 eureka:

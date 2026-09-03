@@ -2,7 +2,9 @@ package com.sajo.user_service.account.service.query;
 
 import com.sajo.user_service.account.client.KisClient;
 import com.sajo.user_service.account.client.dto.response.KisAccessTokenResponse;
+import com.sajo.user_service.account.client.dto.response.KisApprovalKeyResponse;
 import com.sajo.user_service.account.controller.dto.response.AccessTokenResponse;
+import com.sajo.user_service.account.controller.dto.response.ApprovalKeyResponse;
 import com.sajo.user_service.account.domain.Account;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CachePut;
@@ -35,5 +37,15 @@ public class AccountKisService {
     @CachePut(cacheNames = "kis-access-token", key = "#userId")
     public AccessTokenResponse primeKisAccessTokenCache(UUID userId, AccessTokenResponse response) {
         return response;
+    }
+
+    // ToDo : 캐시 만료 시 kis 중복 요청 방지 위해 분산락 적용 (접근토큰과 동일한 이슈)
+    @Cacheable(cacheNames = "kis-approval-key", key = "#userId", sync = true)
+    public ApprovalKeyResponse getKisApprovalKey(UUID userId) {
+        Account account = accountQueryService.getAccountByUserId(userId);
+        KisApprovalKeyResponse approvalKey =
+                kisClient.getApprovalKey(account.getAppKey(), account.getSecretKey(), account.getAccountType());
+
+        return new ApprovalKeyResponse(approvalKey.approval_key());
     }
 }

@@ -1,6 +1,7 @@
 package com.sajo.user_service.account.controller.internal;
 
 import com.sajo.user_service.account.controller.dto.response.AccessTokenResponse;
+import com.sajo.user_service.account.controller.dto.response.ApprovalKeyResponse;
 import com.sajo.user_service.account.service.query.AccountKisService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -20,6 +21,11 @@ public class AccountInternalController {
     @PostMapping("/accounts/{userId}/token")
     public AccessTokenResponse getToken(@PathVariable UUID userId) {
         return accountKisService.getKisAccessToken(userId);
+    }
+
+    @PostMapping("/accounts/{userId}/ws-token")
+    public ApprovalKeyResponse getWsToken(@PathVariable UUID userId) {
+        return accountKisService.getKisApprovalKey(userId);
     }
 
 }
