@@ -242,6 +242,7 @@ services:
       CONFIG_SERVER_URL: http://config-server:8888
       DB_PASSWORD: ${DB_PASSWORD}
       MONGO_PASSWORD: ${MONGO_PASSWORD}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
     ports:
       - "127.0.0.1:8083:8083"
     networks:
