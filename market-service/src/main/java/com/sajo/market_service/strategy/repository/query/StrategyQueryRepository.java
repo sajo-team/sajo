@@ -6,6 +6,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.Optional;
@@ -23,9 +24,9 @@ public interface StrategyQueryRepository extends JpaRepository<Strategy, UUID> {
             and (:stockCode is null or s.stockCode = :stockCode)
     """)
     Page<Strategy> findStrategies(
-            UUID userId,
-            StrategyStatus status,
-            String stockCode,
+            @Param("userId") UUID userId,
+            @Param("status") StrategyStatus status,
+            @Param("stockCode") String stockCode,
             Pageable pageable
     );
 

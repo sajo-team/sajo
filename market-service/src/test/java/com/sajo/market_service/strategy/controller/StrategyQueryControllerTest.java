@@ -156,4 +156,15 @@ class StrategyQueryControllerTest {
                 .andExpect(jsonPath("$.data.roeCondition").value(10.0000))
                 .andExpect(jsonPath("$.data.status").value("INACTIVE"));
     }
+
+    @Test
+    @DisplayName("stockCode 형식이 올바르지 않으면 요청이 실패한다")
+    void getStrategiesWithInvalidStockCode() throws Exception {
+        UUID userId = UUID.randomUUID();
+
+        mockMvc.perform(get("/api/v1/strategies")
+                        .header("X-User-Id", userId.toString())
+                        .param("stockCode", "ABC"))
+                .andExpect(status().isInternalServerError());
+    }
 }
