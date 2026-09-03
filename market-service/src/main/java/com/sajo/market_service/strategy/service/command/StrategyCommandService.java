@@ -75,4 +75,6 @@ public class StrategyCommandService {
 
         strategy.delete(userId);
     }
+
+    // TODO: Market 재무 지표 내부 API 구현 완료 후 전략 활성화 전 PER/PBR/ROE 조건 검증 연동
 }
