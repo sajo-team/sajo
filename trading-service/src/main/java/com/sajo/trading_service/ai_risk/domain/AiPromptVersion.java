@@ -1,6 +1,6 @@
 package com.sajo.trading_service.ai_risk.domain;
 
-import com.sajo.common.entity.BaseEntity;
+import com.sajo.common.entity.BaseUpdatableEntity;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -27,7 +27,7 @@ import java.util.UUID;
 )
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-public class AiPromptVersion extends BaseEntity {
+public class AiPromptVersion extends BaseUpdatableEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
