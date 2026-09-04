@@ -4,6 +4,7 @@ import com.sajo.common.exception.BusinessException;
 import com.sajo.user_service.account.client.dto.response.AccessTokenRevokeResponse;
 import com.sajo.user_service.account.client.dto.response.KisAccessTokenResponse;
 import com.sajo.user_service.account.client.dto.response.KisApprovalKeyResponse;
+import com.sajo.user_service.account.client.dto.response.KisBalanceResponse;
 import com.sajo.user_service.account.domain.AccountType;
 import com.sajo.user_service.account.exception.AccountErrorCode;
 import org.junit.jupiter.api.DisplayName;
@@ -17,6 +18,7 @@ import org.springframework.web.client.RestClient;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.jsonPath;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
@@ -278,6 +280,108 @@ class KisClientTest {
                     BusinessException businessException = (BusinessException) exception;
                     assertThat(businessException.getErrorCode())
                             .isEqualTo(AccountErrorCode.INVALID_KIS_CREDENTIALS);
+                });
+
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("잔고조회(예수금) - 정상 응답이면 KisBalanceResponse를 반환하고, VIRTUAL은 virtual 서버/모의 tr_id로 요청한다")
+    void inquiresBalanceSuccessfully() {
+        // given
+        setUp();
+        server.expect(requestTo("https://kis.example/uapi/domestic-stock/v1/trading/inquire-balance"
+                        + "?CANO=12345678&ACNT_PRDT_CD=01&AFHR_FLPR_YN=N&OFL_YN=&INQR_DVSN=02&UNPR_DVSN=01"
+                        + "&FUND_STTL_ICLD_YN=N&FNCG_AMT_AUTO_RDPT_YN=N&PRCS_DVSN=00"
+                        + "&CTX_AREA_FK100=&CTX_AREA_NK100="))
+                .andExpect(method(HttpMethod.GET))
+                .andExpect(header("authorization", "Bearer issued-token"))
+                .andExpect(header("appkey", "app-key"))
+                .andExpect(header("appsecret", "secret-key"))
+                .andExpect(header("tr_id", "VTTC8434R"))
+                .andExpect(header("tr_cont", ""))
+                .andRespond(withSuccess("""
+                        {"rt_cd":"0","msg_cd":"MSG_CD","msg1":"정상처리 되었습니다","ctx_area_fk100":"","ctx_area_nk100":"",
+                         "output1":[],"output2":[{"dnca_tot_amt":"1000000"}]}
+                        """, MediaType.APPLICATION_JSON));
+
+        // when
+        KisBalanceResponse response = client.inquireBalance(
+                "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.VIRTUAL);
+
+        // then
+        assertThat(response.rt_cd()).isEqualTo("0");
+        assertThat(response.output2()).hasSize(1);
+        assertThat(response.output2().getFirst().dnca_tot_amt()).isEqualTo("1000000");
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("잔고조회 - REAL 계좌는 real 서버와 실전 tr_id로 요청한다")
+    void inquiresBalanceRoutesRealAccountTypeToRealServer() {
+        // given
+        setUp();
+        server.expect(requestTo("https://kis-real.example/uapi/domestic-stock/v1/trading/inquire-balance"
+                        + "?CANO=12345678&ACNT_PRDT_CD=01&AFHR_FLPR_YN=N&OFL_YN=&INQR_DVSN=02&UNPR_DVSN=01"
+                        + "&FUND_STTL_ICLD_YN=N&FNCG_AMT_AUTO_RDPT_YN=N&PRCS_DVSN=00"
+                        + "&CTX_AREA_FK100=&CTX_AREA_NK100="))
+                .andExpect(header("tr_id", "TTTC8434R"))
+                .andRespond(withSuccess("""
+                        {"rt_cd":"0","msg_cd":"MSG_CD","msg1":"정상처리 되었습니다","output1":[],"output2":[{}]}
+                        """, MediaType.APPLICATION_JSON));
+
+        // when
+        client.inquireBalance("issued-token", "app-key", "secret-key", "12345678", "01", AccountType.REAL);
+
+        // then
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("잔고조회 - rt_cd가 0이 아니면 HTTP 200이어도 KIS_BALANCE_INQUIRY_FAILED 예외를 던진다")
+    void inquireBalanceFailsWhenRtCdIsNotZero() {
+        // given
+        setUp();
+        server.expect(requestTo("https://kis.example/uapi/domestic-stock/v1/trading/inquire-balance"
+                        + "?CANO=12345678&ACNT_PRDT_CD=01&AFHR_FLPR_YN=N&OFL_YN=&INQR_DVSN=02&UNPR_DVSN=01"
+                        + "&FUND_STTL_ICLD_YN=N&FNCG_AMT_AUTO_RDPT_YN=N&PRCS_DVSN=00"
+                        + "&CTX_AREA_FK100=&CTX_AREA_NK100="))
+                .andRespond(withSuccess("""
+                        {"rt_cd":"1","msg_cd":"MSG_CD","msg1":"조회 실패","output1":[],"output2":[]}
+                        """, MediaType.APPLICATION_JSON));
+
+        // when & then
+        assertThatThrownBy(() -> client.inquireBalance(
+                "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.VIRTUAL))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(AccountErrorCode.KIS_BALANCE_INQUIRY_FAILED);
+                });
+
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("잔고조회 - 5xx 응답이면 KIS_BALANCE_INQUIRY_FAILED 예외를 던진다")
+    void inquireBalanceFailsWithHttp5xx() {
+        // given
+        setUp();
+        server.expect(requestTo("https://kis.example/uapi/domestic-stock/v1/trading/inquire-balance"
+                        + "?CANO=12345678&ACNT_PRDT_CD=01&AFHR_FLPR_YN=N&OFL_YN=&INQR_DVSN=02&UNPR_DVSN=01"
+                        + "&FUND_STTL_ICLD_YN=N&FNCG_AMT_AUTO_RDPT_YN=N&PRCS_DVSN=00"
+                        + "&CTX_AREA_FK100=&CTX_AREA_NK100="))
+                .andRespond(withStatus(HttpStatus.INTERNAL_SERVER_ERROR));
+
+        // when & then
+        assertThatThrownBy(() -> client.inquireBalance(
+                "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.VIRTUAL))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(AccountErrorCode.KIS_BALANCE_INQUIRY_FAILED);
                 });
 
         server.verify();
