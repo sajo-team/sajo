@@ -56,26 +56,26 @@ class AccountCreateFacadeTest {
         // given
         UUID userId = UUID.randomUUID();
         Account account = Account.createAccount(
-                userId, "app-key", "secret-key", "123-456-789", "hashed-account-no", AccountType.REAL);
+                userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
         KisAccessTokenResponse kisResponse =
                 new KisAccessTokenResponse("issued-token", "Bearer", 86400f, "2026-01-01 00:00:00");
 
         given(kisClient.getAccessToken("app-key", "secret-key", AccountType.REAL)).willReturn(kisResponse);
-        given(accountCommandService.createAccount(userId, "app-key", "secret-key", "123-456-789", AccountType.REAL))
+        given(accountCommandService.createAccount(userId, "app-key", "secret-key", "12345678-01", AccountType.REAL))
                 .willReturn(account);
 
         // when
         Account result = accountCreateFacade.createAccount(
-                userId, "app-key", "secret-key", "123-456-789", AccountType.REAL);
+                userId, "app-key", "secret-key", "12345678-01", AccountType.REAL);
 
         // then
         assertThat(result).isEqualTo(account);
 
         InOrder inOrder = inOrder(accountQueryService, kisClient, accountCommandService, kisTokenCacheCommandService);
-        inOrder.verify(accountQueryService).validateCreatable(userId, "123-456-789");
+        inOrder.verify(accountQueryService).validateCreatable(userId, "12345678-01");
         inOrder.verify(kisClient).getAccessToken("app-key", "secret-key", AccountType.REAL);
         inOrder.verify(accountCommandService)
-                .createAccount(userId, "app-key", "secret-key", "123-456-789", AccountType.REAL);
+                .createAccount(userId, "app-key", "secret-key", "12345678-01", AccountType.REAL);
         inOrder.verify(kisTokenCacheCommandService)
                 .primeKisAccessTokenCache(userId, "issued-token");
     }
@@ -86,11 +86,11 @@ class AccountCreateFacadeTest {
         // given
         UUID userId = UUID.randomUUID();
         willThrow(new BusinessException(AccountErrorCode.ALREADY_HAS_ACCOUNT))
-                .given(accountQueryService).validateCreatable(userId, "123-456-789");
+                .given(accountQueryService).validateCreatable(userId, "12345678-01");
 
         // when & then
         assertThatThrownBy(() -> accountCreateFacade.createAccount(
-                userId, "app-key", "secret-key", "123-456-789", AccountType.REAL))
+                userId, "app-key", "secret-key", "12345678-01", AccountType.REAL))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(exception -> {
                     BusinessException businessException = (BusinessException) exception;
@@ -114,7 +114,7 @@ class AccountCreateFacadeTest {
 
         // when & then
         assertThatThrownBy(() -> accountCreateFacade.createAccount(
-                userId, "app-key", "secret-key", "123-456-789", AccountType.REAL))
+                userId, "app-key", "secret-key", "12345678-01", AccountType.REAL))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(exception -> {
                     BusinessException businessException = (BusinessException) exception;
@@ -136,12 +136,12 @@ class AccountCreateFacadeTest {
                 new KisAccessTokenResponse("issued-token", "Bearer", 86400f, "2026-01-01 00:00:00");
 
         given(kisClient.getAccessToken("app-key", "secret-key", AccountType.REAL)).willReturn(kisResponse);
-        given(accountCommandService.createAccount(userId, "app-key", "secret-key", "123-456-789", AccountType.REAL))
+        given(accountCommandService.createAccount(userId, "app-key", "secret-key", "12345678-01", AccountType.REAL))
                 .willThrow(new BusinessException(AccountErrorCode.DUPLICATE_ACCOUNT_NO));
 
         // when & then
         assertThatThrownBy(() -> accountCreateFacade.createAccount(
-                userId, "app-key", "secret-key", "123-456-789", AccountType.REAL))
+                userId, "app-key", "secret-key", "12345678-01", AccountType.REAL))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(exception -> {
                     BusinessException businessException = (BusinessException) exception;
@@ -158,19 +158,19 @@ class AccountCreateFacadeTest {
         // given
         UUID userId = UUID.randomUUID();
         Account account = Account.createAccount(
-                userId, "app-key", "secret-key", "123-456-789", "hashed-account-no", AccountType.REAL);
+                userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
         KisAccessTokenResponse kisResponse =
                 new KisAccessTokenResponse("issued-token", "Bearer", 86400f, "2026-01-01 00:00:00");
 
         given(kisClient.getAccessToken("app-key", "secret-key", AccountType.REAL)).willReturn(kisResponse);
-        given(accountCommandService.createAccount(userId, "app-key", "secret-key", "123-456-789", AccountType.REAL))
+        given(accountCommandService.createAccount(userId, "app-key", "secret-key", "12345678-01", AccountType.REAL))
                 .willReturn(account);
         willThrow(new RuntimeException("Redis 연결 실패"))
                 .given(kisTokenCacheCommandService).primeKisAccessTokenCache(any(), any());
 
         // when
         Account result = accountCreateFacade.createAccount(
-                userId, "app-key", "secret-key", "123-456-789", AccountType.REAL);
+                userId, "app-key", "secret-key", "12345678-01", AccountType.REAL);
 
         // then
         assertThat(result).isEqualTo(account);
