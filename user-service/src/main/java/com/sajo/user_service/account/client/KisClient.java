@@ -13,6 +13,7 @@ import com.sajo.user_service.account.domain.AccountType;
 import com.sajo.user_service.account.exception.AccountErrorCode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
@@ -70,13 +71,25 @@ public class KisClient {
 
     }
 
-    // kis 주식 잔고 조회 요청
+    // kis 주식 잔고 조회 요청 (예수금 전용 - 첫 페이지만, 보유종목 목록은 안 씀)
     public KisBalanceResponse inquireBalance(
             String accessToken, String appKey, String secretKey, String cano, String accountProductCode,
             AccountType accountType
     ) {
+        return inquireBalance(
+                accessToken, appKey, secretKey, cano, accountProductCode, accountType, null, null
+        ).body();
+    }
+
+    // kis 주식 잔고 조회 요청 (보유종목 연속조회용) - ctxAreaFk100/ctxAreaNk100이 둘 다 null이면 최초 조회
+    public KisContinuationResult<KisBalanceResponse> inquireBalance(
+            String accessToken, String appKey, String secretKey, String cano, String accountProductCode,
+            AccountType accountType, String ctxAreaFk100, String ctxAreaNk100
+    ) {
         RestClient restClient = selectRestClient(accountType);
         String trId = accountType == AccountType.REAL ? BALANCE_TR_ID_REAL : BALANCE_TR_ID_VIRTUAL;
+        boolean isFirstCall = ctxAreaFk100 == null && ctxAreaNk100 == null;
+        String trCont = isFirstCall ? "" : "N"; // 공백: 초기 조회, N: 다음 데이터 조회
 
         String uri = UriComponentsBuilder.fromPath(INQUIRE_BALANCE)
                 .queryParam("CANO", cano) // 종합계좌번호 - 계좌번호 체계(8-2)의 앞 8자리
@@ -88,49 +101,57 @@ public class KisClient {
                 .queryParam("FUND_STTL_ICLD_YN", "N") // 펀드결제분포함여부 - N: 포함하지 않음, Y: 포함
                 .queryParam("FNCG_AMT_AUTO_RDPT_YN", "N") // 융자금액자동상환여부 - N: 기본값
                 .queryParam("PRCS_DVSN", "00") // 처리구분 - 00: 전일매매포함, 01: 전일매매미포함
-                .queryParam("CTX_AREA_FK100", "") // 연속조회검색조건100 - 공란: 최초 조회시
-                .queryParam("CTX_AREA_NK100", "") // 연속조회키100 - 공란: 최초 조회시
+                .queryParam("CTX_AREA_FK100", isFirstCall ? "" : ctxAreaFk100) // 연속조회검색조건100
+                .queryParam("CTX_AREA_NK100", isFirstCall ? "" : ctxAreaNk100) // 연속조회키100
                 .build()
                 .toUriString();
 
         // 요청
-        KisBalanceResponse response =
-                inquire(restClient, uri, accessToken, appKey, secretKey, trId, KisBalanceResponse.class);
+        KisContinuationResult<KisBalanceResponse> result =
+                inquire(restClient, uri, accessToken, appKey, secretKey, trId, trCont, KisBalanceResponse.class);
 
         // KIS 조회 API는 HTTP 200이어도 rt_cd가 "0"이 아니면 업무상 실패
+        KisBalanceResponse response = result.body();
         if (!"0".equals(response.rt_cd())) {
             log.warn("KIS 잔고조회 실패. msg_cd={}, msg1={}", response.msg_cd(), response.msg1());
             throw new BusinessException(AccountErrorCode.KIS_BALANCE_INQUIRY_FAILED);
         }
-        return response;
+        return result;
     }
 
-    private <T> T inquire(
+    private <T> KisContinuationResult<T> inquire(
             RestClient restClient, String uri, String accessToken, String appKey, String secretKey, String trId,
-            Class<T> responseType
+            String trCont, Class<T> responseType
     ) {
-        return execute(() -> restClient.get()
+        ResponseEntity<T> responseEntity = execute(() -> restClient.get()
                 .uri(uri)
                 .header("authorization", "Bearer " + accessToken)
                 .header("appkey", appKey)
                 .header("appsecret", secretKey)
                 .header("tr_id", trId)
+                .header("tr_cont", trCont)
                 .retrieve()
-                .body(responseType), AccountErrorCode.KIS_BALANCE_INQUIRY_FAILED);
+                .toEntity(responseType), AccountErrorCode.KIS_BALANCE_INQUIRY_FAILED);
+
+        // 응답 헤더 tr_cont: F/M = 다음 데이터 있음, D/E = 마지막
+        String responseTrCont = responseEntity.getHeaders().getFirst("tr_cont");
+        boolean hasNext = "F".equals(responseTrCont) || "M".equals(responseTrCont);
+        return new KisContinuationResult<>(responseEntity.getBody(), hasNext);
     }
 
     private <T> T issue(RestClient restClient, String path, Object request, Class<T> responseType) {
-        return execute(() -> restClient.post()
+        ResponseEntity<T> responseEntity = execute(() -> restClient.post()
                 .uri(path)
                 .contentType(MediaType.APPLICATION_JSON)
                 .body(request)
                 .retrieve()
-                .body(responseType), AccountErrorCode.KIS_TOKEN_ISSUE_FAILED);
+                .toEntity(responseType), AccountErrorCode.KIS_TOKEN_ISSUE_FAILED);
+        return responseEntity.getBody();
     }
 
     // issue()/inquire() 공통 에러 처리 - 실제 요청 실행만 각자 넘기고, 실패 시 판별/변환은 여기서 한다
-    private <T> T execute(Supplier<T> request, AccountErrorCode defaultFailureCode) {
-        T response;
+    private <T> ResponseEntity<T> execute(Supplier<ResponseEntity<T>> request, AccountErrorCode defaultFailureCode) {
+        ResponseEntity<T> response;
         try {
             response = request.get();
         } catch (RestClientResponseException e) {
@@ -164,7 +185,7 @@ public class KisClient {
             throw new BusinessException(defaultFailureCode);
         }
 
-        if (response == null) {
+        if (response == null || response.getBody() == null) {
             throw new BusinessException(defaultFailureCode, "KIS 응답이 비어 있습니다.");
         }
         return response;

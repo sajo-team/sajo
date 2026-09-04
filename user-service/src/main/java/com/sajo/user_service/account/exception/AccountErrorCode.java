@@ -25,7 +25,9 @@ public enum AccountErrorCode implements ErrorCode {
 
     INVALID_ACCOUNT_NO_FORMAT(HttpStatus.INTERNAL_SERVER_ERROR, "ACCOUNT_0008", "계좌번호 형식이 올바르지 않습니다"),
 
-    KIS_BALANCE_INQUIRY_FAILED(HttpStatus.BAD_GATEWAY, "ACCOUNT_0009", "KIS 잔고 조회에 실패했습니다");
+    KIS_BALANCE_INQUIRY_FAILED(HttpStatus.BAD_GATEWAY, "ACCOUNT_0009", "KIS 잔고 조회에 실패했습니다"),
+
+    INVALID_CONTINUATION_CURSOR(HttpStatus.BAD_REQUEST, "ACCOUNT_0010", "ctxAreaFk100/ctxAreaNk100은 둘 다 있거나 둘 다 없어야 합니다");
 
     private final HttpStatus status;
     private final String errorCode;
