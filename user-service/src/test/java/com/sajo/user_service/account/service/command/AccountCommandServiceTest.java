@@ -145,7 +145,7 @@ class AccountCommandServiceTest {
         // given
         UUID userId = UUID.randomUUID();
         Account account = Account.createAccount(
-                userId, "app-key", "secret-key", "123-456-789", "hashed-account-no", AccountType.REAL);
+                userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
         given(accountCommandRepository.findByUserIdAndDeletedAtIsNull(userId)).willReturn(Optional.of(account));
 
         // when
