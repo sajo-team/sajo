@@ -11,6 +11,7 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -19,15 +20,17 @@ import java.util.UUID;
 
 @Getter
 @Entity
-@Table(name = "p_accounts")
+@Table(name = "p_accounts", uniqueConstraints = {
+        @UniqueConstraint(name = "uq_account_user_id", columnNames = {"user_id", "unique_column"}),
+        @UniqueConstraint(name = "uq_account_no_hash", columnNames = {"account_no_hash", "unique_column"})
+})
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-//Todo: DDL 작성 시 partial unique index 적용
 public class Account extends BaseUpdatableEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(unique = true, nullable = false)
+    @Column(nullable = false)
     private UUID userId;
 
     @Convert(converter = AesGcmStringConverter.class)
@@ -42,12 +45,19 @@ public class Account extends BaseUpdatableEntity {
     @Column(nullable = false, columnDefinition = "text")
     private String accountNo;
 
-    @Column(unique = true, nullable = false)
+    @Column(nullable = false)
     private String accountNoHash;
 
     @Column(nullable = false)
     @Enumerated(value = EnumType.STRING)
     private AccountType accountType;
+
+    // soft delete된 row끼리는 유니크 제약에서 서로 겹치지 않도록 하기 위한 컬럼
+    // 활성 상태: 고정값(0) 공유, 삭제 상태: 자기 자신의 id로 교체
+    // 추후 ddl 작성 하게 되면 PostgreSQL partial unique index로 교체
+    //Todo: DDL 작성 시 partial unique index 적용
+    @Column(name = "unique_column", nullable = false)
+    private UUID uniqueColumn;
 
     private Account(
             UUID userId, String appKey, String secretKey, String accountNo, String accountNoHash,
@@ -58,6 +68,7 @@ public class Account extends BaseUpdatableEntity {
         this.accountNo = accountNo;
         this.accountNoHash = accountNoHash;
         this.accountType = accountType;
+        this.uniqueColumn = new UUID(0L, 0L);
     }
 
     public static Account createAccount(
@@ -66,4 +77,9 @@ public class Account extends BaseUpdatableEntity {
         return new Account(userId, appKey, secretKey, accountNo, accountNoHash, accountType);
     }
 
+    @Override
+    public void softDelete(UUID deletedBy) {
+        super.softDelete(deletedBy);
+        this.uniqueColumn = this.id;
+    }
 }

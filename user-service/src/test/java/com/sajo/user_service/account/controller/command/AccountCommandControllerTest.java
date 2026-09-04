@@ -8,6 +8,7 @@ import com.sajo.user_service.account.domain.Account;
 import com.sajo.user_service.account.domain.AccountType;
 import com.sajo.user_service.account.exception.AccountErrorCode;
 import com.sajo.user_service.account.service.command.AccountCreateFacade;
+import com.sajo.user_service.account.service.command.AccountDeleteFacade;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,6 +23,9 @@ import java.util.UUID;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.Mockito.verify;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -38,6 +42,9 @@ class AccountCommandControllerTest {
 
     @MockitoBean
     private AccountCreateFacade accountCreateFacade;
+
+    @MockitoBean
+    private AccountDeleteFacade accountDeleteFacade;
 
     @Test
     @DisplayName("계좌를 생성하면 201과 생성된 계좌 정보를 반환한다")
@@ -125,5 +132,34 @@ class AccountCommandControllerTest {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.errorCode").value("ACCOUNT_0002"));
+    }
+
+    @Test
+    @DisplayName("계좌를 삭제하면 200을 반환한다")
+    void deleteAccount() throws Exception {
+        // given
+        UUID userId = UUID.randomUUID();
+
+        // when & then
+        mockMvc.perform(delete("/api/v1/accounts").param("userId", userId.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true));
+
+        verify(accountDeleteFacade).deleteAccount(userId);
+    }
+
+    @Test
+    @DisplayName("삭제할 계좌가 없으면 404를 반환한다")
+    void deleteAccountNotFound() throws Exception {
+        // given
+        UUID userId = UUID.randomUUID();
+        willThrow(new BusinessException(AccountErrorCode.ACCOUNT_NOT_FOUND))
+                .given(accountDeleteFacade).deleteAccount(userId);
+
+        // when & then
+        mockMvc.perform(delete("/api/v1/accounts").param("userId", userId.toString()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.errorCode").value("ACCOUNT_0006"));
     }
 }

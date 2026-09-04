@@ -6,9 +6,11 @@ import com.sajo.user_service.account.controller.dto.request.AccountCreateRequest
 import com.sajo.user_service.account.controller.dto.response.AccountResponse;
 import com.sajo.user_service.account.domain.Account;
 import com.sajo.user_service.account.service.command.AccountCreateFacade;
+import com.sajo.user_service.account.service.command.AccountDeleteFacade;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -23,6 +25,7 @@ import java.util.UUID;
 public class AccountCommandController {
 
     private final AccountCreateFacade accountCreateFacade;
+    private final AccountDeleteFacade accountDeleteFacade;
 
     @PostMapping("/accounts")
     public ResponseEntity<GeneralResponse<AccountResponse>> createAccount(
@@ -32,6 +35,15 @@ public class AccountCommandController {
         Account account = accountCreateFacade.createAccount(
                 userId, request.appKey(), request.secretKey(), request.accountNo(), request.accountType());
         return GeneralResponse.toResponseEntity(GeneralResponseCode.CREATED, AccountResponse.from(account));
+    }
+
+    @DeleteMapping("/accounts")
+    public ResponseEntity<GeneralResponse<Void>> deleteAccount(
+            @RequestParam("userId") UUID userId // TODO: Gateway에서 JWT 검증 후 전달하는 X-User-Id 헤더를 사용하도록 변경
+    ) {
+
+        accountDeleteFacade.deleteAccount(userId);
+        return GeneralResponse.toResponseEntity(GeneralResponseCode.OK, null);
     }
 
 }
