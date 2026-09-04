@@ -6,11 +6,7 @@ import com.sajo.common.feign.FeignApiException;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @Validated
@@ -23,6 +19,11 @@ public class ExceptionTestController {
 
     @GetMapping("/validate-param")
     public String validateParam(@RequestParam @Min(1) int page) {
+        return "ok";
+    }
+
+    @GetMapping("/require-header")
+    public String requireHeader(@RequestHeader("X-User-Id") String userId) {
         return "ok";
     }
 

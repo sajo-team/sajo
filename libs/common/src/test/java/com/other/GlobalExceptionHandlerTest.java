@@ -54,6 +54,14 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
+    @DisplayName("필수 헤더 누락 시 401을 반환한다 (Gateway를 거치지 않은 요청과 동일하게 처리)")
+    void missingRequiredHeader_returnsUnauthorized() throws Exception {
+        mockMvc.perform(get("/require-header"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.errorCode").value("COMMON_0002"));
+    }
+
+    @Test
     @DisplayName("BusinessException은 커스텀 메시지와 자기 에러코드를 그대로 사용한다")
     void businessException_usesCustomMessageAndItsOwnErrorCode() throws Exception {
         mockMvc.perform(get("/business-error"))
