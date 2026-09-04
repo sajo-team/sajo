@@ -115,6 +115,42 @@ class MarketQuoteQueryServiceTest {
     }
 
     @Test
+    void refreshesLegacyCacheWithoutBaseTimeAndCachesKisBaseTime() {
+        UUID userId = UUID.randomUUID();
+        UserKisTokenResponse credentials = new UserKisTokenResponse("token", "app-key", "secret-key");
+        QuoteResponse legacyQuote = new QuoteResponse(
+                STOCK_CODE, 69_000L, null, null, null, null, null, null, null, null, null, null, null, null, null);
+        QuoteResponse refreshedQuote = quoteResponse(70_000L);
+        given(valueOperations.get(CACHE_KEY)).willReturn(legacyQuote, legacyQuote);
+        given(userAccountFeignClient.getKisToken(userId)).willReturn(credentials);
+        given(kisApiClient.getQuote(credentials, STOCK_CODE)).willReturn(refreshedQuote);
+
+        QuoteResponse response = marketQuoteQueryService.getQuote(userId, STOCK_CODE);
+
+        assertThat(response.baseTime()).isEqualTo("2026-09-04T14:30:00+09:00");
+        verify(kisApiClient).getQuote(credentials, STOCK_CODE);
+        verify(valueOperations).set(CACHE_KEY, refreshedQuote, CACHE_TTL);
+    }
+
+    @Test
+    void refreshesLegacyCacheWithBlankBaseTimeAndCachesKisBaseTime() {
+        UUID userId = UUID.randomUUID();
+        UserKisTokenResponse credentials = new UserKisTokenResponse("token", "app-key", "secret-key");
+        QuoteResponse legacyQuote = new QuoteResponse(
+                STOCK_CODE, 69_000L, null, null, null, null, null, null, null, null, null, null, null, null, null, "   ");
+        QuoteResponse refreshedQuote = quoteResponse(70_000L);
+        given(valueOperations.get(CACHE_KEY)).willReturn(legacyQuote, legacyQuote);
+        given(userAccountFeignClient.getKisToken(userId)).willReturn(credentials);
+        given(kisApiClient.getQuote(credentials, STOCK_CODE)).willReturn(refreshedQuote);
+
+        QuoteResponse response = marketQuoteQueryService.getQuote(userId, STOCK_CODE);
+
+        assertThat(response).isEqualTo(refreshedQuote);
+        verify(kisApiClient).getQuote(credentials, STOCK_CODE);
+        verify(valueOperations).set(CACHE_KEY, refreshedQuote, CACHE_TTL);
+    }
+
+    @Test
     @DisplayName("KIS 조회가 실패하면 캐시에 데이터를 저장하지 않는다")
     void doesNotCacheWhenKisLookupFails() {
         UUID userId = UUID.randomUUID();
@@ -268,7 +304,7 @@ class MarketQuoteQueryServiceTest {
             assertThat(bothKisCallsStarted.await(1, TimeUnit.SECONDS)).isTrue();
             return new QuoteResponse(
                     invocation.getArgument(1), 70_000L, null, null, null, null,
-                    null, null, null, null, null, null, null, null, null
+                    null, null, null, null, null, null, null, null, null, "2026-09-04T14:30:00+09:00"
             );
         });
 
@@ -310,7 +346,7 @@ class MarketQuoteQueryServiceTest {
         return new QuoteResponse(
                 STOCK_CODE, currentPrice, 69_000L, 70_500L, 68_800L, 69_500L,
                 500L, null, 123_456L, 8_610_000_000L, 4_180_000L,
-                null, null, null, null
+                null, null, null, null, "2026-09-04T14:30:00+09:00"
         );
     }
 }

@@ -14,6 +14,8 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.bind.MissingRequestHeaderException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -63,6 +65,13 @@ public class GlobalExceptionHandler {
 
         log.warn("uri: {}", request.getRequestURI(), e);
         return ErrorResponse.toResponseEntity(ErrorResponseCode.MALFORMED_REQUEST);
+    }
+
+    // Required request headers and path/query type conversion failures are client input errors, not server failures.
+    @ExceptionHandler({MissingRequestHeaderException.class, MethodArgumentTypeMismatchException.class})
+    public ResponseEntity<ErrorResponse> handleRequestBindingException(Exception e, HttpServletRequest request) {
+        log.warn("uri: {}, requestBindingException: {}", request.getRequestURI(), e.getMessage());
+        return ErrorResponse.toResponseEntity(ErrorResponseCode.INVALID_BAD_REQUEST);
     }
 
     // 지원하지 않는 HTTP 메서드로 요청 시

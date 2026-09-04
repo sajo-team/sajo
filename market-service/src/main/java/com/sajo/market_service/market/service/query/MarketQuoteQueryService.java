@@ -13,7 +13,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.util.UUID;
@@ -33,11 +32,10 @@ public class MarketQuoteQueryService {
     private final KisApiClient kisApiClient;
     private final MarketQuoteCacheProperties cacheProperties;
 
-    @Transactional(readOnly = true)
     public QuoteResponse getQuote(UUID userId, String stockCode) {
         String cacheKey = createCacheKey(stockCode);
         CacheLookup initialLookup = findCachedQuote(cacheKey);
-        if (initialLookup.quote() != null) {
+        if (isCacheableQuote(initialLookup.quote())) {
             return initialLookup.quote();
         }
         if (!initialLookup.redisAvailable()) {
@@ -58,7 +56,7 @@ public class MarketQuoteQueryService {
                 if (marketQuoteCacheLock.tryLock(stockCode, lockToken, cacheProperties.lockTtl())) {
                     try {
                         CacheLookup lockAcquiredLookup = findCachedQuote(cacheKey);
-                        if (lockAcquiredLookup.quote() != null) {
+                        if (isCacheableQuote(lockAcquiredLookup.quote())) {
                             return lockAcquiredLookup.quote();
                         }
                         return fetchAndCacheQuote(userId, stockCode, cacheKey);
@@ -73,7 +71,7 @@ public class MarketQuoteQueryService {
             }
 
             CacheLookup waitingLookup = findCachedQuote(cacheKey);
-            if (waitingLookup.quote() != null) {
+            if (isCacheableQuote(waitingLookup.quote())) {
                 return waitingLookup.quote();
             }
             if (!waitingLookup.redisAvailable()) {
@@ -135,6 +133,11 @@ public class MarketQuoteQueryService {
 
     private String createCacheKey(String stockCode) {
         return QUOTE_CACHE_KEY_PREFIX + stockCode;
+    }
+
+    private boolean isCacheableQuote(QuoteResponse quote) {
+        // Pre-baseTime cache entries are refreshed rather than returning a fabricated quote timestamp.
+        return quote != null && quote.baseTime() != null && !quote.baseTime().isBlank();
     }
 
     private record CacheLookup(QuoteResponse quote, boolean redisAvailable) {

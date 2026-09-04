@@ -46,7 +46,8 @@ class MarketQuoteQueryControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.stockCode").value("005930"))
-                .andExpect(jsonPath("$.data.currentPrice").value(70_000));
+                .andExpect(jsonPath("$.data.currentPrice").value(70_000))
+                .andExpect(jsonPath("$.data.baseTime").doesNotExist());
 
         verify(marketQuoteQueryService).getQuote(userId, "005930");
     }

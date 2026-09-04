@@ -9,8 +9,11 @@ import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.UUID;
 
 @RestController
 @Validated
@@ -24,6 +27,16 @@ public class ExceptionTestController {
     @GetMapping("/validate-param")
     public String validateParam(@RequestParam @Min(1) int page) {
         return "ok";
+    }
+
+    @GetMapping("/required-header")
+    public String requiredHeader(@RequestHeader("X-Test-Id") String testId) {
+        return testId;
+    }
+
+    @GetMapping("/uuid-header")
+    public String uuidHeader(@RequestHeader("X-Test-Id") UUID testId) {
+        return testId.toString();
     }
 
     @GetMapping("/business-error")

@@ -3,6 +3,7 @@ package com.sajo.market_service.market.controller;
 import com.sajo.common.code.GeneralResponseCode;
 import com.sajo.common.response.GeneralResponse;
 import com.sajo.market_service.market.dto.response.QuoteResponse;
+import com.sajo.market_service.market.dto.response.PublicQuoteResponse;
 import com.sajo.market_service.market.service.query.MarketQuoteQueryService;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -27,7 +28,7 @@ public class MarketQuoteQueryController {
     private final MarketQuoteQueryService marketQuoteQueryService;
 
     @GetMapping("/quote")
-    public ResponseEntity<GeneralResponse<QuoteResponse>> getQuote(
+    public ResponseEntity<GeneralResponse<PublicQuoteResponse>> getQuote(
             @RequestHeader("X-User-Id") UUID userId,
             @RequestParam
             @NotBlank(message = "종목 코드는 필수입니다.")
@@ -35,6 +36,6 @@ public class MarketQuoteQueryController {
             String stockCode
     ) {
         QuoteResponse response = marketQuoteQueryService.getQuote(userId, stockCode);
-        return GeneralResponse.toResponseEntity(GeneralResponseCode.OK, response);
+        return GeneralResponse.toResponseEntity(GeneralResponseCode.OK, PublicQuoteResponse.from(response));
     }
 }

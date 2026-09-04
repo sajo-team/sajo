@@ -24,7 +24,7 @@ class MarketRedisConfigurationTest {
                 "005930", 70_000L, 69_000L, 70_500L, 68_800L, 69_500L,
                 500L, new BigDecimal("0.7194"), 123_456L, 8_610_000_000L,
                 4_180_000L, new BigDecimal("15.20"), new BigDecimal("1.35"),
-                new BigDecimal("4605.00"), new BigDecimal("51850.00")
+                new BigDecimal("4605.00"), new BigDecimal("51850.00"), "2026-09-04T14:30:00+09:00"
         );
 
         byte[] serialized = serializer.serialize(quote);

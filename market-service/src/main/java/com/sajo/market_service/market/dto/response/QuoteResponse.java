@@ -5,6 +5,12 @@ import com.sajo.market_service.market.dto.kis.KisQuoteResponse;
 import com.sajo.market_service.market.exception.MarketErrorCode;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 
 /** Market 내부에서 사용하는 현재가 응답 모델이다. */
 public record QuoteResponse(
@@ -22,8 +28,18 @@ public record QuoteResponse(
         BigDecimal per,
         BigDecimal pbr,
         BigDecimal eps,
-        BigDecimal bps
+        BigDecimal bps,
+        String baseTime
 ) {
+
+    public QuoteResponse(
+            String stockCode, Long currentPrice, Long openPrice, Long highPrice, Long lowPrice,
+            Long previousClosePrice, Long changePrice, BigDecimal changeRate, Long accumulatedVolume,
+            Long tradeAmount, Long marketCapitalization, BigDecimal per, BigDecimal pbr, BigDecimal eps, BigDecimal bps
+    ) {
+        this(stockCode, currentPrice, openPrice, highPrice, lowPrice, previousClosePrice, changePrice, changeRate,
+                accumulatedVolume, tradeAmount, marketCapitalization, per, pbr, eps, bps, null);
+    }
 
     public static QuoteResponse from(KisQuoteResponse response, String stockCode) {
         if (response == null) {
@@ -54,7 +70,8 @@ public record QuoteResponse(
                 toBigDecimal(output.per()),
                 toBigDecimal(output.pbr()),
                 toBigDecimal(output.eps()),
-                toBigDecimal(output.bps())
+                toBigDecimal(output.bps()),
+                toBaseTime(output.businessDate(), output.contractTime())
         );
     }
 
@@ -64,5 +81,17 @@ public record QuoteResponse(
 
     private static BigDecimal toBigDecimal(String value) {
         return value == null || value.isBlank() ? null : new BigDecimal(value);
+    }
+
+    private static String toBaseTime(String businessDate, String contractTime) {
+        try {
+            LocalDate date = LocalDate.parse(businessDate, DateTimeFormatter.BASIC_ISO_DATE);
+            LocalTime time = LocalTime.parse(contractTime, DateTimeFormatter.ofPattern("HHmmss"));
+            OffsetDateTime baseTime = OffsetDateTime.of(date, time, ZoneId.of("Asia/Seoul").getRules().getOffset(date.atTime(time)));
+            return DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(baseTime);
+        } catch (DateTimeParseException | NullPointerException exception) {
+            throw new BusinessException(MarketErrorCode.KIS_QUOTE_RESPONSE_INVALID,
+                    "KIS 현재가 기준 일자 또는 체결 시각이 유효하지 않습니다.");
+        }
     }
 }
