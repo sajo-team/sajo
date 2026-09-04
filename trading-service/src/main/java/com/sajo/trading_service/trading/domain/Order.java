@@ -124,7 +124,7 @@ public class Order extends BaseUpdatableEntity {
     }
 
     public void accept(String brokerOrderNo){
-        if(this.status != OrderStatus.REQUESTED
+        if(this.status != OrderStatus.PROCESSING
                 && this.status != OrderStatus.TIMEOUT){
             throw new BusinessException(
                     TradingErrorCode.ORDER_STATUS_CHANGE_NOT_ALLOWED
@@ -146,7 +146,7 @@ public class Order extends BaseUpdatableEntity {
             String failureCode,
             String failureMessage
     ){
-        if(this.status != OrderStatus.REQUESTED
+        if(this.status != OrderStatus.PROCESSING
                 && this.status != OrderStatus.TIMEOUT){
             throw new BusinessException(
                     TradingErrorCode.ORDER_STATUS_CHANGE_NOT_ALLOWED
@@ -161,7 +161,7 @@ public class Order extends BaseUpdatableEntity {
             String failureCode,
             String failureMessage
     ){
-        if(this.status != OrderStatus.REQUESTED){
+        if(this.status != OrderStatus.PROCESSING){
             throw new BusinessException(
                     TradingErrorCode.ORDER_STATUS_CHANGE_NOT_ALLOWED
             );
@@ -169,5 +169,14 @@ public class Order extends BaseUpdatableEntity {
         this.failureCode = failureCode;
         this.failureMessage = failureMessage;
         this.status = OrderStatus.TIMEOUT;
+    }
+
+    public void startProcessing(){
+        if(this.status != OrderStatus.REQUESTED){
+            throw new BusinessException(
+                    TradingErrorCode.ORDER_EXECUTION_NOT_ALLOWED
+            );
+        }
+        this.status = OrderStatus.PROCESSING;
     }
 }

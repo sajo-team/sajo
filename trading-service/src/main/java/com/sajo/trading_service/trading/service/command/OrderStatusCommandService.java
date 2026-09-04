@@ -51,4 +51,16 @@ public class OrderStatusCommandService {
                         );
         order.timeout(failureCode, failureMessage);
     }
+
+    @Transactional
+    public void startProcessing(UUID orderId){
+        Order order =
+                orderCommandRepository.findByIdForUpdate(orderId)
+                        .orElseThrow(()->
+                                new BusinessException(
+                                        TradingErrorCode.ORDER_NOT_FOUND
+                                )
+                        );
+        order.startProcessing();
+    }
 }

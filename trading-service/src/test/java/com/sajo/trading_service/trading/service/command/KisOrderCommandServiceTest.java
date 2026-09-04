@@ -1,6 +1,7 @@
 package com.sajo.trading_service.trading.service.command;
 
 import com.sajo.common.exception.BusinessException;
+import com.sajo.common.feign.FeignApiException;
 import com.sajo.trading_service.trading.client.AccountClient;
 import com.sajo.trading_service.trading.client.KisOrderClient;
 import com.sajo.trading_service.trading.client.dto.request.KisOrderRequest;
@@ -10,6 +11,7 @@ import com.sajo.trading_service.trading.domain.enums.AccountType;
 import com.sajo.trading_service.trading.domain.enums.OrderType;
 import com.sajo.trading_service.trading.exception.TradingErrorCode;
 import com.sajo.trading_service.trading.repository.command.OrderCommandRepository;
+import feign.FeignException;
 import feign.RetryableException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -22,8 +24,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.util.Optional;
 import java.util.UUID;
 
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -54,7 +55,7 @@ class KisOrderCommandServiceTest {
     }
 
     @Test
-    @DisplayName("BUY 주문 성공 시 Order를 ACCEPTED 처리한다")
+    @DisplayName("BUY 주문 성공 시 PROCESSING 선점 후 ACCEPTED 처리한다")
     void executeBuyOrderSuccess() {
         // given
         Order order = createOrder(OrderType.BUY);
@@ -65,7 +66,11 @@ class KisOrderCommandServiceTest {
         givenCommonAccountResponses();
 
         when(accountClient.getOrderableAmount(userId))
-                .thenReturn(new AccountOrderableAmountResponse(1_000_000L));
+                .thenReturn(
+                        new AccountOrderableAmountResponse(
+                                1_000_000L
+                        )
+                );
 
         KisOrderResponse response =
                 new KisOrderResponse(
@@ -92,17 +97,31 @@ class KisOrderCommandServiceTest {
 
         // then
         verify(orderStatusCommandService)
-                .accept(orderId, "1234567890");
+                .startProcessing(orderId);
+
+        verify(orderStatusCommandService)
+                .accept(
+                        orderId,
+                        "1234567890"
+                );
 
         verify(orderStatusCommandService, never())
-                .fail(any(), any(), any());
+                .fail(
+                        any(),
+                        any(),
+                        any()
+                );
 
         verify(orderStatusCommandService, never())
-                .timeout(any(), any(), any());
+                .timeout(
+                        any(),
+                        any(),
+                        any()
+                );
     }
 
     @Test
-    @DisplayName("BUY 주문 가능 금액이 부족하면 주문을 실행하지 않는다")
+    @DisplayName("BUY 주문 가능 금액이 부족하면 FAILED 처리하고 KIS를 호출하지 않는다")
     void executeBuyOrderNotEnoughAmount() {
         // given
         Order order = createOrder(OrderType.BUY);
@@ -113,27 +132,79 @@ class KisOrderCommandServiceTest {
         givenCommonAccountResponses();
 
         when(accountClient.getOrderableAmount(userId))
-                .thenReturn(new AccountOrderableAmountResponse(100_000L));
-
-        // when & then
-        assertThatThrownBy(() ->
-                kisOrderCommandService.executeOrder(orderId)
-        )
-                .isInstanceOf(BusinessException.class)
-                .satisfies(exception ->
-                        org.assertj.core.api.Assertions.assertThat(
-                                ((BusinessException) exception).getErrorCode()
-                        ).isEqualTo(
-                                TradingErrorCode.ORDERABLE_AMOUNT_NOT_ENOUGH
+                .thenReturn(
+                        new AccountOrderableAmountResponse(
+                                100_000L
                         )
                 );
 
+        // when
+        kisOrderCommandService.executeOrder(orderId);
+
+        // then
+        verify(orderStatusCommandService)
+                .startProcessing(orderId);
+
+        verify(orderStatusCommandService)
+                .fail(
+                        orderId,
+                        "ORDERABLE_AMOUNT_NOT_ENOUGH",
+                        "주문 가능 금액이 부족합니다."
+                );
+
         verifyNoInteractions(kisOrderClient);
-        verifyNoInteractions(orderStatusCommandService);
+
+        verify(orderStatusCommandService, never())
+                .accept(
+                        any(),
+                        any()
+                );
+
+        verify(orderStatusCommandService, never())
+                .timeout(
+                        any(),
+                        any(),
+                        any()
+                );
     }
 
     @Test
-    @DisplayName("SELL 매도 가능 수량이 부족하면 주문을 실행하지 않는다")
+    @DisplayName("BUY 주문 가능 금액이 null이면 FAILED 처리하고 KIS를 호출하지 않는다")
+    void executeBuyOrderNullOrderableAmount() {
+        // given
+        Order order = createOrder(OrderType.BUY);
+
+        when(orderCommandRepository.findById(orderId))
+                .thenReturn(Optional.of(order));
+
+        givenCommonAccountResponses();
+
+        when(accountClient.getOrderableAmount(userId))
+                .thenReturn(
+                        new AccountOrderableAmountResponse(
+                                null
+                        )
+                );
+
+        // when
+        kisOrderCommandService.executeOrder(orderId);
+
+        // then
+        verify(orderStatusCommandService)
+                .startProcessing(orderId);
+
+        verify(orderStatusCommandService)
+                .fail(
+                        orderId,
+                        "ORDERABLE_AMOUNT_NOT_ENOUGH",
+                        "주문 가능 금액이 부족합니다."
+                );
+
+        verifyNoInteractions(kisOrderClient);
+    }
+
+    @Test
+    @DisplayName("SELL 매도 가능 수량이 부족하면 FAILED 처리하고 KIS를 호출하지 않는다")
     void executeSellOrderNotEnoughQuantity() {
         // given
         Order order = createOrder(OrderType.SELL);
@@ -147,28 +218,116 @@ class KisOrderCommandServiceTest {
                 userId,
                 order.getStockCode()
         )).thenReturn(
-                new AccountHoldingResponse(1)
+                new AccountHoldingResponse(
+                        1
+                )
         );
 
-        // when & then
-        assertThatThrownBy(() ->
-                kisOrderCommandService.executeOrder(orderId)
-        )
-                .isInstanceOf(BusinessException.class)
-                .satisfies(exception ->
-                        org.assertj.core.api.Assertions.assertThat(
-                                ((BusinessException) exception).getErrorCode()
-                        ).isEqualTo(
-                                TradingErrorCode.SELLABLE_QUANTITY_NOT_ENOUGH
-                        )
+        // when
+        kisOrderCommandService.executeOrder(orderId);
+
+        // then
+        verify(orderStatusCommandService)
+                .startProcessing(orderId);
+
+        verify(orderStatusCommandService)
+                .fail(
+                        orderId,
+                        "SELLABLE_QUANTITY_NOT_ENOUGH",
+                        "매도 가능 수량이 부족합니다."
                 );
 
         verifyNoInteractions(kisOrderClient);
-        verifyNoInteractions(orderStatusCommandService);
+
+        verify(orderStatusCommandService, never())
+                .accept(
+                        any(),
+                        any()
+                );
+
+        verify(orderStatusCommandService, never())
+                .timeout(
+                        any(),
+                        any(),
+                        any()
+                );
     }
 
     @Test
-    @DisplayName("KIS가 주문 실패 응답을 반환하면 Order를 FAILED 처리한다")
+    @DisplayName("SELL 매도 가능 수량이 null이면 FAILED 처리하고 KIS를 호출하지 않는다")
+    void executeSellOrderNullSellableQuantity() {
+        // given
+        Order order = createOrder(OrderType.SELL);
+
+        when(orderCommandRepository.findById(orderId))
+                .thenReturn(Optional.of(order));
+
+        givenCommonAccountResponses();
+
+        when(accountClient.getHolding(
+                userId,
+                order.getStockCode()
+        )).thenReturn(
+                new AccountHoldingResponse(
+                        null
+                )
+        );
+
+        // when
+        kisOrderCommandService.executeOrder(orderId);
+
+        // then
+        verify(orderStatusCommandService)
+                .startProcessing(orderId);
+
+        verify(orderStatusCommandService)
+                .fail(
+                        orderId,
+                        "SELLABLE_QUANTITY_NOT_ENOUGH",
+                        "매도 가능 수량이 부족합니다."
+                );
+
+        verifyNoInteractions(kisOrderClient);
+    }
+
+    @Test
+    @DisplayName("Account Service에서 FeignApiException이 발생하면 FAILED 처리한다")
+    void executeOrderAccountFeignApiException() {
+        // given
+        Order order = createOrder(OrderType.BUY);
+
+        when(orderCommandRepository.findById(orderId))
+                .thenReturn(Optional.of(order));
+
+        FeignApiException exception =
+                new FeignApiException(
+                        "ACCOUNT_ERROR",
+                        "Account Service 오류",
+                        400
+                );
+
+        when(accountClient.getAccessToken(userId))
+                .thenThrow(exception);
+
+        // when
+        kisOrderCommandService.executeOrder(orderId);
+
+        // then
+        verify(orderStatusCommandService)
+                .startProcessing(orderId);
+
+        verify(orderStatusCommandService)
+                .fail(
+                        orderId,
+                        "ACCOUNT_ERROR",
+                        "Account Service 오류"
+                );
+
+        verifyNoInteractions(kisOrderClient);
+    }
+
+    @Test
+    @DisplayName("KIS가 주문 실패 응답을 반환하면 FAILED 처리한다")
     void executeOrderFailResponse() {
         // given
         Order order = createOrder(OrderType.BUY);
@@ -179,7 +338,11 @@ class KisOrderCommandServiceTest {
         givenCommonAccountResponses();
 
         when(accountClient.getOrderableAmount(userId))
-                .thenReturn(new AccountOrderableAmountResponse(1_000_000L));
+                .thenReturn(
+                        new AccountOrderableAmountResponse(
+                                1_000_000L
+                        )
+                );
 
         KisOrderResponse response =
                 new KisOrderResponse(
@@ -203,6 +366,9 @@ class KisOrderCommandServiceTest {
 
         // then
         verify(orderStatusCommandService)
+                .startProcessing(orderId);
+
+        verify(orderStatusCommandService)
                 .fail(
                         orderId,
                         "KIS_ERROR",
@@ -210,10 +376,126 @@ class KisOrderCommandServiceTest {
                 );
 
         verify(orderStatusCommandService, never())
-                .accept(any(), any());
+                .accept(
+                        any(),
+                        any()
+                );
 
         verify(orderStatusCommandService, never())
-                .timeout(any(), any(), any());
+                .timeout(
+                        any(),
+                        any(),
+                        any()
+                );
+    }
+
+    @Test
+    @DisplayName("KIS 성공 응답에 output이 없으면 TIMEOUT 처리한다")
+    void executeOrderSuccessWithoutOutput() {
+        // given
+        Order order = createOrder(OrderType.BUY);
+
+        when(orderCommandRepository.findById(orderId))
+                .thenReturn(Optional.of(order));
+
+        givenCommonAccountResponses();
+
+        when(accountClient.getOrderableAmount(userId))
+                .thenReturn(
+                        new AccountOrderableAmountResponse(
+                                1_000_000L
+                        )
+                );
+
+        KisOrderResponse response =
+                new KisOrderResponse(
+                        "0",
+                        "SUCCESS",
+                        "주문 전송 완료",
+                        null
+                );
+
+        when(kisOrderClient.placeOrder(
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                any(KisOrderRequest.class)
+        )).thenReturn(response);
+
+        // when
+        kisOrderCommandService.executeOrder(orderId);
+
+        // then
+        verify(orderStatusCommandService)
+                .timeout(
+                        orderId,
+                        "KIS_INVALID_RESPONSE",
+                        "KIS 주문 성공 응답의 주문번호를 확인할 수 없습니다."
+                );
+
+        verify(orderStatusCommandService, never())
+                .accept(
+                        any(),
+                        any()
+                );
+    }
+
+    @Test
+    @DisplayName("KIS 성공 응답의 주문번호가 비어있으면 TIMEOUT 처리한다")
+    void executeOrderSuccessWithoutOrderNumber() {
+        // given
+        Order order = createOrder(OrderType.BUY);
+
+        when(orderCommandRepository.findById(orderId))
+                .thenReturn(Optional.of(order));
+
+        givenCommonAccountResponses();
+
+        when(accountClient.getOrderableAmount(userId))
+                .thenReturn(
+                        new AccountOrderableAmountResponse(
+                                1_000_000L
+                        )
+                );
+
+        KisOrderResponse response =
+                new KisOrderResponse(
+                        "0",
+                        "SUCCESS",
+                        "주문 전송 완료",
+                        new KisOrderResponse.KisOrderOutput(
+                                "",
+                                "101530"
+                        )
+                );
+
+        when(kisOrderClient.placeOrder(
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                any(KisOrderRequest.class)
+        )).thenReturn(response);
+
+        // when
+        kisOrderCommandService.executeOrder(orderId);
+
+        // then
+        verify(orderStatusCommandService)
+                .timeout(
+                        orderId,
+                        "KIS_INVALID_RESPONSE",
+                        "KIS 주문 성공 응답의 주문번호를 확인할 수 없습니다."
+                );
+
+        verify(orderStatusCommandService, never())
+                .accept(
+                        any(),
+                        any()
+                );
     }
 
     @Test
@@ -228,7 +510,11 @@ class KisOrderCommandServiceTest {
         givenCommonAccountResponses();
 
         when(accountClient.getOrderableAmount(userId))
-                .thenReturn(new AccountOrderableAmountResponse(1_000_000L));
+                .thenReturn(
+                        new AccountOrderableAmountResponse(
+                                1_000_000L
+                        )
+                );
 
         RetryableException retryableException =
                 mock(RetryableException.class);
@@ -250,14 +536,161 @@ class KisOrderCommandServiceTest {
                 .timeout(
                         orderId,
                         "KIS_TIMEOUT",
-                        "KIS 주문 응답 TIMEOUT 발생"
+                        "KIS 주문 응답을 확인할 수 없습니다."
                 );
 
         verify(orderStatusCommandService, never())
-                .accept(any(), any());
+                .accept(
+                        any(),
+                        any()
+                );
 
         verify(orderStatusCommandService, never())
-                .fail(any(), any(), any());
+                .fail(
+                        any(),
+                        any(),
+                        any()
+                );
+    }
+
+    @Test
+    @DisplayName("KIS가 4xx 응답을 반환하면 FAILED 처리한다")
+    void executeOrderClientError() {
+        // given
+        Order order = createOrder(OrderType.BUY);
+
+        when(orderCommandRepository.findById(orderId))
+                .thenReturn(Optional.of(order));
+
+        givenCommonAccountResponses();
+
+        when(accountClient.getOrderableAmount(userId))
+                .thenReturn(
+                        new AccountOrderableAmountResponse(
+                                1_000_000L
+                        )
+                );
+
+        FeignException feignException =
+                mock(FeignException.class);
+
+        when(feignException.status())
+                .thenReturn(400);
+
+        when(kisOrderClient.placeOrder(
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                any(KisOrderRequest.class)
+        )).thenThrow(feignException);
+
+        // when
+        kisOrderCommandService.executeOrder(orderId);
+
+        // then
+        verify(orderStatusCommandService)
+                .fail(
+                        orderId,
+                        "KIS_HTTP_400",
+                        "KIS 주문 요청이 실패했습니다."
+                );
+
+        verify(orderStatusCommandService, never())
+                .accept(
+                        any(),
+                        any()
+                );
+    }
+
+    @Test
+    @DisplayName("KIS가 5xx 응답을 반환하면 TIMEOUT 처리한다")
+    void executeOrderServerError() {
+        // given
+        Order order = createOrder(OrderType.BUY);
+
+        when(orderCommandRepository.findById(orderId))
+                .thenReturn(Optional.of(order));
+
+        givenCommonAccountResponses();
+
+        when(accountClient.getOrderableAmount(userId))
+                .thenReturn(
+                        new AccountOrderableAmountResponse(
+                                1_000_000L
+                        )
+                );
+
+        FeignException feignException =
+                mock(FeignException.class);
+
+        when(feignException.status())
+                .thenReturn(500);
+
+        when(kisOrderClient.placeOrder(
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                any(KisOrderRequest.class)
+        )).thenThrow(feignException);
+
+        // when
+        kisOrderCommandService.executeOrder(orderId);
+
+        // then
+        verify(orderStatusCommandService)
+                .timeout(
+                        orderId,
+                        "KIS_SERVER_ERROR",
+                        "KIS 서버 오류로 주문 결과를 확인할 수 없습니다."
+                );
+
+        verify(orderStatusCommandService, never())
+                .accept(
+                        any(),
+                        any()
+                );
+    }
+
+    @Test
+    @DisplayName("PROCESSING 선점에 실패하면 Account와 KIS를 호출하지 않는다")
+    void executeOrderProcessingNotAllowed() {
+        // given
+        Order order = createOrder(OrderType.BUY);
+
+        when(orderCommandRepository.findById(orderId))
+                .thenReturn(Optional.of(order));
+
+        doThrow(
+                new BusinessException(
+                        TradingErrorCode.ORDER_EXECUTION_NOT_ALLOWED
+                )
+        )
+                .when(orderStatusCommandService)
+                .startProcessing(orderId);
+
+        // when & then
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                        kisOrderCommandService.executeOrder(orderId)
+                )
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception ->
+                        org.assertj.core.api.Assertions.assertThat(
+                                ((BusinessException) exception)
+                                        .getErrorCode()
+                        ).isEqualTo(
+                                TradingErrorCode.ORDER_EXECUTION_NOT_ALLOWED
+                        )
+                );
+
+        verify(orderStatusCommandService)
+                .startProcessing(orderId);
+
+        verifyNoInteractions(accountClient);
+        verifyNoInteractions(kisOrderClient);
     }
 
     private Order createOrder(OrderType orderType) {
@@ -292,64 +725,5 @@ class KisOrderCommandServiceTest {
                                 "01"
                         )
                 );
-    }
-
-    @Test
-    @DisplayName("ACCEPTED 상태의 주문은 다시 실행할 수 없다")
-    void executeOrderNotAllowedWhenAccepted() {
-        // given
-        Order order = createOrder(OrderType.BUY);
-        order.accept("1234567890");
-
-        when(orderCommandRepository.findById(orderId))
-                .thenReturn(Optional.of(order));
-
-        // when & then
-        assertThatThrownBy(() ->
-                kisOrderCommandService.executeOrder(orderId)
-        )
-                .isInstanceOf(BusinessException.class)
-                .satisfies(exception ->
-                        org.assertj.core.api.Assertions.assertThat(
-                                ((BusinessException) exception).getErrorCode()
-                        ).isEqualTo(
-                                TradingErrorCode.ORDER_EXECUTION_NOT_ALLOWED
-                        )
-                );
-
-        verifyNoInteractions(accountClient);
-        verifyNoInteractions(kisOrderClient);
-        verifyNoInteractions(orderStatusCommandService);
-    }
-
-    @Test
-    @DisplayName("TIMEOUT 상태의 주문은 다시 실행할 수 없다")
-    void executeOrderNotAllowedWhenTimeout() {
-        // given
-        Order order = createOrder(OrderType.BUY);
-        order.timeout(
-                "KIS_TIMEOUT",
-                "KIS 주문 응답 TIMEOUT 발생"
-        );
-
-        when(orderCommandRepository.findById(orderId))
-                .thenReturn(Optional.of(order));
-
-        // when & then
-        assertThatThrownBy(() ->
-                kisOrderCommandService.executeOrder(orderId)
-        )
-                .isInstanceOf(BusinessException.class)
-                .satisfies(exception ->
-                        org.assertj.core.api.Assertions.assertThat(
-                                ((BusinessException) exception).getErrorCode()
-                        ).isEqualTo(
-                                TradingErrorCode.ORDER_EXECUTION_NOT_ALLOWED
-                        )
-                );
-
-        verifyNoInteractions(accountClient);
-        verifyNoInteractions(kisOrderClient);
-        verifyNoInteractions(orderStatusCommandService);
     }
 }
