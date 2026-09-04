@@ -1,0 +1,5 @@
+# 테스트 전용 값 - 실제 운영 키와 무관 (libs/common 자체 테스트에서만 사용)
+sajo:
+  jwt:
+    secret: libs-common-test-only-jwt-secret-value-not-used-anywhere-else
+    access-token-validity-seconds: 3600
