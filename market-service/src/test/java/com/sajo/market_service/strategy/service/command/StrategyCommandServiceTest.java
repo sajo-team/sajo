@@ -1,8 +1,10 @@
 package com.sajo.market_service.strategy.service.command;
 
 import com.sajo.common.exception.BusinessException;
+import com.sajo.market_service.strategy.controller.dto.request.StrategyActivationRequest;
 import com.sajo.market_service.strategy.controller.dto.request.StrategyCreateRequest;
 import com.sajo.market_service.strategy.controller.dto.request.StrategyUpdateRequest;
+import com.sajo.market_service.strategy.controller.dto.response.StrategyActivationResponse;
 import com.sajo.market_service.strategy.controller.dto.response.StrategyCreateResponse;
 import com.sajo.market_service.strategy.controller.dto.response.StrategyUpdateResponse;
 import com.sajo.market_service.strategy.domain.Strategy;
@@ -346,6 +348,184 @@ class StrategyCommandServiceTest {
 
         // when & then
         assertThatThrownBy(() -> strategyCommandService.deleteStrategy(userId, strategyId))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(StrategyErrorCode.STRATEGY_NOT_FOUND);
+                });
+    }
+
+    @Test
+    @DisplayName("INACTIVE 전략을 활성화하면 ACTIVE 상태가 되고 activatedAt이 설정된다.")
+    void activateStrategy() {
+        // given
+        UUID userId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+
+        Strategy strategy = Strategy.create(
+                userId,
+                UUID.randomUUID(),
+                "005930",
+                "테스트 전략",
+                70_000L,
+                80_000L,
+                new BigDecimal("5.0000"),
+                null,
+                3_000_000L,
+                null,
+                null,
+                null
+        );
+
+        StrategyActivationRequest request = new StrategyActivationRequest(true);
+
+        given(strategyCommandRepository.findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId))
+                .willReturn(Optional.of(strategy));
+
+        // when
+        StrategyActivationResponse response = strategyCommandService.updateActivation(userId, strategyId, request);
+
+        // then
+        assertThat(response.status()).isEqualTo(StrategyStatus.ACTIVE);
+        assertThat(response.activatedAt()).isNotNull();
+        assertThat(strategy.getStatus()).isEqualTo(StrategyStatus.ACTIVE);
+        assertThat(strategy.getActivatedAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("ACTIVE 전략을 비활성화하면 INACTIVE 상태가 되고, activatedAt이 초기화된다.")
+    void deactivateStrategy() {
+        // given
+        UUID userId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+
+        Strategy strategy = Strategy.create(
+                userId,
+                UUID.randomUUID(),
+                "005930",
+                "테스트 전략",
+                70_000L,
+                80_000L,
+                new BigDecimal("5.0000"),
+                null,
+                3_000_000L,
+                null,
+                null,
+                null
+        );
+        strategy.activate();
+
+        StrategyActivationRequest request = new StrategyActivationRequest(false);
+        given(strategyCommandRepository.findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId))
+                .willReturn(Optional.of(strategy));
+
+        // when
+        StrategyActivationResponse response = strategyCommandService.updateActivation(userId, strategyId, request);
+
+        // then
+        assertThat(response.status()).isEqualTo(StrategyStatus.INACTIVE);
+        assertThat(response.activatedAt()).isNull();
+        assertThat(strategy.getStatus()).isEqualTo(StrategyStatus.INACTIVE);
+        assertThat(strategy.getActivatedAt()).isNull();
+    }
+
+    @Test
+    @DisplayName("ACTIVE 상태의 전략은 수정할 수 없다.")
+    void updateActivateStrategyFails() {
+        // given
+        UUID userId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+
+        Strategy strategy = Strategy.create(
+                userId,
+                UUID.randomUUID(),
+                "005930",
+                "테스트 전략",
+                70_000L,
+                80_000L,
+                new BigDecimal("5.0000"),
+                null,
+                3_000_000L,
+                null,
+                null,
+                null
+        );
+        strategy.activate();
+
+        StrategyUpdateRequest request = new StrategyUpdateRequest(
+                "수정 전략",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null
+        );
+
+        given(strategyCommandRepository.findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId))
+                .willReturn(Optional.of(strategy));
+
+        // when & then
+        assertThatThrownBy(() -> strategyCommandService.updateStrategy(userId, strategyId, request))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode()).isEqualTo(StrategyErrorCode.INVALID_STRATEGY);
+                });
+    }
+
+    @Test
+    @DisplayName("ACTIVE 상태의 전략은 삭제할 수 없다.")
+    void deleteActivateStrategyFails() {
+        // given
+        UUID userId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+
+        Strategy strategy = Strategy.create(
+                userId,
+                UUID.randomUUID(),
+                "005930",
+                "테스트 전략",
+                70_000L,
+                80_000L,
+                new BigDecimal("5.0000"),
+                null,
+                3_000_000L,
+                null,
+                null,
+                null
+        );
+        strategy.activate();
+
+        given(strategyCommandRepository.findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId))
+                .willReturn(Optional.of(strategy));
+
+        // when & then
+        assertThatThrownBy(() -> strategyCommandService.deleteStrategy(userId, strategyId))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode()).isEqualTo(StrategyErrorCode.INVALID_STRATEGY);
+                });
+    }
+
+    @Test
+    @DisplayName("활성화할 전략이 없으면 예외가 발생한다.")
+    void updateActivationStrategyNotFound() {
+        // given
+        UUID userId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+
+        StrategyActivationRequest request = new StrategyActivationRequest(true);
+
+        given(strategyCommandRepository.findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId))
+                .willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> strategyCommandService.updateActivation(userId, strategyId, request))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(exception -> {
                     BusinessException businessException = (BusinessException) exception;

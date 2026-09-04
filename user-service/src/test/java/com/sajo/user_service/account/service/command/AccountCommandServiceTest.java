@@ -47,7 +47,7 @@ class AccountCommandServiceTest {
         // given
         UUID userId = UUID.randomUUID();
 
-        given(hmacSha256Hasher.hash("123-456-789")).willReturn("hashed-account-no");
+        given(hmacSha256Hasher.hash("12345678-01")).willReturn("hashed-account-no");
         given(accountCommandRepository.existsByUserIdAndDeletedAtIsNull(userId)).willReturn(false);
         given(accountCommandRepository.existsByAccountNoHashAndDeletedAtIsNull("hashed-account-no")).willReturn(false);
         given(accountCommandRepository.saveAndFlush(any(Account.class)))
@@ -55,7 +55,7 @@ class AccountCommandServiceTest {
 
         // when
         Account account = accountCommandService.createAccount(
-                userId, "app-key", "secret-key", "123-456-789", AccountType.REAL);
+                userId, "app-key", "secret-key", "12345678-01", AccountType.REAL);
 
         // then
         ArgumentCaptor<Account> captor = ArgumentCaptor.forClass(Account.class);
@@ -65,7 +65,7 @@ class AccountCommandServiceTest {
         assertThat(savedAccount.getUserId()).isEqualTo(userId);
         assertThat(savedAccount.getAppKey()).isEqualTo("app-key");
         assertThat(savedAccount.getSecretKey()).isEqualTo("secret-key");
-        assertThat(savedAccount.getAccountNo()).isEqualTo("123-456-789");
+        assertThat(savedAccount.getAccountNo()).isEqualTo("12345678-01");
         assertThat(savedAccount.getAccountNoHash()).isEqualTo("hashed-account-no");
         assertThat(savedAccount.getAccountType()).isEqualTo(AccountType.REAL);
 
@@ -82,7 +82,7 @@ class AccountCommandServiceTest {
 
         // when & then
         assertThatThrownBy(() -> accountCommandService.createAccount(
-                userId, "app-key", "secret-key", "123-456-789", AccountType.REAL))
+                userId, "app-key", "secret-key", "12345678-01", AccountType.REAL))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(exception -> {
                     BusinessException businessException = (BusinessException) exception;
@@ -99,13 +99,13 @@ class AccountCommandServiceTest {
         // given
         UUID userId = UUID.randomUUID();
 
-        given(hmacSha256Hasher.hash("123-456-789")).willReturn("hashed-account-no");
+        given(hmacSha256Hasher.hash("12345678-01")).willReturn("hashed-account-no");
         given(accountCommandRepository.existsByUserIdAndDeletedAtIsNull(userId)).willReturn(false);
         given(accountCommandRepository.existsByAccountNoHashAndDeletedAtIsNull("hashed-account-no")).willReturn(true);
 
         // when & then
         assertThatThrownBy(() -> accountCommandService.createAccount(
-                userId, "app-key", "secret-key", "123-456-789", AccountType.REAL))
+                userId, "app-key", "secret-key", "12345678-01", AccountType.REAL))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(exception -> {
                     BusinessException businessException = (BusinessException) exception;
@@ -122,7 +122,7 @@ class AccountCommandServiceTest {
         // given
         UUID userId = UUID.randomUUID();
 
-        given(hmacSha256Hasher.hash("123-456-789")).willReturn("hashed-account-no");
+        given(hmacSha256Hasher.hash("12345678-01")).willReturn("hashed-account-no");
         given(accountCommandRepository.existsByUserIdAndDeletedAtIsNull(userId)).willReturn(false);
         given(accountCommandRepository.existsByAccountNoHashAndDeletedAtIsNull("hashed-account-no")).willReturn(false);
         given(accountCommandRepository.saveAndFlush(any(Account.class)))
@@ -130,7 +130,7 @@ class AccountCommandServiceTest {
 
         // when & then
         assertThatThrownBy(() -> accountCommandService.createAccount(
-                userId, "app-key", "secret-key", "123-456-789", AccountType.REAL))
+                userId, "app-key", "secret-key", "12345678-01", AccountType.REAL))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(exception -> {
                     BusinessException businessException = (BusinessException) exception;
@@ -145,7 +145,7 @@ class AccountCommandServiceTest {
         // given
         UUID userId = UUID.randomUUID();
         Account account = Account.createAccount(
-                userId, "app-key", "secret-key", "123-456-789", "hashed-account-no", AccountType.REAL);
+                userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
         given(accountCommandRepository.findByUserIdAndDeletedAtIsNull(userId)).willReturn(Optional.of(account));
 
         // when

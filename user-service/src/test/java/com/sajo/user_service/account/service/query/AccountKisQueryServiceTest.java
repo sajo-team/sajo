@@ -44,7 +44,7 @@ class AccountKisQueryServiceTest {
         // given
         UUID userId = UUID.randomUUID();
         Account account = Account.createAccount(
-                userId, "app-key", "secret-key", "123-456-789", "hashed-account-no", AccountType.REAL);
+                userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
 
         given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
         given(kisTokenCacheQueryService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL))
@@ -89,7 +89,7 @@ class AccountKisQueryServiceTest {
         // given
         UUID userId = UUID.randomUUID();
         Account account = Account.createAccount(
-                userId, "app-key", "secret-key", "123-456-789", "hashed-account-no", AccountType.REAL);
+                userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
 
         given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
         given(kisTokenCacheQueryService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL))
@@ -111,7 +111,7 @@ class AccountKisQueryServiceTest {
         // given
         UUID userId = UUID.randomUUID();
         Account account = Account.createAccount(
-                userId, "app-key", "secret-key", "123-456-789", "hashed-account-no", AccountType.REAL);
+                userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
 
         given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
         given(kisTokenCacheQueryService.getApprovalKey(userId, "app-key", "secret-key", AccountType.REAL))

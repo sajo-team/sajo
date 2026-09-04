@@ -1,8 +1,10 @@
 package com.sajo.market_service.strategy.service.command;
 
 import com.sajo.common.exception.BusinessException;
+import com.sajo.market_service.strategy.controller.dto.request.StrategyActivationRequest;
 import com.sajo.market_service.strategy.controller.dto.request.StrategyCreateRequest;
 import com.sajo.market_service.strategy.controller.dto.request.StrategyUpdateRequest;
+import com.sajo.market_service.strategy.controller.dto.response.StrategyActivationResponse;
 import com.sajo.market_service.strategy.controller.dto.response.StrategyCreateResponse;
 import com.sajo.market_service.strategy.controller.dto.response.StrategyUpdateResponse;
 import com.sajo.market_service.strategy.domain.Strategy;
@@ -74,5 +76,23 @@ public class StrategyCommandService {
                 .orElseThrow(() -> new BusinessException(StrategyErrorCode.STRATEGY_NOT_FOUND));
 
         strategy.delete(userId);
+    }
+
+    @Transactional
+    public StrategyActivationResponse updateActivation(
+            UUID userId,
+            UUID strategyId,
+            StrategyActivationRequest request
+    ) {
+        Strategy strategy = strategyCommandRepository.findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId)
+                .orElseThrow(() -> new BusinessException(StrategyErrorCode.STRATEGY_NOT_FOUND));
+
+        if (Boolean.TRUE.equals(request.active())) {
+            strategy.activate();
+        } else {
+            strategy.deactivate();
+        }
+
+        return StrategyActivationResponse.from(strategy);
     }
 }
