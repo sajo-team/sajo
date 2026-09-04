@@ -388,6 +388,61 @@ class KisClientTest {
     }
 
     @Test
+    @DisplayName("잔고조회(연속조회, 최초 호출) - 커서 없이 호출하면 tr_cont 공백/CTX_AREA 공란으로 요청하고, "
+            + "응답 tr_cont가 M이면 hasNext=true를 반환한다")
+    void inquiresBalanceFirstPageHasNext() {
+        // given
+        setUp();
+        server.expect(requestTo("https://kis.example/uapi/domestic-stock/v1/trading/inquire-balance"
+                        + "?CANO=12345678&ACNT_PRDT_CD=01&AFHR_FLPR_YN=N&OFL_YN=&INQR_DVSN=02&UNPR_DVSN=01"
+                        + "&FUND_STTL_ICLD_YN=N&FNCG_AMT_AUTO_RDPT_YN=N&PRCS_DVSN=00"
+                        + "&CTX_AREA_FK100=&CTX_AREA_NK100="))
+                .andExpect(header("tr_cont", ""))
+                .andRespond(withSuccess("""
+                        {"rt_cd":"0","msg_cd":"MSG_CD","msg1":"정상처리 되었습니다","ctx_area_fk100":"next-fk",
+                         "ctx_area_nk100":"next-nk","output1":[{"pdno":"005930"}],"output2":[{}]}
+                        """, MediaType.APPLICATION_JSON)
+                        .header("tr_cont", "M"));
+
+        // when
+        KisContinuationResult<KisBalanceResponse> result = client.inquireBalance(
+                "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.VIRTUAL, null, null);
+
+        // then
+        assertThat(result.hasNext()).isTrue();
+        assertThat(result.body().output1()).hasSize(1);
+        assertThat(result.body().ctx_area_fk100()).isEqualTo("next-fk");
+        assertThat(result.body().ctx_area_nk100()).isEqualTo("next-nk");
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("잔고조회(연속조회, 다음 페이지) - 커서를 넘기면 tr_cont=N과 그 커서 값으로 요청하고, "
+            + "응답 tr_cont가 D면 hasNext=false를 반환한다")
+    void inquiresBalanceNextPageHasNoNext() {
+        // given
+        setUp();
+        server.expect(requestTo("https://kis.example/uapi/domestic-stock/v1/trading/inquire-balance"
+                        + "?CANO=12345678&ACNT_PRDT_CD=01&AFHR_FLPR_YN=N&OFL_YN=&INQR_DVSN=02&UNPR_DVSN=01"
+                        + "&FUND_STTL_ICLD_YN=N&FNCG_AMT_AUTO_RDPT_YN=N&PRCS_DVSN=00"
+                        + "&CTX_AREA_FK100=prev-fk&CTX_AREA_NK100=prev-nk"))
+                .andExpect(header("tr_cont", "N"))
+                .andRespond(withSuccess("""
+                        {"rt_cd":"0","msg_cd":"MSG_CD","msg1":"정상처리 되었습니다","output1":[],"output2":[{}]}
+                        """, MediaType.APPLICATION_JSON)
+                        .header("tr_cont", "D"));
+
+        // when
+        KisContinuationResult<KisBalanceResponse> result = client.inquireBalance(
+                "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.VIRTUAL,
+                "prev-fk", "prev-nk");
+
+        // then
+        assertThat(result.hasNext()).isFalse();
+        server.verify();
+    }
+
+    @Test
     @DisplayName("타임아웃/연결 실패 시 KIS_TOKEN_ISSUE_FAILED 예외로 변환하고 원본 메시지는 노출하지 않는다")
     void convertsConnectionFailureToBusinessException() {
         // given
