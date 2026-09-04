@@ -85,6 +85,12 @@ eureka:
   client:
     service-url:
       defaultZone: http://localhost:8761/eureka/
+
+# 로컬 전용 값 - user-service의 local 프로필과 반드시 동일해야 함 (발급/검증 쌍이 맞아야 함)
+sajo:
+  jwt:
+    secret: local-dev-jwt-secret-key-do-not-use-in-prod-32bytes-min
+    access-token-validity-seconds: 3600
 ---
 spring:
   config:
@@ -95,3 +101,10 @@ eureka:
   client:
     service-url:
       defaultZone: http://discovery-service:8761/eureka/
+
+# TODO: 운영값은 sajo-config-repo에 user-service와 동일한 sajo.jwt.secret으로 등록할 것.
+# (이 프로젝트 config-server 설정 저장소라 이 레포에서는 직접 관리하지 않음 - README 참고)
+sajo:
+  jwt:
+    secret: ${JWT_SECRET}
+    access-token-validity-seconds: 3600
