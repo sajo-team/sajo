@@ -1,6 +1,7 @@
 package com.sajo.user_service.account.service.query;
 
 import com.sajo.common.exception.BusinessException;
+import com.sajo.user_service.account.client.KisClient;
 import com.sajo.user_service.account.controller.dto.response.AccessTokenResponse;
 import com.sajo.user_service.account.controller.dto.response.ApprovalKeyResponse;
 import com.sajo.user_service.account.domain.Account;
@@ -31,11 +32,15 @@ class AccountKisQueryServiceTest {
     @Mock
     private KisTokenCacheQueryService kisTokenCacheQueryService;
 
+    @Mock
+    private KisClient kisClient;
+
     private AccountKisQueryService accountKisQueryService;
 
     @BeforeEach
     void setUp() {
-        accountKisQueryService = new AccountKisQueryService(accountQueryService, kisTokenCacheQueryService);
+        accountKisQueryService =
+                new AccountKisQueryService(accountQueryService, kisTokenCacheQueryService, kisClient);
     }
 
     @Test
