@@ -1,7 +1,9 @@
 package com.sajo.user_service.account.domain;
 
 import com.sajo.common.entity.BaseUpdatableEntity;
+import com.sajo.common.exception.BusinessException;
 import com.sajo.user_service.account.crypto.AesGcmStringConverter;
+import com.sajo.user_service.account.exception.AccountErrorCode;
 import jakarta.persistence.Column;
 import jakarta.persistence.Convert;
 import jakarta.persistence.Entity;
@@ -23,6 +25,9 @@ import java.util.UUID;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 //Todo: DDL 작성 시 partial unique index 적용
 public class Account extends BaseUpdatableEntity {
+
+    private static final String ACCOUNT_NO_PATTERN = "^[0-9]{8}-[0-9]{2}$";
+
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
@@ -51,7 +56,9 @@ public class Account extends BaseUpdatableEntity {
 
     private Account(
             UUID userId, String appKey, String secretKey, String accountNo, String accountNoHash,
-            AccountType accountType) {
+            AccountType accountType
+    ) {
+        validateAccountNoFormat(accountNo);
         this.userId = userId;
         this.appKey = appKey;
         this.secretKey = secretKey;
@@ -66,4 +73,19 @@ public class Account extends BaseUpdatableEntity {
         return new Account(userId, appKey, secretKey, accountNo, accountNoHash, accountType);
     }
 
+    public String getCano() {
+        validateAccountNoFormat(accountNo);
+        return accountNo.substring(0, 8);
+    }
+
+    public String getAccountProductCode() {
+        validateAccountNoFormat(accountNo);
+        return accountNo.substring(9, 11);
+    }
+
+    private static void validateAccountNoFormat(String accountNo) {
+        if (accountNo == null || !accountNo.matches(ACCOUNT_NO_PATTERN)) {
+            throw new BusinessException(AccountErrorCode.INVALID_ACCOUNT_NO_FORMAT);
+        }
+    }
 }

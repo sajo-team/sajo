@@ -8,9 +8,9 @@ public record AccountOrderInfoResponse(
         String accountType
 ) {
     public static AccountOrderInfoResponse from(Account account) {
-        String accountNo = account.getAccountNo();
-        String cano = accountNo.substring(0, 8);
-        String accountProductCode = accountNo.substring(9, 11);
+        String cano = account.getCano();
+        String accountProductCode = account.getAccountProductCode();
+
         return new AccountOrderInfoResponse(cano, accountProductCode, account.getAccountType().name());
     }
 }
