@@ -77,6 +77,7 @@ class JwtTokenProviderTest {
         assertThatThrownBy(() -> jwtTokenProvider.validateAndGetUserId("not-a-jwt-at-all"))
                 .isInstanceOf(JwtValidationException.class);
     }
+
     @Test
     @DisplayName("서명은 유효하지만 subject가 UUID 형식이 아니면 검증에 실패한다")
     void validSignatureButNonUuidSubjectFails() {
