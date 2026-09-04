@@ -27,6 +27,8 @@ public enum TradingErrorCode implements ErrorCode {
     INVALID_TRADING_SIGNAL(HttpStatus.BAD_REQUEST, "AUTO_TRADING_0016","유효하지 않은 매매 Signal입니다."),
     ORDER_QUANTITY_OUT_OF_RANGE(HttpStatus.BAD_REQUEST, "AUTO_TRADING_0017", "주문 수량이 허용 범위를 초과했습니다."),
     ORDER_STATUS_CHANGE_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "AUTO_TRADING_0018", "현재 주문 상태에서는 상태 변경이 허용되지 않습니다."),
+    ORDERABLE_AMOUNT_NOT_ENOUGH(HttpStatus.BAD_REQUEST, "AUTO_TRADING_0019", "주문 가능 금액이 부족합니다."),
+    SELLABLE_QUANTITY_NOT_ENOUGH(HttpStatus.BAD_REQUEST, "AUTO_TRADING_0020", "매도 가능 수량이 부족합니다."),
 
     ;
 
