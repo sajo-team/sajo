@@ -29,11 +29,13 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private static final String AUTHORIZATION_HEADER = "Authorization";
     private static final String BEARER_PREFIX = "Bearer ";
 
-    // 로그인 없이 접근 가능한 (method, path) 목록. 새 public API는 여기 명시적으로 추가할 것
     private static final List<PublicEndpoint> PERMIT_ALL_ENDPOINTS = List.of(
             new PublicEndpoint("POST", "/api/v1/auth/login"),
             new PublicEndpoint("POST", "/api/v1/users"),
-            new PublicEndpoint("GET", "/actuator/**") // Prometheus 스크래핑, 헬스체크용
+            // 와일드카드(/actuator/**) 대신 명시적으로 나열 - 나중에 management.endpoints.web.exposure.include에
+            // 다른 엔드포인트(env, heapdump 등)가 추가돼도 이 필터 코드를 안 건드리면 자동으로 열리지 않도록
+            new PublicEndpoint("GET", "/actuator/health"),
+            new PublicEndpoint("GET", "/actuator/prometheus")
     );
 
     private final JwtTokenProvider jwtTokenProvider;
