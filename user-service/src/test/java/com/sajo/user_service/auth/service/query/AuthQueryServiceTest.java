@@ -21,7 +21,10 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 @ExtendWith(MockitoExtension.class)
@@ -79,6 +82,8 @@ class AuthQueryServiceTest {
                     assertThat(businessException.getErrorCode()).isEqualTo(UserErrorCode.INVALID_CREDENTIALS);
                 });
 
+        // 이메일이 없어도 BCrypt 비교를 한 번 수행해야 한다 (타이밍 사이드채널 방지 - 리뷰 반영)
+        verify(passwordEncoder).matches(eq("raw-password"), anyString());
         verifyNoInteractions(jwtTokenProvider);
     }
 
