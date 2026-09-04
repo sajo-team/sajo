@@ -15,6 +15,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.UUID;
@@ -125,5 +126,22 @@ class AccountInternalControllerTest {
         mockMvc.perform(get("/internal/v1/accounts/{userId}/order-info", userId))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.errorCode").value("ACCOUNT_0006"));
+    }
+
+    @Test
+    @DisplayName("저장된 accountNo 형식이 깨져있으면 주문용 계좌 정보 조회는 500과 INVALID_ACCOUNT_NO_FORMAT을 반환한다")
+    void getAccountOrderInfoFailsWhenPersistedAccountNoHasInvalidFormat() throws Exception {
+        // given
+        // 생성자 검증을 우회해 레거시/마이그레이션 이슈로 형식이 깨진 accountNo가 이미 저장돼 있는 상황을 시뮬레이션한다.
+        UUID userId = UUID.randomUUID();
+        Account account = Account.createAccount(
+                userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
+        ReflectionTestUtils.setField(account, "accountNo", "123-456-789");
+        given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
+
+        // when & then
+        mockMvc.perform(get("/internal/v1/accounts/{userId}/order-info", userId))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.errorCode").value("ACCOUNT_0008"));
     }
 }
