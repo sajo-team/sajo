@@ -1,0 +1,148 @@
+package com.sajo.trading_service.ai_risk.service.command;
+
+import com.sajo.trading_service.ai_risk.controller.dto.request.AiPromptVersionCreateRequest;
+import com.sajo.trading_service.ai_risk.controller.dto.response.AiPromptVersionCreateResponse;
+import com.sajo.trading_service.ai_risk.domain.AiPromptKey;
+import com.sajo.trading_service.ai_risk.domain.AiPromptStatus;
+import com.sajo.trading_service.ai_risk.domain.AiPromptVersion;
+import com.sajo.trading_service.ai_risk.repository.command.AiPromptVersionCommandRepository;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import java.util.Optional;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
+
+@Tag("unit")
+@Tag("ai-risk")
+@ExtendWith(MockitoExtension.class)
+class AiPromptVersionCommandServiceTest {
+
+    @Mock
+    private AiPromptVersionCommandRepository promptVersionCommandRepository;
+
+    @InjectMocks
+    private AiPromptVersionCommandService promptVersionCommandService;
+
+    @Test
+    @DisplayName("등록된 프롬프트가 없으면 v1 버전을 ACTIVE 상태로 생성한다")
+    void createFirstPromptVersion() {
+        AiPromptVersionCreateRequest request =
+                new AiPromptVersionCreateRequest(
+                        AiPromptKey.RISK_ANALYSIS,
+                        "위험 분석 프롬프트",
+                        "최초 등록"
+                );
+
+        given(promptVersionCommandRepository
+                .findTopByPromptKeyOrderByCreatedAtDesc(AiPromptKey.RISK_ANALYSIS))
+                .willReturn(Optional.empty());
+
+        given(promptVersionCommandRepository
+                .findByPromptKeyAndStatus(
+                        AiPromptKey.RISK_ANALYSIS,
+                        AiPromptStatus.ACTIVE))
+                .willReturn(Optional.empty());
+
+        given(promptVersionCommandRepository.save(any(AiPromptVersion.class)))
+                .willAnswer(invocation -> invocation.getArgument(0));
+
+        // when
+        AiPromptVersionCreateResponse response =
+                promptVersionCommandService.create(request);
+
+        // then
+        assertThat(response.version()).isEqualTo("v1");
+        assertThat(response.promptKey()).isEqualTo(AiPromptKey.RISK_ANALYSIS);
+        assertThat(response.status()).isEqualTo(AiPromptStatus.ACTIVE);
+
+        verify(promptVersionCommandRepository)
+                .save(any(AiPromptVersion.class));
+
+    }
+
+    @Test
+    @DisplayName("기존 ACTIVE 프롬프트가 있으면 RETIRED 처리하고 다음 버전을 생성한다")
+    void createNextPromptVersion() {
+        AiPromptVersion existing = AiPromptVersion.create(
+                AiPromptKey.RISK_ANALYSIS,
+                "v1",
+                "기존 프롬프트",
+                "최초 등록"
+        );
+
+        AiPromptVersionCreateRequest request =
+                new AiPromptVersionCreateRequest(
+                        AiPromptKey.RISK_ANALYSIS,
+                        "새로운 프롬프트",
+                        "위험 분석 기준 변경"
+                );
+
+        given(promptVersionCommandRepository
+                .findTopByPromptKeyOrderByCreatedAtDesc(AiPromptKey.RISK_ANALYSIS))
+                .willReturn(Optional.of(existing));
+
+        given(promptVersionCommandRepository
+                .findByPromptKeyAndStatus(
+                        AiPromptKey.RISK_ANALYSIS,
+                        AiPromptStatus.ACTIVE))
+                .willReturn(Optional.of(existing));
+
+        given(promptVersionCommandRepository.save(any(AiPromptVersion.class)))
+                .willAnswer(invocation -> invocation.getArgument(0));
+
+        AiPromptVersionCreateResponse response =
+                promptVersionCommandService.create(request);
+
+        assertThat(existing.getStatus()).isEqualTo(AiPromptStatus.RETIRED);
+        assertThat(existing.getRetiredAt()).isNotNull();
+
+        assertThat(response.version()).isEqualTo("v2");
+        assertThat(response.status()).isEqualTo(AiPromptStatus.ACTIVE);
+    }
+
+    @Test
+    @DisplayName("v9 다음 버전은 v10으로 생성한다")
+    void incrementVersionFromV9ToV10() {
+        AiPromptVersion existing = AiPromptVersion.create(
+                AiPromptKey.RISK_ANALYSIS,
+                "v9",
+                "기존 프롬프트",
+                "기존 버전"
+        );
+
+        AiPromptVersionCreateRequest request =
+                new AiPromptVersionCreateRequest(
+                        AiPromptKey.RISK_ANALYSIS,
+                        "새 프롬프트",
+                        "변경"
+                );
+
+        given(promptVersionCommandRepository
+                .findTopByPromptKeyOrderByCreatedAtDesc(AiPromptKey.RISK_ANALYSIS))
+                .willReturn(Optional.of(existing));
+
+        given(promptVersionCommandRepository
+                .findByPromptKeyAndStatus(
+                        AiPromptKey.RISK_ANALYSIS,
+                        AiPromptStatus.ACTIVE))
+                .willReturn(Optional.of(existing));
+
+        given(promptVersionCommandRepository.save(any(AiPromptVersion.class)))
+                .willAnswer(invocation -> invocation.getArgument(0));
+
+        AiPromptVersionCreateResponse response =
+                promptVersionCommandService.create(request);
+
+        assertThat(response.version()).isEqualTo("v10");
+    }
+}
