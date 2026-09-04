@@ -3,8 +3,8 @@ package com.sajo.user_service.account.controller.internal;
 import com.sajo.common.exception.BusinessException;
 import com.sajo.common.exception.GlobalExceptionHandler;
 import com.sajo.user_service.account.controller.dto.response.AccessTokenResponse;
+import com.sajo.user_service.account.controller.dto.response.AccountOrderInfoResponse;
 import com.sajo.user_service.account.controller.dto.response.ApprovalKeyResponse;
-import com.sajo.user_service.account.domain.Account;
 import com.sajo.user_service.account.domain.AccountType;
 import com.sajo.user_service.account.exception.AccountErrorCode;
 import com.sajo.user_service.account.service.query.AccountKisQueryService;
@@ -15,7 +15,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.UUID;
@@ -102,9 +101,8 @@ class AccountInternalControllerTest {
     void getAccountOrderInfo() throws Exception {
         // given
         UUID userId = UUID.randomUUID();
-        Account account = Account.createAccount(
-                userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
-        given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
+        given(accountQueryService.getAccountOrderInfo(userId))
+                .willReturn(new AccountOrderInfoResponse("12345678", "01", AccountType.REAL.name()));
 
         // when & then
         mockMvc.perform(get("/internal/v1/accounts/{userId}/order-info", userId))
@@ -119,7 +117,7 @@ class AccountInternalControllerTest {
     void getAccountOrderInfoAccountNotFound() throws Exception {
         // given
         UUID userId = UUID.randomUUID();
-        given(accountQueryService.getAccountByUserId(userId))
+        given(accountQueryService.getAccountOrderInfo(userId))
                 .willThrow(new BusinessException(AccountErrorCode.ACCOUNT_NOT_FOUND));
 
         // when & then
@@ -132,12 +130,9 @@ class AccountInternalControllerTest {
     @DisplayName("저장된 accountNo 형식이 깨져있으면 주문용 계좌 정보 조회는 500과 INVALID_ACCOUNT_NO_FORMAT을 반환한다")
     void getAccountOrderInfoFailsWhenPersistedAccountNoHasInvalidFormat() throws Exception {
         // given
-        // 생성자 검증을 우회해 레거시/마이그레이션 이슈로 형식이 깨진 accountNo가 이미 저장돼 있는 상황을 시뮬레이션한다.
         UUID userId = UUID.randomUUID();
-        Account account = Account.createAccount(
-                userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
-        ReflectionTestUtils.setField(account, "accountNo", "123-456-789");
-        given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
+        given(accountQueryService.getAccountOrderInfo(userId))
+                .willThrow(new BusinessException(AccountErrorCode.INVALID_ACCOUNT_NO_FORMAT));
 
         // when & then
         mockMvc.perform(get("/internal/v1/accounts/{userId}/order-info", userId))

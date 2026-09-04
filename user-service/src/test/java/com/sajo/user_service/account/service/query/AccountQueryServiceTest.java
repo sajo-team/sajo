@@ -1,6 +1,7 @@
 package com.sajo.user_service.account.service.query;
 
 import com.sajo.common.exception.BusinessException;
+import com.sajo.user_service.account.controller.dto.response.AccountOrderInfoResponse;
 import com.sajo.user_service.account.crypto.HmacSha256Hasher;
 import com.sajo.user_service.account.domain.Account;
 import com.sajo.user_service.account.domain.AccountType;
@@ -12,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -118,6 +120,62 @@ class AccountQueryServiceTest {
                     BusinessException businessException = (BusinessException) exception;
                     assertThat(businessException.getErrorCode())
                             .isEqualTo(AccountErrorCode.ACCOUNT_NOT_FOUND);
+                });
+    }
+
+    @Test
+    @DisplayName("주문용 계좌 정보 조회에 성공하면 cano/accountProductCode/accountType을 반환한다")
+    void getAccountOrderInfoReturnsResponse() {
+        // given
+        UUID userId = UUID.randomUUID();
+        Account account = Account.createAccount(
+                userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
+        given(accountQueryRepository.findByUserIdAndDeletedAtIsNull(userId)).willReturn(Optional.of(account));
+
+        // when
+        AccountOrderInfoResponse response = accountQueryService.getAccountOrderInfo(userId);
+
+        // then
+        assertThat(response.cano()).isEqualTo("12345678");
+        assertThat(response.accountProductCode()).isEqualTo("01");
+        assertThat(response.accountType()).isEqualTo("REAL");
+    }
+
+    @Test
+    @DisplayName("계좌가 없거나 소프트 삭제된 경우 주문용 계좌 정보 조회도 ACCOUNT_NOT_FOUND 예외를 던진다")
+    void getAccountOrderInfoFailsWhenAccountNotFoundOrDeleted() {
+        // given
+        UUID userId = UUID.randomUUID();
+        given(accountQueryRepository.findByUserIdAndDeletedAtIsNull(userId)).willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> accountQueryService.getAccountOrderInfo(userId))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(AccountErrorCode.ACCOUNT_NOT_FOUND);
+                });
+    }
+
+    @Test
+    @DisplayName("저장된 accountNo 형식이 깨져있으면 주문용 계좌 정보 조회는 INVALID_ACCOUNT_NO_FORMAT 예외를 던진다")
+    void getAccountOrderInfoFailsWhenPersistedAccountNoHasInvalidFormat() {
+        // given
+        // 생성자 검증을 우회해 레거시/마이그레이션 이슈로 형식이 깨진 accountNo가 이미 저장돼 있는 상황을 시뮬레이션한다.
+        UUID userId = UUID.randomUUID();
+        Account account = Account.createAccount(
+                userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
+        ReflectionTestUtils.setField(account, "accountNo", "123-456-789");
+        given(accountQueryRepository.findByUserIdAndDeletedAtIsNull(userId)).willReturn(Optional.of(account));
+
+        // when & then
+        assertThatThrownBy(() -> accountQueryService.getAccountOrderInfo(userId))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(AccountErrorCode.INVALID_ACCOUNT_NO_FORMAT);
                 });
     }
 }
