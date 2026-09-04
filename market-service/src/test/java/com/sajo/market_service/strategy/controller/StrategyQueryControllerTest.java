@@ -101,14 +101,15 @@ class StrategyQueryControllerTest {
                 .andExpect(jsonPath("$.data.page").value(1))
                 .andExpect(jsonPath("$.data.size").value(5));
     }
-    // #27에서 GlobalExceptionHandler(libs:common)에 MissingRequestHeaderException 핸들러가
-    // 추가되어 500 -> 400으로 처리된다.
+
     @Test
     @DisplayName("X-User-Id 헤더가 없으면 요청이 실패한다")
+// #27에서 GlobalExceptionHandler(libs:common)에 MissingRequestHeaderException 핸들러가
+// 추가되어 500 -> 401로 처리된다 (인증 정보 없음으로 취급).
     void getStrategiesWithoutUserHeader() throws Exception {
         // when & then
         mockMvc.perform(get("/api/v1/strategies"))
-                .andExpect(status().isBadRequest());   // <- isBadRequest()로 변경
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
