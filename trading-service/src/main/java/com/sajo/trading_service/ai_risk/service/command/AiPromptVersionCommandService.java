@@ -1,12 +1,15 @@
 package com.sajo.trading_service.ai_risk.service.command;
 
+import com.sajo.common.exception.BusinessException;
 import com.sajo.trading_service.ai_risk.controller.dto.request.AiPromptVersionCreateRequest;
 import com.sajo.trading_service.ai_risk.controller.dto.response.AiPromptVersionCreateResponse;
 import com.sajo.trading_service.ai_risk.domain.AiPromptKey;
 import com.sajo.trading_service.ai_risk.domain.AiPromptStatus;
 import com.sajo.trading_service.ai_risk.domain.AiPromptVersion;
+import com.sajo.trading_service.ai_risk.exception.AiRiskErrorCode;
 import com.sajo.trading_service.ai_risk.repository.command.AiPromptVersionCommandRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,13 +36,13 @@ public class AiPromptVersionCommandService {
     public AiPromptVersionCreateResponse create(
             AiPromptVersionCreateRequest request
     ){
-        String nextVersion = generateNextVersion(request.promptKey());
-
         promptVersionCommandRepository.findByPromptKeyAndStatus(
                 request.promptKey(),
                 AiPromptStatus.ACTIVE
                 )
                 .ifPresent(AiPromptVersion::retire);
+
+        String nextVersion = generateNextVersion(request.promptKey());
 
         AiPromptVersion promptVersion = AiPromptVersion.create(
                 request.promptKey(),
@@ -48,8 +51,14 @@ public class AiPromptVersionCommandService {
                 request.changeSummary()
         );
 
-        AiPromptVersion saved = promptVersionCommandRepository.save(promptVersion);
+        try{
+            AiPromptVersion saved = promptVersionCommandRepository.saveAndFlush(promptVersion);
 
-        return AiPromptVersionCreateResponse.from(saved);
+            return AiPromptVersionCreateResponse.from(saved);
+        } catch(DataIntegrityViolationException e){
+            throw new BusinessException(
+                    AiRiskErrorCode.AI_PROMPT_VERSION_CONFLICT
+            );
+        }
     }
 }

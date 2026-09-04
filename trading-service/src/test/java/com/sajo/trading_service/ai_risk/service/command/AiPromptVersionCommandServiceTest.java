@@ -1,5 +1,6 @@
 package com.sajo.trading_service.ai_risk.service.command;
 
+import com.sajo.common.exception.BusinessException;
 import com.sajo.trading_service.ai_risk.controller.dto.request.AiPromptVersionCreateRequest;
 import com.sajo.trading_service.ai_risk.controller.dto.response.AiPromptVersionCreateResponse;
 import com.sajo.trading_service.ai_risk.domain.AiPromptKey;
@@ -13,6 +14,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
 
 import java.util.Optional;
 
@@ -53,7 +55,7 @@ class AiPromptVersionCommandServiceTest {
                         AiPromptStatus.ACTIVE))
                 .willReturn(Optional.empty());
 
-        given(promptVersionCommandRepository.save(any(AiPromptVersion.class)))
+        given(promptVersionCommandRepository.saveAndFlush(any(AiPromptVersion.class)))
                 .willAnswer(invocation -> invocation.getArgument(0));
 
         // when
@@ -66,7 +68,7 @@ class AiPromptVersionCommandServiceTest {
         assertThat(response.status()).isEqualTo(AiPromptStatus.ACTIVE);
 
         verify(promptVersionCommandRepository)
-                .save(any(AiPromptVersion.class));
+                .saveAndFlush(any(AiPromptVersion.class));
 
     }
 
@@ -97,7 +99,7 @@ class AiPromptVersionCommandServiceTest {
                         AiPromptStatus.ACTIVE))
                 .willReturn(Optional.of(existing));
 
-        given(promptVersionCommandRepository.save(any(AiPromptVersion.class)))
+        given(promptVersionCommandRepository.saveAndFlush(any(AiPromptVersion.class)))
                 .willAnswer(invocation -> invocation.getArgument(0));
 
         AiPromptVersionCreateResponse response =
@@ -137,12 +139,53 @@ class AiPromptVersionCommandServiceTest {
                         AiPromptStatus.ACTIVE))
                 .willReturn(Optional.of(existing));
 
-        given(promptVersionCommandRepository.save(any(AiPromptVersion.class)))
+        given(promptVersionCommandRepository.saveAndFlush(any(AiPromptVersion.class)))
                 .willAnswer(invocation -> invocation.getArgument(0));
 
         AiPromptVersionCreateResponse response =
                 promptVersionCommandService.create(request);
 
         assertThat(response.version()).isEqualTo("v10");
+    }
+
+    @Test
+    @DisplayName("프롬프트 저장 중 데이터 무결성 충돌이 발생하면 비즈니스 예외를 발생시킨다")
+    void createPromptVersionConflict() {
+        // given
+        AiPromptVersionCreateRequest request =
+                new AiPromptVersionCreateRequest(
+                        AiPromptKey.RISK_ANALYSIS,
+                        "위험 분석 프롬프트",
+                        "동시 등록"
+                );
+
+        given(promptVersionCommandRepository
+                .findByPromptKeyAndStatus(
+                        AiPromptKey.RISK_ANALYSIS,
+                        AiPromptStatus.ACTIVE
+                ))
+                .willReturn(Optional.empty());
+
+        given(promptVersionCommandRepository
+                .findTopByPromptKeyOrderByCreatedAtDesc(
+                        AiPromptKey.RISK_ANALYSIS
+                ))
+                .willReturn(Optional.empty());
+
+        given(promptVersionCommandRepository
+                .saveAndFlush(any(AiPromptVersion.class)))
+                .willThrow(new DataIntegrityViolationException(
+                        "duplicate active prompt"
+                ));
+
+        // when
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> promptVersionCommandService.create(request)
+        );
+
+        // then
+        assertThat(exception.getMessage())
+                .isEqualTo("프롬프트 등록 중 충돌이 발생했습니다.");
     }
 }

@@ -56,3 +56,9 @@ tasks.register('aiRiskUnitTest', Test){
     group = 'verification'
     description = 'Runs AI risk unit tests only.'
 }
+
+tasks.register('aiRiskIntegrationTest', Test){
+    useJUnitPlatform{
+            includeTags 'integration & ai-risk'
+    }
+}
