@@ -2,8 +2,10 @@ package com.sajo.market_service.strategy.controller;
 
 import com.sajo.common.code.GeneralResponseCode;
 import com.sajo.common.response.GeneralResponse;
+import com.sajo.market_service.strategy.controller.dto.request.StrategyActivationRequest;
 import com.sajo.market_service.strategy.controller.dto.request.StrategyCreateRequest;
 import com.sajo.market_service.strategy.controller.dto.request.StrategyUpdateRequest;
+import com.sajo.market_service.strategy.controller.dto.response.StrategyActivationResponse;
 import com.sajo.market_service.strategy.controller.dto.response.StrategyCreateResponse;
 import com.sajo.market_service.strategy.controller.dto.response.StrategyUpdateResponse;
 import com.sajo.market_service.strategy.service.command.StrategyCommandService;
@@ -50,5 +52,16 @@ public class StrategyCommandController {
         strategyCommandService.deleteStrategy(userId, strategyId);
 
         return GeneralResponse.toResponseEntity(GeneralResponseCode.OK, null);
+    }
+
+    @PatchMapping("/{strategyId}/activation")
+    public ResponseEntity<GeneralResponse<StrategyActivationResponse>> updateActivation(
+            @PathVariable("strategyId") UUID strategyId,
+            @RequestHeader("X-User-Id") UUID userId,
+            @Valid @RequestBody StrategyActivationRequest request
+    ) {
+        StrategyActivationResponse response = strategyCommandService.updateActivation(userId, strategyId, request);
+
+        return GeneralResponse.toResponseEntity(GeneralResponseCode.OK, response);
     }
 }
