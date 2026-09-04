@@ -11,11 +11,19 @@ public class AiResponseParseException extends AiAnalysisException {
     public AiResponseParseException(
             String message,
             String rawResponse,
+            String promptVersion,
+            String promptContent,
+            String model,
+            long latencyMs,
             Throwable cause
     ) {
         super(
                 AiAnalysisFailureType.RESPONSE_PARSE_ERROR,
                 message,
+                promptVersion,
+                promptContent,
+                model,
+                latencyMs,
                 cause
         );
 

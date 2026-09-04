@@ -119,7 +119,10 @@ class AiRiskAnalysisProcessorTest {
         assertThat(history.getBacktestId()).isEqualTo(backtestId);
 
         assertThat(history.getPrompt().version())
-                .isEqualTo("TEMP");
+                .isEqualTo("v3");
+
+        assertThat(history.getPrompt().content())
+                .isEqualTo("테스트 시스템 프롬프트");
 
         assertThat(history.getResponse().rawResponse())
                 .isEqualTo("{\"riskLevel\":\"HIGH\"}");
@@ -222,7 +225,7 @@ class AiRiskAnalysisProcessorTest {
     }
 
     @Test
-    @DisplayName("AI 응답 파싱에 실패하면 원본 응답을 이력에 저장한다")
+    @DisplayName("AI 응답 파싱에 실패하면 사용한 프롬프트와 원본 응답을 이력에 저장한다")
     void process_parseFailure() {
         String rawResponse = "invalid json";
 
@@ -230,6 +233,10 @@ class AiRiskAnalysisProcessorTest {
                 new AiResponseParseException(
                         "AI 응답 변환에 실패했습니다.",
                         rawResponse,
+                        "v3",
+                        "테스트 시스템 프롬프트",
+                        "gpt-5-mini",
+                        100L,
                         new RuntimeException("parse error")
                 );
 
@@ -253,6 +260,12 @@ class AiRiskAnalysisProcessorTest {
 
         AiAnalysisHistory history = captor.getValue();
 
+        assertThat(history.getPrompt()).isNotNull();
+
+        assertThat(history.getPrompt().version()).isEqualTo("v3");
+
+        assertThat(history.getPrompt().content()).isEqualTo("테스트 시스템 프롬프트");
+
         assertThat(history.getResponse().rawResponse())
                 .isEqualTo(rawResponse);
 
@@ -264,6 +277,12 @@ class AiRiskAnalysisProcessorTest {
 
         assertThat(history.getValidation().errors())
                 .containsExactly("AI 응답 변환에 실패했습니다.");
+
+        assertThat(history.getMetadata().model())
+                .isEqualTo("gpt-5-mini");
+
+        assertThat(history.getMetadata().latencyMs())
+                .isEqualTo(100L);
     }
 
     @Test
@@ -273,6 +292,10 @@ class AiRiskAnalysisProcessorTest {
                 new AiAnalysisException(
                         AiAnalysisFailureType.LLM_API_ERROR,
                         "LLM API 호출에 실패했습니다.",
+                        "v3",
+                        "테스트 시스템 프롬프트",
+                        "gpt-5-mini",
+                        150L,
                         new RuntimeException("OpenAI error")
                 );
 
@@ -298,6 +321,22 @@ class AiRiskAnalysisProcessorTest {
 
         assertThat(history.getAnalysisId())
                 .isEqualTo(analysisId);
+
+        assertThat(history.getPrompt()).isNotNull();
+
+        assertThat(history.getPrompt().version())
+                .isEqualTo("v3");
+
+        assertThat(history.getPrompt().content())
+                .isEqualTo("테스트 시스템 프롬프트");
+
+        assertThat(history.getMetadata()).isNotNull();
+
+        assertThat(history.getMetadata().model())
+                .isEqualTo("gpt-5-mini");
+
+        assertThat(history.getMetadata().latencyMs())
+                .isEqualTo(150L);
 
         assertThat(history.getValidation().structureValid())
                 .isFalse();
@@ -359,7 +398,7 @@ class AiRiskAnalysisProcessorTest {
                 result,
                 "{\"riskLevel\":\"HIGH\"}",
                 "테스트 시스템 프롬프트",
-                "TEMP",
+                "v3",
                 "gpt-5-mini",
                 100L
         );

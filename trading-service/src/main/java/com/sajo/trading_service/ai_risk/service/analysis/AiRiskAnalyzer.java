@@ -3,10 +3,13 @@ package com.sajo.trading_service.ai_risk.service.analysis;
 import com.sajo.trading_service.ai_risk.client.backtest.dto.BacktestInternalResponse;
 import com.sajo.trading_service.ai_risk.client.strategy.dto.StrategyInternalResponse;
 import com.sajo.trading_service.ai_risk.domain.AiAnalysisFailureType;
+import com.sajo.trading_service.ai_risk.domain.AiPromptKey;
+import com.sajo.trading_service.ai_risk.domain.AiPromptVersion;
 import com.sajo.trading_service.ai_risk.exception.AiAnalysisException;
 import com.sajo.trading_service.ai_risk.exception.AiResponseParseException;
 import com.sajo.trading_service.ai_risk.service.analysis.dto.AiRiskAnalysisOutput;
 import com.sajo.trading_service.ai_risk.service.analysis.dto.AiRiskAnalysisResult;
+import com.sajo.trading_service.ai_risk.service.query.AiPromptVersionQueryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.converter.BeanOutputConverter;
@@ -18,9 +21,8 @@ public class AiRiskAnalyzer {
 
     private final BeanOutputConverter<AiRiskAnalysisResult> outputConverter = new BeanOutputConverter<>(AiRiskAnalysisResult.class);
     private final ChatClient chatClient;
+    private final AiPromptVersionQueryService promptVersionQueryService;
 
-    // TODO: 프롬프트 버전 관리 구현 후 ACTIVE 프롬프트의 version 사용
-    private static final String PROMPT_VERSION = "TEMP";
     private static final String MODEL = "gpt-5-mini";
 
     private String createAnalysisData(
@@ -70,21 +72,8 @@ public class AiRiskAnalyzer {
         );
     }
 
-    public AiRiskAnalysisOutput analyze(
-            StrategyInternalResponse strategy,
-            BacktestInternalResponse backtest
-    ){
-
-        //TODO: 관리자 프롬프트 버전 관리 구현 후 ACTIVE 프롬프트의 분석 지시로 교체
-        String analysisPrompt = """
-                당신은 주식 자동매매 전략의 위험을 분석하는 AI입니다.
-                
-                제공된 전략 정보와 백테스트 결과를 기반으로 위험을 분석하세요.
-                반드시 제공된 데이터만 분석 근거로 사용하고,
-                제공되지 않은 수치나 사실을 임의로 생성하지 마세요.
-                """;
-
-        String systemPrompt = """
+    private String createSystemPrompt(String promptContent){
+        return """
                 %s
                 
                 [응답 규칙]
@@ -96,9 +85,23 @@ public class AiRiskAnalyzer {
                 
                 %s
                 """.formatted(
-                        analysisPrompt,
-                        outputConverter.getFormat()
+                        promptContent,
+                outputConverter.getFormat()
         );
+    }
+
+    public AiRiskAnalysisOutput analyze(
+            StrategyInternalResponse strategy,
+            BacktestInternalResponse backtest
+    ){
+        AiPromptVersion promptVersion = promptVersionQueryService.getActivePrompt(
+                AiPromptKey.RISK_ANALYSIS
+        );
+
+        String promptContent = promptVersion.getPromptContent();
+        String version = promptVersion.getVersion();
+
+        String systemPrompt = createSystemPrompt(promptContent);
 
         String analysisData = createAnalysisData(strategy, backtest);
 
@@ -112,9 +115,15 @@ public class AiRiskAnalyzer {
                     .call()
                     .content();
         } catch (Exception e){
+            long latencyMs = System.currentTimeMillis() - startTime;
+
             throw new AiAnalysisException(
                     AiAnalysisFailureType.LLM_API_ERROR,
                     "LLM API 호출에 실패했습니다.",
+                    promptVersion.getVersion(),
+                    systemPrompt,
+                    MODEL,
+                    latencyMs,
                     e
             );
         }
@@ -128,7 +137,7 @@ public class AiRiskAnalyzer {
                     result,
                     rawResponse,
                     systemPrompt,
-                    PROMPT_VERSION,
+                    version,
                     MODEL,
                     latencyMs
             );
@@ -137,6 +146,10 @@ public class AiRiskAnalyzer {
             throw new AiResponseParseException(
                     "AI 응답 변환에 실패했습니다.",
                     rawResponse,
+                    promptVersion.getVersion(),
+                    systemPrompt,
+                    MODEL,
+                    latencyMs,
                     e
             );
         }
