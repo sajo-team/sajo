@@ -115,61 +115,46 @@ class MarketQuoteQueryServiceTest {
     }
 
     @Test
-    void refreshesLegacyCacheWithoutBaseTimeAndCachesKisBaseTime() {
+    void returnsCachedQuoteWithoutBaseTimeWithoutCallingKis() {
         UUID userId = UUID.randomUUID();
-        UserKisTokenResponse credentials = new UserKisTokenResponse("token", "app-key", "secret-key");
         QuoteResponse legacyQuote = new QuoteResponse(
                 STOCK_CODE, 69_000L, null, null, null, null, null, null, null, null, null, null, null, null, null);
-        QuoteResponse refreshedQuote = quoteResponse(70_000L);
-        given(valueOperations.get(CACHE_KEY)).willReturn(legacyQuote, legacyQuote);
-        given(userAccountFeignClient.getKisToken(userId)).willReturn(credentials);
-        given(kisApiClient.getQuote(credentials, STOCK_CODE)).willReturn(refreshedQuote);
+        given(valueOperations.get(CACHE_KEY)).willReturn(legacyQuote);
 
         QuoteResponse response = marketQuoteQueryService.getQuote(userId, STOCK_CODE);
 
-        assertThat(response.baseTime()).isEqualTo("2026-09-04T14:30:00+09:00");
-        verify(kisApiClient).getQuote(credentials, STOCK_CODE);
-        verify(valueOperations).set(CACHE_KEY, refreshedQuote, CACHE_TTL);
+        assertThat(response).isEqualTo(legacyQuote);
+        verify(kisApiClient, never()).getQuote(any(), anyString());
     }
 
     @Test
-    void refreshesLegacyCacheWithBlankBaseTimeAndCachesKisBaseTime() {
+    void returnsCachedQuoteWithBlankBaseTimeWithoutCallingKis() {
         UUID userId = UUID.randomUUID();
-        UserKisTokenResponse credentials = new UserKisTokenResponse("token", "app-key", "secret-key");
         QuoteResponse legacyQuote = new QuoteResponse(
                 STOCK_CODE, 69_000L, null, null, null, null, null, null, null, null, null, null, null, null, null, "   ");
-        QuoteResponse refreshedQuote = quoteResponse(70_000L);
-        given(valueOperations.get(CACHE_KEY)).willReturn(legacyQuote, legacyQuote);
-        given(userAccountFeignClient.getKisToken(userId)).willReturn(credentials);
-        given(kisApiClient.getQuote(credentials, STOCK_CODE)).willReturn(refreshedQuote);
+        given(valueOperations.get(CACHE_KEY)).willReturn(legacyQuote);
 
         QuoteResponse response = marketQuoteQueryService.getQuote(userId, STOCK_CODE);
 
-        assertThat(response).isEqualTo(refreshedQuote);
-        verify(kisApiClient).getQuote(credentials, STOCK_CODE);
-        verify(valueOperations).set(CACHE_KEY, refreshedQuote, CACHE_TTL);
+        assertThat(response).isEqualTo(legacyQuote);
+        verify(kisApiClient, never()).getQuote(any(), anyString());
     }
 
     @Test
-    void refreshesCacheWithMalformedBaseTimeAndCachesKisBaseTime() {
+    void returnsCachedQuoteWithMalformedBaseTimeWithoutCallingKis() {
         UUID userId = UUID.randomUUID();
-        UserKisTokenResponse credentials = new UserKisTokenResponse("token", "app-key", "secret-key");
         QuoteResponse malformedCachedQuote = new QuoteResponse(
                 STOCK_CODE, 69_000L, null, null, null, null, null, null, null, null, null, null, null, null, null, "not-a-date");
-        QuoteResponse refreshedQuote = quoteResponse(70_000L);
-        given(valueOperations.get(CACHE_KEY)).willReturn(malformedCachedQuote, malformedCachedQuote);
-        given(userAccountFeignClient.getKisToken(userId)).willReturn(credentials);
-        given(kisApiClient.getQuote(credentials, STOCK_CODE)).willReturn(refreshedQuote);
+        given(valueOperations.get(CACHE_KEY)).willReturn(malformedCachedQuote);
 
         QuoteResponse response = marketQuoteQueryService.getQuote(userId, STOCK_CODE);
 
-        assertThat(response).isEqualTo(refreshedQuote);
-        verify(kisApiClient).getQuote(credentials, STOCK_CODE);
-        verify(valueOperations).set(CACHE_KEY, refreshedQuote, CACHE_TTL);
+        assertThat(response).isEqualTo(malformedCachedQuote);
+        verify(kisApiClient, never()).getQuote(any(), anyString());
     }
 
     @Test
-    void returnsQuoteButDoesNotCacheWhenKisBaseTimeIsInvalid() {
+    void cachesQuoteWhenKisBaseTimeIsMissing() {
         UUID userId = UUID.randomUUID();
         UserKisTokenResponse credentials = new UserKisTokenResponse("token", "app-key", "secret-key");
         QuoteResponse quoteWithoutBaseTime = new QuoteResponse(
@@ -181,7 +166,76 @@ class MarketQuoteQueryServiceTest {
         QuoteResponse response = marketQuoteQueryService.getQuote(userId, STOCK_CODE);
 
         assertThat(response).isEqualTo(quoteWithoutBaseTime);
+        verify(valueOperations).set(CACHE_KEY, quoteWithoutBaseTime, CACHE_TTL);
+    }
+
+    @Test
+    void cachesQuoteWhenKisBaseTimeIsBlank() {
+        assertCachesQuoteWithBaseTime(" ");
+    }
+
+    @Test
+    void cachesQuoteWhenKisBaseTimeIsMalformed() {
+        assertCachesQuoteWithBaseTime("not-a-date");
+    }
+
+    @Test
+    void doesNotCacheWhenCurrentPriceIsMissing() {
+        UUID userId = UUID.randomUUID();
+        UserKisTokenResponse credentials = new UserKisTokenResponse("token", "app-key", "secret-key");
+        QuoteResponse quoteWithoutCurrentPrice = new QuoteResponse(
+                STOCK_CODE, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+        given(valueOperations.get(CACHE_KEY)).willReturn(null);
+        given(userAccountFeignClient.getKisToken(userId)).willReturn(credentials);
+        given(kisApiClient.getQuote(credentials, STOCK_CODE)).willReturn(quoteWithoutCurrentPrice);
+
+        marketQuoteQueryService.getQuote(userId, STOCK_CODE);
+
         verify(valueOperations, never()).set(anyString(), any(), any(Duration.class));
+    }
+
+    @Test
+    void reusesCachedQuoteWithoutBaseTimeWithoutCallingKisAgainBeforeTtlExpires() {
+        UUID userId = UUID.randomUUID();
+        UserKisTokenResponse credentials = new UserKisTokenResponse("token", "app-key", "secret-key");
+        QuoteResponse quoteWithoutBaseTime = new QuoteResponse(
+                STOCK_CODE, 70_000L, null, null, null, null, null, null, null, null, null, null, null, null, null);
+        Map<String, QuoteResponse> cache = new ConcurrentHashMap<>();
+        given(valueOperations.get(CACHE_KEY)).willAnswer(invocation -> cache.get(invocation.getArgument(0)));
+        doAnswer(invocation -> {
+            cache.put(invocation.getArgument(0), invocation.getArgument(1));
+            return null;
+        }).when(valueOperations).set(anyString(), any(QuoteResponse.class), any(Duration.class));
+        given(userAccountFeignClient.getKisToken(userId)).willReturn(credentials);
+        given(kisApiClient.getQuote(credentials, STOCK_CODE)).willReturn(quoteWithoutBaseTime);
+
+        marketQuoteQueryService.getQuote(userId, STOCK_CODE);
+        QuoteResponse cachedResponse = marketQuoteQueryService.getQuote(userId, STOCK_CODE);
+
+        assertThat(cachedResponse).isEqualTo(quoteWithoutBaseTime);
+        verify(kisApiClient, times(1)).getQuote(credentials, STOCK_CODE);
+    }
+
+    @Test
+    void fetchesQuoteAgainWhenCacheEntryHasExpired() {
+        UUID userId = UUID.randomUUID();
+        UserKisTokenResponse credentials = new UserKisTokenResponse("token", "app-key", "secret-key");
+        QuoteResponse quoteWithoutBaseTime = new QuoteResponse(
+                STOCK_CODE, 70_000L, null, null, null, null, null, null, null, null, null, null, null, null, null);
+        Map<String, QuoteResponse> cache = new ConcurrentHashMap<>();
+        given(valueOperations.get(CACHE_KEY)).willAnswer(invocation -> cache.get(invocation.getArgument(0)));
+        doAnswer(invocation -> {
+            cache.put(invocation.getArgument(0), invocation.getArgument(1));
+            return null;
+        }).when(valueOperations).set(anyString(), any(QuoteResponse.class), any(Duration.class));
+        given(userAccountFeignClient.getKisToken(userId)).willReturn(credentials);
+        given(kisApiClient.getQuote(credentials, STOCK_CODE)).willReturn(quoteWithoutBaseTime);
+
+        marketQuoteQueryService.getQuote(userId, STOCK_CODE);
+        cache.clear(); // TTL 만료로 Redis 값이 사라진 상황을 모사한다.
+        marketQuoteQueryService.getQuote(userId, STOCK_CODE);
+
+        verify(kisApiClient, times(2)).getQuote(credentials, STOCK_CODE);
     }
 
     @Test
@@ -382,5 +436,19 @@ class MarketQuoteQueryServiceTest {
                 500L, null, 123_456L, 8_610_000_000L, 4_180_000L,
                 null, null, null, null, "2026-09-04T14:30:00+09:00"
         );
+    }
+
+    private void assertCachesQuoteWithBaseTime(String baseTime) {
+        UUID userId = UUID.randomUUID();
+        UserKisTokenResponse credentials = new UserKisTokenResponse("token", "app-key", "secret-key");
+        QuoteResponse quote = new QuoteResponse(
+                STOCK_CODE, 70_000L, null, null, null, null, null, null, null, null, null, null, null, null, null, baseTime);
+        given(valueOperations.get(CACHE_KEY)).willReturn(null);
+        given(userAccountFeignClient.getKisToken(userId)).willReturn(credentials);
+        given(kisApiClient.getQuote(credentials, STOCK_CODE)).willReturn(quote);
+
+        marketQuoteQueryService.getQuote(userId, STOCK_CODE);
+
+        verify(valueOperations).set(CACHE_KEY, quote, CACHE_TTL);
     }
 }
