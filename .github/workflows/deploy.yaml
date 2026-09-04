@@ -1,0 +1,145 @@
+name: CD Deploy
+
+on:
+  workflow_run:
+    workflows: ["CI Build"]
+    types:
+      - completed
+    branches:
+      - main
+
+concurrency:
+  group: cd-deploy-main
+  cancel-in-progress: false
+
+jobs:
+  build-and-push:
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      matrix:
+        service:
+          - gateway
+          - discovery-service
+          - config-server
+          - user-service
+          - market-service
+          - trading-service
+
+    steps:
+      - name: Checkout code at the commit that CI validated
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push ${{ matrix.service }} image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.service }}/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/sajo-team/sajo-${{ matrix.service }}:${{ github.event.workflow_run.head_sha }}
+
+  deploy:
+    needs: build-and-push
+    if: github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      - name: Deploy to EC2 via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_ACTOR: ${{ github.actor }}
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          envs: GHCR_TOKEN,GHCR_ACTOR
+          script_stop: true
+          script: |
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_ACTOR" --password-stdin
+
+            cd ~/sajo
+            git fetch origin main
+            git reset --hard origin/main
+            git checkout ${{ github.event.workflow_run.head_sha }}
+
+            LATEST_MAIN_SHA=$(git ls-remote origin main | awk '{print $1}')
+            if [ "$LATEST_MAIN_SHA" != "${{ github.event.workflow_run.head_sha }}" ]; then
+              echo "This deploy targets ${{ github.event.workflow_run.head_sha }}, but origin/main has since moved to $LATEST_MAIN_SHA."
+              echo "A newer commit's deploy will handle this (or already has). Skipping to avoid deploying stale code."
+              exit 0
+            fi
+
+            PREV_TAG=$(cat ~/sajo/.last_healthy_sha 2>/dev/null || echo "")
+
+            check_health() {
+              local ports="8080 8081 8082 8083 8761 8888"
+              for i in $(seq 1 30); do
+                all_up=true
+                for port in $ports; do
+                  if ! curl -sf --max-time 5 http://localhost:$port/actuator/health | grep -q '"status":"UP"'; then
+                    all_up=false
+                    break
+                  fi
+                done
+                if [ "$all_up" = true ]; then
+                  return 0
+                fi
+                echo "Not all services healthy yet, retrying ($i/30)..."
+                sleep 5
+              done
+              return 1
+            }
+
+            export IMAGE_TAG=${{ github.event.workflow_run.head_sha }}
+            if docker compose -f docker-compose.prod.yaml pull && docker compose -f docker-compose.prod.yaml up -d; then
+              echo "Waiting for health checks (discovery-service, config-server, gateway, user-service, market-service, trading-service)..."
+              if check_health; then
+                echo "$IMAGE_TAG" > ~/sajo/.last_healthy_sha
+                echo "Deploy succeeded, all core services are healthy."
+                exit 0
+              fi
+              echo "Services did not become healthy within timeout."
+            else
+              echo "docker compose pull/up failed — the deploy command itself did not succeed."
+            fi
+
+            if [ -n "$PREV_TAG" ]; then
+              echo "Rolling back to previous known-good commit: $PREV_TAG"
+              git checkout $PREV_TAG
+              export IMAGE_TAG=$PREV_TAG
+              docker compose -f docker-compose.prod.yaml pull
+              docker compose -f docker-compose.prod.yaml up -d
+
+              echo "Verifying rollback health..."
+              if check_health; then
+                echo "Rollback succeeded, service restored to previous version. Marking this deploy as failed for visibility."
+              else
+                echo "Rollback ALSO failed health check. Service may still be down. Immediate manual intervention required."
+              fi
+            else
+              echo "No previous known-good image recorded — cannot roll back automatically."
+            fi
+            exit 1

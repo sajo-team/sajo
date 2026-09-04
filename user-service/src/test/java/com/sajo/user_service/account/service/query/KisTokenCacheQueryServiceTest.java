@@ -12,7 +12,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
 
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -25,11 +28,17 @@ class KisTokenCacheQueryServiceTest {
     @Mock
     private KisClient kisClient;
 
+    @Mock
+    private CacheManager cacheManager;
+
+    @Mock
+    private Cache cache;
+
     private KisTokenCacheQueryService kisTokenCacheQueryService;
 
     @BeforeEach
     void setUp() {
-        kisTokenCacheQueryService = new KisTokenCacheQueryService(kisClient);
+        kisTokenCacheQueryService = new KisTokenCacheQueryService(kisClient, cacheManager);
     }
 
     @Test
@@ -98,5 +107,49 @@ class KisTokenCacheQueryServiceTest {
                     assertThat(businessException.getErrorCode())
                             .isEqualTo(AccountErrorCode.KIS_TOKEN_ISSUE_FAILED);
                 });
+    }
+
+    @Test
+    @DisplayName("접근토큰 캐시에 값이 있으면 KIS 호출 없이 그 값을 반환한다")
+    void peekAccessTokenReturnsCachedValue() {
+        // given
+        UUID userId = UUID.randomUUID();
+        given(cacheManager.getCache("kis-access-token")).willReturn(cache);
+        given(cache.get(userId, String.class)).willReturn("cached-token");
+
+        // when
+        Optional<String> result = kisTokenCacheQueryService.peekAccessToken(userId);
+
+        // then
+        assertThat(result).contains("cached-token");
+    }
+
+    @Test
+    @DisplayName("접근토큰 캐시에 값이 없으면 빈 Optional을 반환한다")
+    void peekAccessTokenReturnsEmptyWhenCacheMiss() {
+        // given
+        UUID userId = UUID.randomUUID();
+        given(cacheManager.getCache("kis-access-token")).willReturn(cache);
+        given(cache.get(userId, String.class)).willReturn(null);
+
+        // when
+        Optional<String> result = kisTokenCacheQueryService.peekAccessToken(userId);
+
+        // then
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    @DisplayName("캐시 자체가 없으면(설정 누락 등) 빈 Optional을 반환한다")
+    void peekAccessTokenReturnsEmptyWhenCacheNotConfigured() {
+        // given
+        UUID userId = UUID.randomUUID();
+        given(cacheManager.getCache("kis-access-token")).willReturn(null);
+
+        // when
+        Optional<String> result = kisTokenCacheQueryService.peekAccessToken(userId);
+
+        // then
+        assertThat(result).isEmpty();
     }
 }

@@ -15,7 +15,7 @@ public enum AccountErrorCode implements ErrorCode {
 
     DUPLICATE_ACCOUNT_REQUEST(HttpStatus.CONFLICT, "ACCOUNT_0003", "이미 처리된 요청입니다"),
 
-    KIS_TOKEN_ISSUE_FAILED(HttpStatus.BAD_GATEWAY, "ACCOUNT_0004", "KIS 토큰 발급에 실패했습니다"),
+    KIS_TOKEN_ISSUE_FAILED(HttpStatus.BAD_GATEWAY, "ACCOUNT_0004", "KIS 요청 처리에 실패했습니다"),
 
     INVALID_KIS_CREDENTIALS(HttpStatus.BAD_REQUEST, "ACCOUNT_0005", "유효하지 않은 KIS 인증 정보입니다"),
 

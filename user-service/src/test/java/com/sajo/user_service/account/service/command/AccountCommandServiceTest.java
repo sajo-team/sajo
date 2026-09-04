@@ -15,6 +15,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 
+import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -135,6 +136,40 @@ class AccountCommandServiceTest {
                     BusinessException businessException = (BusinessException) exception;
                     assertThat(businessException.getErrorCode())
                             .isEqualTo(AccountErrorCode.DUPLICATE_ACCOUNT_REQUEST);
+                });
+    }
+
+    @Test
+    @DisplayName("계좌를 삭제하면 softDelete가 반영된 계좌를 반환한다")
+    void deleteAccount() {
+        // given
+        UUID userId = UUID.randomUUID();
+        Account account = Account.createAccount(
+                userId, "app-key", "secret-key", "123-456-789", "hashed-account-no", AccountType.REAL);
+        given(accountCommandRepository.findByUserIdAndDeletedAtIsNull(userId)).willReturn(Optional.of(account));
+
+        // when
+        Account result = accountCommandService.deleteAccount(userId);
+
+        // then
+        assertThat(result).isSameAs(account);
+        assertThat(result.isDeleted()).isTrue();
+    }
+
+    @Test
+    @DisplayName("삭제할 계좌가 없으면 ACCOUNT_NOT_FOUND 예외를 던진다")
+    void deleteAccountNotFound() {
+        // given
+        UUID userId = UUID.randomUUID();
+        given(accountCommandRepository.findByUserIdAndDeletedAtIsNull(userId)).willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> accountCommandService.deleteAccount(userId))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(AccountErrorCode.ACCOUNT_NOT_FOUND);
                 });
     }
 }

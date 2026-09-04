@@ -1,6 +1,7 @@
 package com.sajo.user_service.account.client;
 
 import com.sajo.common.exception.BusinessException;
+import com.sajo.user_service.account.client.dto.response.AccessTokenRevokeResponse;
 import com.sajo.user_service.account.client.dto.response.KisAccessTokenResponse;
 import com.sajo.user_service.account.client.dto.response.KisApprovalKeyResponse;
 import com.sajo.user_service.account.domain.AccountType;
@@ -224,6 +225,54 @@ class KisClientTest {
 
         // when & then
         assertThatThrownBy(() -> client.getApprovalKey("app-key", "secret-key", AccountType.VIRTUAL))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(AccountErrorCode.INVALID_KIS_CREDENTIALS);
+                });
+
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("토큰 폐기 - 정상 응답이면 code/message를 반환한다")
+    void revokesAccessTokenSuccessfully() {
+        // given
+        setUp();
+        server.expect(requestTo("https://kis.example/oauth2/revokeP"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(jsonPath("$.appkey").value("app-key"))
+                .andExpect(jsonPath("$.appsecret").value("secret-key"))
+                .andExpect(jsonPath("$.token").value("issued-token"))
+                .andRespond(withSuccess("""
+                        {"code":"200","message":"접근토큰 폐기에 성공하였습니다"}
+                        """, MediaType.APPLICATION_JSON));
+
+        // when
+        AccessTokenRevokeResponse response =
+                client.revokeAccessToken("app-key", "secret-key", "issued-token", AccountType.VIRTUAL);
+
+        // then
+        assertThat(response.code()).isEqualTo("200");
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("토큰 폐기 - 4xx 응답이면 INVALID_KIS_CREDENTIALS 예외를 던진다")
+    void revokeAccessTokenFailsWithHttp4xx() {
+        // given
+        setUp();
+        server.expect(requestTo("https://kis.example/oauth2/revokeP"))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("""
+                                {"error_code":"EGW00121","error_description":"유효하지 않은 token 입니다."}
+                                """));
+
+        // when & then
+        assertThatThrownBy(() ->
+                client.revokeAccessToken("app-key", "secret-key", "issued-token", AccountType.VIRTUAL))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(exception -> {
                     BusinessException businessException = (BusinessException) exception;

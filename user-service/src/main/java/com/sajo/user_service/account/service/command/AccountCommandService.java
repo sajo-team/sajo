@@ -15,7 +15,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
-class AccountCommandService {
+public class AccountCommandService {
 
     private final AccountCommandRepository accountCommandRepository;
     private final HmacSha256Hasher hmacSha256Hasher;
@@ -42,5 +42,13 @@ class AccountCommandService {
         } catch (DataIntegrityViolationException e) {
             throw new BusinessException(AccountErrorCode.DUPLICATE_ACCOUNT_REQUEST);
         }
+    }
+
+    @Transactional
+    public Account deleteAccount(UUID userId) {
+        Account account = accountCommandRepository.findByUserIdAndDeletedAtIsNull(userId)
+                .orElseThrow(() -> new BusinessException(AccountErrorCode.ACCOUNT_NOT_FOUND));
+        account.softDelete(userId);
+        return account;
     }
 }
