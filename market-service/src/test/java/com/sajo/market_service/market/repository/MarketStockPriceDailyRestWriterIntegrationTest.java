@@ -27,7 +27,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 class MarketStockPriceDailyRestWriterIntegrationTest {
 
     @Container
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
+    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine")
+            .withUrlParam("currentSchema", "market_strategy");
 
     private JdbcTemplate jdbcTemplate;
     private MarketStockPriceDailyRestWriter writer;
@@ -35,7 +36,7 @@ class MarketStockPriceDailyRestWriterIntegrationTest {
     @BeforeEach
     void setUp() {
         DriverManagerDataSource dataSource = new DriverManagerDataSource(
-                postgres.getJdbcUrl() + "?currentSchema=market_strategy", postgres.getUsername(), postgres.getPassword());
+                postgres.getJdbcUrl(), postgres.getUsername(), postgres.getPassword());
         jdbcTemplate = new JdbcTemplate(dataSource);
         writer = new MarketStockPriceDailyRestWriter(new NamedParameterJdbcTemplate(dataSource));
         jdbcTemplate.execute("CREATE SCHEMA market_strategy");
