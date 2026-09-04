@@ -471,22 +471,31 @@ class AiRiskAnalysisProcessorTest {
     @Test
     @DisplayName("ACTIVE 프롬프트가 없으면 PROMPT_NOT_FOUND로 실패 처리하고 감사 이력을 저장한다")
     void process_activePromptNotFound_savesFailureHistory() {
-        // given
-        BusinessException exception =
-                new BusinessException(AiRiskErrorCode.AI_ACTIVE_PROMPT_NOT_FOUND);
+        AiAnalysisException exception =
+                new AiAnalysisException(
+                        AiAnalysisFailureType.PROMPT_NOT_FOUND,
+                        "활성화된 AI 프롬프트를 찾을 수 없습니다.",
+                        null,
+                        null,
+                        "gpt-5-mini",
+                        0L,
+                        new BusinessException(
+                                AiRiskErrorCode.AI_ACTIVE_PROMPT_NOT_FOUND
+                        )
+                );
 
-        when(aiRiskAnalyzer.analyze(any(), any()))
+        when(aiRiskAnalyzer.analyze(strategy, backtest))
                 .thenThrow(exception);
 
-        // when
         processor.process(event);
 
-        // then
         verify(resultService).fail(
-                eq(event.analysisId()),
-                eq(AiAnalysisFailureType.PROMPT_NOT_FOUND),
-                eq(exception.getMessage())
+                analysisId,
+                AiAnalysisFailureType.PROMPT_NOT_FOUND,
+                "활성화된 AI 프롬프트를 찾을 수 없습니다."
         );
+
+        verifyNoInteractions(responseValidator);
 
         ArgumentCaptor<AiAnalysisHistory> captor =
                 ArgumentCaptor.forClass(AiAnalysisHistory.class);
@@ -496,7 +505,7 @@ class AiRiskAnalysisProcessorTest {
         AiAnalysisHistory history = captor.getValue();
 
         assertThat(history.getAnalysisId())
-                .isEqualTo(event.analysisId());
+                .isEqualTo(analysisId);
 
         assertThat(history.getPrompt())
                 .isNull();
@@ -514,6 +523,6 @@ class AiRiskAnalysisProcessorTest {
                 .isFalse();
 
         assertThat(history.getValidation().errors())
-                .containsExactly(exception.getMessage());
+                .containsExactly("활성화된 AI 프롬프트를 찾을 수 없습니다.");
     }
 }

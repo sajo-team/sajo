@@ -1,5 +1,6 @@
 package com.sajo.trading_service.ai_risk.service.analysis;
 
+import com.sajo.common.exception.BusinessException;
 import com.sajo.trading_service.ai_risk.client.backtest.dto.BacktestInternalResponse;
 import com.sajo.trading_service.ai_risk.client.strategy.dto.StrategyInternalResponse;
 import com.sajo.trading_service.ai_risk.domain.AiAnalysisFailureType;
@@ -9,6 +10,7 @@ import com.sajo.trading_service.ai_risk.domain.RiskFactorType;
 import com.sajo.trading_service.ai_risk.domain.RiskLevel;
 import com.sajo.trading_service.ai_risk.exception.AiAnalysisException;
 import com.sajo.trading_service.ai_risk.exception.AiResponseParseException;
+import com.sajo.trading_service.ai_risk.exception.AiRiskErrorCode;
 import com.sajo.trading_service.ai_risk.service.analysis.dto.AiRiskAnalysisOutput;
 import com.sajo.trading_service.ai_risk.service.query.AiPromptVersionQueryService;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,9 +29,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Answers.RETURNS_DEEP_STUBS;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.*;
 
 @Tag("unit")
 @Tag("ai-risk")
@@ -289,5 +290,41 @@ class AiRiskAnalyzerTest {
 
         assertThat(output.promptContent())
                 .contains("[응답 규칙]");
+    }
+
+    @Test
+    @DisplayName("ACTIVE 프롬프트가 없으면 PROMPT_NOT_FOUND 분석 예외가 발생한다")
+    void analyze_activePromptNotFound_throwsAnalysisException() {
+        BusinessException cause =
+                new BusinessException(
+                        AiRiskErrorCode.AI_ACTIVE_PROMPT_NOT_FOUND
+                );
+
+        when(promptVersionQueryService.getActivePrompt(
+                AiPromptKey.RISK_ANALYSIS
+        )).thenThrow(cause);
+
+        assertThatThrownBy(() ->
+                aiRiskAnalyzer.analyze(strategy, backtest)
+        )
+                .isInstanceOf(AiAnalysisException.class)
+                .satisfies(exception -> {
+                    AiAnalysisException aiException =
+                            (AiAnalysisException) exception;
+
+                    assertThat(aiException.getFailureType())
+                            .isEqualTo(AiAnalysisFailureType.PROMPT_NOT_FOUND);
+
+                    assertThat(aiException.getMessage())
+                            .isEqualTo("활성화된 AI 프롬프트를 찾을 수 없습니다.");
+
+                    assertThat(aiException.getPromptVersion()).isNull();
+                    assertThat(aiException.getPromptContent()).isNull();
+
+                    assertThat(aiException.getCause())
+                            .isSameAs(cause);
+                });
+
+        verifyNoInteractions(chatClient);
     }
 }

@@ -1,5 +1,6 @@
 package com.sajo.trading_service.ai_risk.service.analysis;
 
+import com.sajo.common.exception.BusinessException;
 import com.sajo.trading_service.ai_risk.client.backtest.dto.BacktestInternalResponse;
 import com.sajo.trading_service.ai_risk.client.strategy.dto.StrategyInternalResponse;
 import com.sajo.trading_service.ai_risk.domain.AiAnalysisFailureType;
@@ -7,6 +8,7 @@ import com.sajo.trading_service.ai_risk.domain.AiPromptKey;
 import com.sajo.trading_service.ai_risk.domain.AiPromptVersion;
 import com.sajo.trading_service.ai_risk.exception.AiAnalysisException;
 import com.sajo.trading_service.ai_risk.exception.AiResponseParseException;
+import com.sajo.trading_service.ai_risk.exception.AiRiskErrorCode;
 import com.sajo.trading_service.ai_risk.service.analysis.dto.AiRiskAnalysisOutput;
 import com.sajo.trading_service.ai_risk.service.analysis.dto.AiRiskAnalysisResult;
 import com.sajo.trading_service.ai_risk.service.query.AiPromptVersionQueryService;
@@ -94,9 +96,27 @@ public class AiRiskAnalyzer {
             StrategyInternalResponse strategy,
             BacktestInternalResponse backtest
     ){
-        AiPromptVersion promptVersion = promptVersionQueryService.getActivePrompt(
-                AiPromptKey.RISK_ANALYSIS
-        );
+        AiPromptVersion promptVersion;
+
+        try{
+            promptVersion = promptVersionQueryService.getActivePrompt(
+                    AiPromptKey.RISK_ANALYSIS
+            );
+        } catch (BusinessException e){
+            if(e.getErrorCode() == AiRiskErrorCode.AI_ACTIVE_PROMPT_NOT_FOUND) {
+                throw new AiAnalysisException(
+                        AiAnalysisFailureType.PROMPT_NOT_FOUND,
+                        e.getMessage(),
+                        null,
+                        null,
+                        MODEL,
+                        0L,
+                        e
+                );
+            }
+
+            throw e;
+        }
 
         String promptContent = promptVersion.getPromptContent();
         String version = promptVersion.getVersion();
