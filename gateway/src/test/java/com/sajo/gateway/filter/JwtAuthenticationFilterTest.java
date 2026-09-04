@@ -167,4 +167,20 @@ class JwtAuthenticationFilterTest {
         // then
         assertThat(chain.getRequest()).isNotNull();
     }
+
+    @Test
+    @DisplayName("actuator라도 명시적으로 허용하지 않은 엔드포인트는 인증이 필요하다 (와일드카드 아님)")
+    void unlistedActuatorEndpointRequiresAuth() throws Exception {
+        // given - health/prometheus 외의 actuator 경로는 permitAll이 아니어야 함
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/actuator/env");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        MockFilterChain chain = new MockFilterChain();
+
+        // when
+        filter.doFilter(request, response, chain);
+
+        // then
+        assertThat(response.getStatus()).isEqualTo(401);
+        assertThat(chain.getRequest()).isNull();
+    }
 }
