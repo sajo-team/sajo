@@ -2,6 +2,7 @@ package com.sajo.trading_service.ai_risk.service.query;
 
 import com.sajo.common.exception.BusinessException;
 import com.sajo.trading_service.ai_risk.controller.dto.response.AiRiskAnalysisDetailResponse;
+import com.sajo.trading_service.ai_risk.controller.dto.response.AiRiskAnalysisHistoryItemResponse;
 import com.sajo.trading_service.ai_risk.domain.*;
 import com.sajo.trading_service.ai_risk.repository.query.AiRiskAnalysisQueryRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -12,6 +13,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 import java.util.Optional;
@@ -161,5 +166,100 @@ class AiRiskAnalysisQueryServiceTest {
 
         verify(queryRepository)
                 .findByIdAndUserId(analysisId, userId);
+    }
+
+    @Test
+    @DisplayName("사용자의 AI 위험 분석 이력을 페이지 단위로 조회한다.")
+    void getAnalysisHistory_success(){
+
+        Pageable pageable = PageRequest.of(0, 10);
+
+        AiRiskAnalysis firstAnalysis =
+                AiRiskAnalysis.create(
+                        userId,
+                        strategyId,
+                        backtestId
+                );
+
+        UUID secondStrategyId = UUID.randomUUID();
+        UUID secondBacktestId = UUID.randomUUID();
+
+        AiRiskAnalysis secondAnalysis =
+                AiRiskAnalysis.create(
+                        userId,
+                        secondStrategyId,
+                        secondBacktestId
+                );
+
+        Page<AiRiskAnalysis> analysisPage = new PageImpl<>(
+                List.of(firstAnalysis, secondAnalysis),
+                pageable,
+                2
+        );
+
+        when(queryRepository.findAllByUserId(userId, pageable))
+                .thenReturn(analysisPage);
+
+        Page<AiRiskAnalysisHistoryItemResponse> response =
+                queryService.getAnalysisHistory(userId, pageable);
+
+        assertThat(response.getContent()).hasSize(2);
+        assertThat(response.getTotalElements()).isEqualTo(2);
+        assertThat(response.getNumber()).isZero();
+        assertThat(response.getSize()).isEqualTo(10);
+
+        assertThat(response.getContent().get(0).strategyId())
+                .isEqualTo(strategyId);
+        assertThat(response.getContent().get(0).backtestId())
+                .isEqualTo(backtestId);
+        assertThat(response.getContent().get(0).status())
+                .isEqualTo(AiAnalysisStatus.PENDING);
+
+        assertThat(response.getContent().get(1).strategyId())
+                .isEqualTo(secondStrategyId);
+        assertThat(response.getContent().get(1).backtestId())
+                .isEqualTo(secondBacktestId);
+        assertThat(response.getContent().get(1).status())
+                .isEqualTo(AiAnalysisStatus.PENDING);
+
+        verify(queryRepository)
+                .findAllByUserId(userId, pageable);
+    }
+
+    @Test
+    @DisplayName("다른 사용자의 AI 위험 분석 결과는 조회할 수 없다")
+    void getAnalysis_otherUser_notFound() {
+        UUID otherUserId = UUID.randomUUID();
+
+        when(queryRepository.findByIdAndUserId(analysisId, otherUserId))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() ->
+                queryService.getAnalysis(analysisId, otherUserId)
+        )
+                .isInstanceOf(BusinessException.class);
+
+        verify(queryRepository)
+                .findByIdAndUserId(analysisId, otherUserId);
+    }
+
+    @Test
+    @DisplayName("AI 위험 분석 이력이 없으면 빈 페이지를 반환한다.")
+    void getAnalysisHistory_empty(){
+        Pageable pageable = PageRequest.of(0, 10);
+
+        when(queryRepository.findAllByUserId(userId, pageable))
+                .thenReturn(Page.empty(pageable));
+
+        Page<AiRiskAnalysisHistoryItemResponse> response =
+                queryService.getAnalysisHistory(userId, pageable);
+
+        assertThat(response.getContent()).isEmpty();
+        assertThat(response.getTotalElements()).isZero();
+        assertThat(response.getNumber()).isZero();
+        assertThat(response.getSize()).isEqualTo(10);
+
+        verify(queryRepository)
+                .findAllByUserId(userId, pageable);
     }
 }
