@@ -77,6 +77,22 @@ class JwtTokenProviderTest {
         assertThatThrownBy(() -> jwtTokenProvider.validateAndGetUserId("not-a-jwt-at-all"))
                 .isInstanceOf(JwtValidationException.class);
     }
+    @Test
+    @DisplayName("서명은 유효하지만 subject가 UUID 형식이 아니면 검증에 실패한다")
+    void validSignatureButNonUuidSubjectFails() {
+        // given - 파싱/서명 검증은 통과하지만 subject가 UUID.fromString에서 실패하는 토큰
+        SecretKey key = Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8));
+        String tokenWithNonUuidSubject = Jwts.builder()
+                .subject("not-a-uuid")
+                .issuedAt(new Date())
+                .expiration(Date.from(Instant.now().plusSeconds(3600)))
+                .signWith(key)
+                .compact();
+
+        // when & then
+        assertThatThrownBy(() -> jwtTokenProvider.validateAndGetUserId(tokenWithNonUuidSubject))
+                .isInstanceOf(JwtValidationException.class);
+    }
 
     @Test
     @DisplayName("secret이 32바이트 미만이면 생성 시점에 실패한다")
