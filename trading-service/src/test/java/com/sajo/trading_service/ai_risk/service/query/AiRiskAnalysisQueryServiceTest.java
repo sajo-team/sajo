@@ -2,6 +2,7 @@ package com.sajo.trading_service.ai_risk.service.query;
 
 import com.sajo.common.exception.BusinessException;
 import com.sajo.trading_service.ai_risk.controller.dto.response.AiRiskAnalysisDetailResponse;
+import com.sajo.trading_service.ai_risk.controller.dto.response.AiRiskAnalysisFailureHistoryItemResponse;
 import com.sajo.trading_service.ai_risk.controller.dto.response.AiRiskAnalysisHistoryItemResponse;
 import com.sajo.trading_service.ai_risk.domain.*;
 import com.sajo.trading_service.ai_risk.repository.query.AiRiskAnalysisQueryRepository;
@@ -261,5 +262,130 @@ class AiRiskAnalysisQueryServiceTest {
 
         verify(queryRepository)
                 .findAllByUserId(userId, pageable);
+    }
+
+    @Test
+    @DisplayName("AI 위험 분석 실패 이력을 전체 조회한다.")
+    void getFailureHistory_success() {
+        Pageable pageable = PageRequest.of(0, 10);
+
+        AiRiskAnalysis analysis1 =
+                AiRiskAnalysis.create(userId, strategyId, backtestId);
+        analysis1.fail(
+                AiAnalysisFailureType.LLM_API_ERROR,
+                "LLM API 호출 실패"
+        );
+
+        AiRiskAnalysis analysis2 =
+                AiRiskAnalysis.create(
+                        UUID.randomUUID(),
+                        UUID.randomUUID(),
+                        UUID.randomUUID()
+                );
+        analysis2.fail(
+                AiAnalysisFailureType.RESPONSE_PARSE_ERROR,
+                "응답 파싱 실패"
+        );
+
+        Page<AiRiskAnalysis> analyses =
+                new PageImpl<>(
+                        List.of(analysis1, analysis2),
+                        pageable,
+                        2
+                );
+
+        when(queryRepository.findAllByStatus(
+                AiAnalysisStatus.FAILED,
+                pageable
+        )).thenReturn(analyses);
+
+        Page<AiRiskAnalysisFailureHistoryItemResponse> response =
+                queryService.getFailureHistory(null, pageable);
+
+        assertThat(response.getContent()).hasSize(2);
+        assertThat(response.getTotalElements()).isEqualTo(2);
+
+        assertThat(response.getContent().get(0).failureType())
+                .isEqualTo(AiAnalysisFailureType.LLM_API_ERROR);
+        assertThat(response.getContent().get(0).failureMessage())
+                .isEqualTo("LLM API 호출 실패");
+
+        assertThat(response.getContent().get(1).failureType())
+                .isEqualTo(AiAnalysisFailureType.RESPONSE_PARSE_ERROR);
+        assertThat(response.getContent().get(1).failureMessage())
+                .isEqualTo("응답 파싱 실패");
+
+        verify(queryRepository)
+                .findAllByStatus(AiAnalysisStatus.FAILED, pageable);
+    }
+
+    @Test
+    @DisplayName("실패 유형으로 AI 위험 분석 실패 이력을 조회한다.")
+    void getFailureHistory_withFailureType() {
+        Pageable pageable = PageRequest.of(0, 10);
+        AiAnalysisFailureType failureType =
+                AiAnalysisFailureType.LLM_API_ERROR;
+
+        AiRiskAnalysis analysis =
+                AiRiskAnalysis.create(userId, strategyId, backtestId);
+        analysis.fail(
+                failureType,
+                "LLM API 호출 실패"
+        );
+
+        Page<AiRiskAnalysis> analyses =
+                new PageImpl<>(
+                        List.of(analysis),
+                        pageable,
+                        1
+                );
+
+        when(queryRepository.findAllByStatusAndFailureType(
+                AiAnalysisStatus.FAILED,
+                failureType,
+                pageable
+        )).thenReturn(analyses);
+
+        Page<AiRiskAnalysisFailureHistoryItemResponse> response =
+                queryService.getFailureHistory(failureType, pageable);
+
+        assertThat(response.getContent()).hasSize(1);
+        assertThat(response.getTotalElements()).isEqualTo(1);
+
+        AiRiskAnalysisFailureHistoryItemResponse result =
+                response.getContent().get(0);
+
+        assertThat(result.analysisId()).isEqualTo(analysis.getId());
+        assertThat(result.failureType()).isEqualTo(failureType);
+        assertThat(result.failureMessage()).isEqualTo("LLM API 호출 실패");
+
+        verify(queryRepository)
+                .findAllByStatusAndFailureType(
+                        AiAnalysisStatus.FAILED,
+                        failureType,
+                        pageable
+                );
+    }
+
+    @Test
+    @DisplayName("AI 위험 분석 실패 이력이 없으면 빈 페이지를 반환한다.")
+    void getFailureHistory_empty() {
+        Pageable pageable = PageRequest.of(0, 10);
+
+        when(queryRepository.findAllByStatus(
+                AiAnalysisStatus.FAILED,
+                pageable
+        )).thenReturn(Page.empty(pageable));
+
+        Page<AiRiskAnalysisFailureHistoryItemResponse> response =
+                queryService.getFailureHistory(null, pageable);
+
+        assertThat(response.getContent()).isEmpty();
+        assertThat(response.getTotalElements()).isZero();
+        assertThat(response.getNumber()).isZero();
+        assertThat(response.getSize()).isEqualTo(10);
+
+        verify(queryRepository)
+                .findAllByStatus(AiAnalysisStatus.FAILED, pageable);
     }
 }
