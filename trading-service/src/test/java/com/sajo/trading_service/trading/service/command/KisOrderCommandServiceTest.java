@@ -293,4 +293,63 @@ class KisOrderCommandServiceTest {
                         )
                 );
     }
+
+    @Test
+    @DisplayName("ACCEPTED 상태의 주문은 다시 실행할 수 없다")
+    void executeOrderNotAllowedWhenAccepted() {
+        // given
+        Order order = createOrder(OrderType.BUY);
+        order.accept("1234567890");
+
+        when(orderCommandRepository.findById(orderId))
+                .thenReturn(Optional.of(order));
+
+        // when & then
+        assertThatThrownBy(() ->
+                kisOrderCommandService.executeOrder(orderId)
+        )
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception ->
+                        org.assertj.core.api.Assertions.assertThat(
+                                ((BusinessException) exception).getErrorCode()
+                        ).isEqualTo(
+                                TradingErrorCode.ORDER_EXECUTION_NOT_ALLOWED
+                        )
+                );
+
+        verifyNoInteractions(accountClient);
+        verifyNoInteractions(kisOrderClient);
+        verifyNoInteractions(orderStatusCommandService);
+    }
+
+    @Test
+    @DisplayName("TIMEOUT 상태의 주문은 다시 실행할 수 없다")
+    void executeOrderNotAllowedWhenTimeout() {
+        // given
+        Order order = createOrder(OrderType.BUY);
+        order.timeout(
+                "KIS_TIMEOUT",
+                "KIS 주문 응답 TIMEOUT 발생"
+        );
+
+        when(orderCommandRepository.findById(orderId))
+                .thenReturn(Optional.of(order));
+
+        // when & then
+        assertThatThrownBy(() ->
+                kisOrderCommandService.executeOrder(orderId)
+        )
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception ->
+                        org.assertj.core.api.Assertions.assertThat(
+                                ((BusinessException) exception).getErrorCode()
+                        ).isEqualTo(
+                                TradingErrorCode.ORDER_EXECUTION_NOT_ALLOWED
+                        )
+                );
+
+        verifyNoInteractions(accountClient);
+        verifyNoInteractions(kisOrderClient);
+        verifyNoInteractions(orderStatusCommandService);
+    }
 }

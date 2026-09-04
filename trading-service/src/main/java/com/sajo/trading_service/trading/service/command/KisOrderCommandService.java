@@ -6,6 +6,7 @@ import com.sajo.trading_service.trading.client.KisOrderClient;
 import com.sajo.trading_service.trading.client.dto.request.KisOrderRequest;
 import com.sajo.trading_service.trading.client.dto.response.*;
 import com.sajo.trading_service.trading.domain.Order;
+import com.sajo.trading_service.trading.domain.enums.OrderStatus;
 import com.sajo.trading_service.trading.domain.enums.OrderType;
 import com.sajo.trading_service.trading.exception.TradingErrorCode;
 import com.sajo.trading_service.trading.repository.command.OrderCommandRepository;
@@ -32,6 +33,12 @@ public class KisOrderCommandService {
                                         TradingErrorCode.ORDER_NOT_FOUND
                                 )
                         );
+
+        if(order.getStatus() != OrderStatus.REQUESTED){
+            throw new BusinessException(
+                    TradingErrorCode.ORDER_EXECUTION_NOT_ALLOWED
+            );
+        }
 
         AccountTokenResponse tokenResponse =
                 accountClient.getAccessToken(order.getUserId());
