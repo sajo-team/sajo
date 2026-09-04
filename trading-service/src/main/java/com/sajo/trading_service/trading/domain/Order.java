@@ -122,4 +122,52 @@ public class Order extends BaseUpdatableEntity {
                 orderQuantity
         );
     }
+
+    public void accept(String brokerOrderNo){
+        if(this.status != OrderStatus.REQUESTED
+                && this.status != OrderStatus.TIMEOUT){
+            throw new BusinessException(
+                    TradingErrorCode.ORDER_STATUS_CHANGE_NOT_ALLOWED
+            );
+        }
+
+        if(brokerOrderNo == null || brokerOrderNo.isBlank()){
+            throw new BusinessException(
+                    TradingErrorCode.INVALID_ORDER
+            );
+        }
+        this.brokerOrderNo = brokerOrderNo;
+        this.failureCode = null;
+        this.failureMessage = null;
+        this.status = OrderStatus.ACCEPTED;
+    }
+
+    public void fail(
+            String failureCode,
+            String failureMessage
+    ){
+        if(this.status != OrderStatus.REQUESTED
+                && this.status != OrderStatus.TIMEOUT){
+            throw new BusinessException(
+                    TradingErrorCode.ORDER_STATUS_CHANGE_NOT_ALLOWED
+            );
+        }
+        this.failureCode = failureCode;
+        this.failureMessage = failureMessage;
+        this.status = OrderStatus.FAILED;
+    }
+
+    public void timeout(
+            String failureCode,
+            String failureMessage
+    ){
+        if(this.status != OrderStatus.REQUESTED){
+            throw new BusinessException(
+                    TradingErrorCode.ORDER_STATUS_CHANGE_NOT_ALLOWED
+            );
+        }
+        this.failureCode = failureCode;
+        this.failureMessage = failureMessage;
+        this.status = OrderStatus.TIMEOUT;
+    }
 }
