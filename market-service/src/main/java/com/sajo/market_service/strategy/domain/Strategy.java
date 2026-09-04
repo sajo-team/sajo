@@ -4,9 +4,6 @@ import com.sajo.common.entity.BaseUpdatableEntity;
 import com.sajo.common.exception.BusinessException;
 import com.sajo.market_service.strategy.exception.StrategyErrorCode;
 import jakarta.persistence.*;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Positive;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -174,6 +171,8 @@ public class Strategy extends BaseUpdatableEntity {
             BigDecimal pbrCondition,
             BigDecimal roeCondition
     ) {
+        validateMutable();
+
         if (strategyName != null) {
             if (strategyName.isBlank()) {
                 throw new BusinessException(StrategyErrorCode.INVALID_STRATEGY);
@@ -235,7 +234,40 @@ public class Strategy extends BaseUpdatableEntity {
     }
 
     public void delete(UUID deletedBy) {
+        validateMutable();
         this.status = StrategyStatus.DELETED;
         softDelete(deletedBy);
+    }
+
+    private void validateMutable() {
+        validateNotDeleted();
+
+        if (this.status == StrategyStatus.ACTIVE) {
+            throw new BusinessException(StrategyErrorCode.INVALID_STRATEGY, "활성화된 전략은 수정하거나 삭제할 수 없습니다.");
+        }
+    }
+
+    public void activate() {
+        validateNotDeleted();
+
+        if (this.status == StrategyStatus.ACTIVE) return;
+
+        this.status = StrategyStatus.ACTIVE;
+        this.activatedAt = Instant.now();
+    }
+
+    public void deactivate() {
+        validateNotDeleted();
+
+        if (this.status == StrategyStatus.INACTIVE) return;
+
+        this.status = StrategyStatus.INACTIVE;
+        this.activatedAt = null;
+    }
+
+    private void validateNotDeleted() {
+        if (this.status == StrategyStatus.DELETED || getDeletedAt() != null) {
+            throw new BusinessException(StrategyErrorCode.STRATEGY_NOT_FOUND);
+        }
     }
 }

@@ -7,6 +7,7 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 import java.sql.Statement;
+import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -62,6 +63,6 @@ public class MarketStockPriceDailyRestWriter {
                 .addValue("lowPrice", price.lowPrice())
                 .addValue("accumulatedVolume", price.volume())
                 .addValue("accumulatedTradeAmount", price.tradeAmount())
-                .addValue("createdAt", createdAt);
+                .addValue("createdAt", Timestamp.from(createdAt));
     }
 }

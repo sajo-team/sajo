@@ -23,7 +23,8 @@ public enum AccountErrorCode implements ErrorCode {
 
     KIS_RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "ACCOUNT_0007", "KIS 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요"),
 
-    KIS_BALANCE_INQUIRY_FAILED(HttpStatus.BAD_GATEWAY, "ACCOUNT_0008", "KIS 잔고 조회에 실패했습니다");
+    KIS_BALANCE_INQUIRY_FAILED(HttpStatus.BAD_GATEWAY, "ACCOUNT_0008", "KIS 잔고 조회에 실패했습니다"),
+    INVALID_ACCOUNT_NO_FORMAT(HttpStatus.INTERNAL_SERVER_ERROR, "ACCOUNT_0008", "계좌번호 형식이 올바르지 않습니다");
 
     private final HttpStatus status;
     private final String errorCode;

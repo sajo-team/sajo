@@ -165,6 +165,6 @@ class StrategyQueryControllerTest {
         mockMvc.perform(get("/api/v1/strategies")
                         .header("X-User-Id", userId.toString())
                         .param("stockCode", "ABC"))
-                .andExpect(status().isInternalServerError());
+                .andExpect(status().isBadRequest());
     }
 }

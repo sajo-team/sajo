@@ -90,7 +90,7 @@ class MarketStockPriceDailyMigrationTest {
                         date DATE NOT NULL,
                         time TIME,
                         current_price BIGINT NOT NULL,
-                        trade_amount BIGINT,
+                        accumulated_trade_amount BIGINT,
                         source VARCHAR(20) NOT NULL,
                         created_at TIMESTAMP
                     )
