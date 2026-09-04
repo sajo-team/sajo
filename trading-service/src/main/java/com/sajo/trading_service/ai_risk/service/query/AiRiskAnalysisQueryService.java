@@ -2,7 +2,10 @@ package com.sajo.trading_service.ai_risk.service.query;
 
 import com.sajo.common.exception.BusinessException;
 import com.sajo.trading_service.ai_risk.controller.dto.response.AiRiskAnalysisDetailResponse;
+import com.sajo.trading_service.ai_risk.controller.dto.response.AiRiskAnalysisFailureHistoryItemResponse;
 import com.sajo.trading_service.ai_risk.controller.dto.response.AiRiskAnalysisHistoryItemResponse;
+import com.sajo.trading_service.ai_risk.domain.AiAnalysisFailureType;
+import com.sajo.trading_service.ai_risk.domain.AiAnalysisStatus;
 import com.sajo.trading_service.ai_risk.domain.AiRiskAnalysis;
 import com.sajo.trading_service.ai_risk.exception.AiRiskErrorCode;
 import com.sajo.trading_service.ai_risk.repository.query.AiRiskAnalysisQueryRepository;
@@ -37,5 +40,16 @@ public class AiRiskAnalysisQueryService {
     ) {
         return queryRepository.findAllByUserId(userId, pageable)
                 .map(AiRiskAnalysisHistoryItemResponse::from);
+    }
+
+    public Page<AiRiskAnalysisFailureHistoryItemResponse> getFailureHistory(
+            AiAnalysisFailureType failureType,
+            Pageable pageable
+    ){
+        Page<AiRiskAnalysis> analyses = failureType == null
+                ? queryRepository.findAllByStatus(AiAnalysisStatus.FAILED, pageable)
+                : queryRepository.findAllByStatusAndFailureType(AiAnalysisStatus.FAILED, failureType, pageable);
+
+        return analyses.map(AiRiskAnalysisFailureHistoryItemResponse :: from);
     }
 }
