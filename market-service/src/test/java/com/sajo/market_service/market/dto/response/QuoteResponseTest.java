@@ -67,14 +67,27 @@ class QuoteResponseTest {
     }
 
     @Test
-    void rejectsInvalidKisBaseTime() {
-        KisQuoteResponse response = new KisQuoteResponse("0", "MCA00000", "정상",
-                new KisQuoteResponse.KisQuoteOutput(
-                        "70000", "", "", "", "", "", "", "", "", "", "", "", "", "", "20260904", "bad"));
+    void returnsNullBaseTimeWhenBusinessDateIsMissingOrBlank() {
+        assertNull(QuoteResponse.from(responseWithBaseTime(null, "143000"), "005930").baseTime());
+        assertNull(QuoteResponse.from(responseWithBaseTime(" ", "143000"), "005930").baseTime());
+    }
 
-        BusinessException exception = assertThrows(BusinessException.class, () -> QuoteResponse.from(response, "005930"));
+    @Test
+    void returnsNullBaseTimeWhenBusinessDateIsMalformedOrDoesNotExist() {
+        assertNull(QuoteResponse.from(responseWithBaseTime("invalid", "143000"), "005930").baseTime());
+        assertNull(QuoteResponse.from(responseWithBaseTime("20260230", "143000"), "005930").baseTime());
+    }
 
-        assertEquals(MarketErrorCode.KIS_QUOTE_RESPONSE_INVALID, exception.getErrorCode());
+    @Test
+    void returnsNullBaseTimeWhenContractTimeIsMissingOrBlank() {
+        assertNull(QuoteResponse.from(responseWithBaseTime("20260904", null), "005930").baseTime());
+        assertNull(QuoteResponse.from(responseWithBaseTime("20260904", " "), "005930").baseTime());
+    }
+
+    @Test
+    void returnsNullBaseTimeWhenContractTimeIsMalformedOrDoesNotExist() {
+        assertNull(QuoteResponse.from(responseWithBaseTime("20260904", "invalid"), "005930").baseTime());
+        assertNull(QuoteResponse.from(responseWithBaseTime("20260904", "246000"), "005930").baseTime());
     }
 
     @Test
@@ -90,5 +103,11 @@ class QuoteResponseTest {
 
         assertEquals(MarketErrorCode.KIS_QUOTE_RESPONSE_INVALID, nullResponseException.getErrorCode());
         assertEquals(MarketErrorCode.KIS_QUOTE_RESPONSE_INVALID, nullOutputException.getErrorCode());
+    }
+
+    private KisQuoteResponse responseWithBaseTime(String businessDate, String contractTime) {
+        return new KisQuoteResponse("0", "MCA00000", "정상",
+                new KisQuoteResponse.KisQuoteOutput(
+                        "70000", "", "", "", "", "", "", "", "", "", "", "", "", "", businessDate, contractTime));
     }
 }

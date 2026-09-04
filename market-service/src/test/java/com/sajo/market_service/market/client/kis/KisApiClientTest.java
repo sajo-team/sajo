@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
@@ -69,6 +70,26 @@ class KisApiClientTest {
         assertEquals(new BigDecimal("0.7194"), response.changeRate());
         assertEquals(new BigDecimal("15.20"), response.per());
         assertEquals("2026-09-04T14:30:00+09:00", response.baseTime());
+        server.verify();
+    }
+
+    @Test
+    void returnsQuoteWhenKisBaseTimeFieldsAreInvalid() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        KisApiClient client = new KisApiClient(builder, new KisApiProperties("https://kis.example"));
+
+        server.expect(requestTo("https://kis.example/uapi/domestic-stock/v1/quotations/inquire-price?FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=005930"))
+                .andRespond(withSuccess("""
+                        {"rt_cd":"0","msg_cd":"MCA00000","msg1":"정상처리 되었습니다.","output":{
+                          "stck_prpr":"70000","stck_bsop_date":"invalid","stck_cntg_hour":"143000"
+                        }}
+                        """, MediaType.APPLICATION_JSON));
+
+        QuoteResponse response = client.getQuote(CREDENTIALS, "005930");
+
+        assertEquals(70000L, response.currentPrice());
+        assertNull(response.baseTime());
         server.verify();
     }
 

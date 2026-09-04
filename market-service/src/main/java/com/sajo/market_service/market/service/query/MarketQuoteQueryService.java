@@ -15,6 +15,8 @@ import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeParseException;
 import java.util.UUID;
 
 
@@ -96,6 +98,9 @@ public class MarketQuoteQueryService {
     private QuoteResponse fetchAndCacheQuote(UUID userId, String stockCode, String cacheKey) {
         UserKisTokenResponse credentials = userAccountFeignClient.getKisToken(userId);
         QuoteResponse quote = kisApiClient.getQuote(credentials, stockCode);
+        if (!isCacheableQuote(quote)) {
+            return quote;
+        }
         try {
             quoteRedisTemplate.opsForValue().set(cacheKey, quote, cacheProperties.ttl());
         } catch (DataAccessException exception) {
@@ -137,7 +142,15 @@ public class MarketQuoteQueryService {
 
     private boolean isCacheableQuote(QuoteResponse quote) {
         // Pre-baseTime cache entries are refreshed rather than returning a fabricated quote timestamp.
-        return quote != null && quote.baseTime() != null && !quote.baseTime().isBlank();
+        if (quote == null || quote.baseTime() == null || quote.baseTime().isBlank()) {
+            return false;
+        }
+        try {
+            OffsetDateTime.parse(quote.baseTime());
+            return true;
+        } catch (DateTimeParseException exception) {
+            return false;
+        }
     }
 
     private record CacheLookup(QuoteResponse quote, boolean redisAvailable) {

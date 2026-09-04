@@ -151,6 +151,40 @@ class MarketQuoteQueryServiceTest {
     }
 
     @Test
+    void refreshesCacheWithMalformedBaseTimeAndCachesKisBaseTime() {
+        UUID userId = UUID.randomUUID();
+        UserKisTokenResponse credentials = new UserKisTokenResponse("token", "app-key", "secret-key");
+        QuoteResponse malformedCachedQuote = new QuoteResponse(
+                STOCK_CODE, 69_000L, null, null, null, null, null, null, null, null, null, null, null, null, null, "not-a-date");
+        QuoteResponse refreshedQuote = quoteResponse(70_000L);
+        given(valueOperations.get(CACHE_KEY)).willReturn(malformedCachedQuote, malformedCachedQuote);
+        given(userAccountFeignClient.getKisToken(userId)).willReturn(credentials);
+        given(kisApiClient.getQuote(credentials, STOCK_CODE)).willReturn(refreshedQuote);
+
+        QuoteResponse response = marketQuoteQueryService.getQuote(userId, STOCK_CODE);
+
+        assertThat(response).isEqualTo(refreshedQuote);
+        verify(kisApiClient).getQuote(credentials, STOCK_CODE);
+        verify(valueOperations).set(CACHE_KEY, refreshedQuote, CACHE_TTL);
+    }
+
+    @Test
+    void returnsQuoteButDoesNotCacheWhenKisBaseTimeIsInvalid() {
+        UUID userId = UUID.randomUUID();
+        UserKisTokenResponse credentials = new UserKisTokenResponse("token", "app-key", "secret-key");
+        QuoteResponse quoteWithoutBaseTime = new QuoteResponse(
+                STOCK_CODE, 70_000L, null, null, null, null, null, null, null, null, null, null, null, null, null);
+        given(valueOperations.get(CACHE_KEY)).willReturn(null);
+        given(userAccountFeignClient.getKisToken(userId)).willReturn(credentials);
+        given(kisApiClient.getQuote(credentials, STOCK_CODE)).willReturn(quoteWithoutBaseTime);
+
+        QuoteResponse response = marketQuoteQueryService.getQuote(userId, STOCK_CODE);
+
+        assertThat(response).isEqualTo(quoteWithoutBaseTime);
+        verify(valueOperations, never()).set(anyString(), any(), any(Duration.class));
+    }
+
+    @Test
     @DisplayName("KIS 조회가 실패하면 캐시에 데이터를 저장하지 않는다")
     void doesNotCacheWhenKisLookupFails() {
         UUID userId = UUID.randomUUID();

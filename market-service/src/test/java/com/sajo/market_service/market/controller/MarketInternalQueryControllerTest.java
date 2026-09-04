@@ -86,6 +86,17 @@ class MarketInternalQueryControllerTest {
     }
 
     @Test
+    void returnsKisResponseErrorWhenInternalQuoteBaseTimeIsInvalid() throws Exception {
+        UUID userId = UUID.randomUUID();
+        given(marketInternalQueryService.getQuote(userId, "005930"))
+                .willThrow(new BusinessException(MarketErrorCode.KIS_QUOTE_RESPONSE_INVALID));
+
+        mockMvc.perform(get("/internal/v1/stocks/005930/quote").header("X-User-Id", userId))
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.errorCode").value("MARKET_0004"));
+    }
+
+    @Test
     void propagatesMissingStockAndIndicatorErrors() throws Exception {
         given(marketInternalQueryService.getIndicator("999999"))
                 .willThrow(new BusinessException(MarketErrorCode.MARKET_STOCK_NOT_FOUND));

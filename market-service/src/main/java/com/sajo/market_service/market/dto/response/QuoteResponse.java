@@ -84,14 +84,16 @@ public record QuoteResponse(
     }
 
     private static String toBaseTime(String businessDate, String contractTime) {
+        if (businessDate == null || businessDate.isBlank() || contractTime == null || contractTime.isBlank()) {
+            return null;
+        }
         try {
             LocalDate date = LocalDate.parse(businessDate, DateTimeFormatter.BASIC_ISO_DATE);
             LocalTime time = LocalTime.parse(contractTime, DateTimeFormatter.ofPattern("HHmmss"));
             OffsetDateTime baseTime = OffsetDateTime.of(date, time, ZoneId.of("Asia/Seoul").getRules().getOffset(date.atTime(time)));
             return DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(baseTime);
-        } catch (DateTimeParseException | NullPointerException exception) {
-            throw new BusinessException(MarketErrorCode.KIS_QUOTE_RESPONSE_INVALID,
-                    "KIS 현재가 기준 일자 또는 체결 시각이 유효하지 않습니다.");
+        } catch (DateTimeParseException exception) {
+            return null;
         }
     }
 }
