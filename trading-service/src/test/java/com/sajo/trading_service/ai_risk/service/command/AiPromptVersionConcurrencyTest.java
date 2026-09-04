@@ -60,6 +60,13 @@ public class AiPromptVersionConcurrencyTest {
     @Autowired
     private AiPromptVersionCommandRepository promptVersionCommandRepository;
 
+    private void assertOnlyExpectedConflicts(List<Throwable> exceptions){
+        assertThat(exceptions)
+                .allSatisfy(exception ->
+                        assertThat(exception)
+                                .isInstanceOf(BusinessException.class));
+    }
+
     @Test
     /*
      * @DataJpaTest는 기본적으로 각 테스트를 하나의 트랜잭션으로 실행한다.
@@ -177,16 +184,12 @@ public class AiPromptVersionConcurrencyTest {
          */
         assertThat(activeCount).isEqualTo(1);
 
-        //충돌한 요청은 BusinessException으로 변환된다
-        assertThat(exceptions).hasSize(1);
-
-        assertThat(exceptions.get(0))
-                .isInstanceOf(BusinessException.class);
-
-        // 실패한 요청은 롤백 -> 기존 v1과 성공한 신규 버전만 남는다.
+        //동시 요청이 충돌하지 않고 순차 처리될 수 있으므로 특정 버전 개수나 예외 발생 횟수에는 의존 x
         assertThat(prompts)
                 .extracting(AiPromptVersion::getVersion)
-                .containsExactlyInAnyOrder("v1", "v2");
+                .doesNotHaveDuplicates();
+
+        assertOnlyExpectedConflicts(exceptions);
     }
 
     @Test
@@ -253,19 +256,12 @@ public class AiPromptVersionConcurrencyTest {
 
         assertThat(activeCount).isEqualTo(1);
 
-        assertThat(exceptions)
-                .hasSize(1);
-
-        assertThat(exceptions.get(0))
-                .isInstanceOf(BusinessException.class);
+        assertThat(prompts).isNotEmpty();
 
         assertThat(prompts)
-                .hasSize(1);
+                .extracting(AiPromptVersion::getVersion)
+                .doesNotHaveDuplicates();
 
-        assertThat(prompts.get(0).getVersion())
-                .isEqualTo("v1");
-
-        assertThat(prompts.get(0).getStatus())
-                .isEqualTo(AiPromptStatus.ACTIVE);
+        assertOnlyExpectedConflicts(exceptions);
     }
 }

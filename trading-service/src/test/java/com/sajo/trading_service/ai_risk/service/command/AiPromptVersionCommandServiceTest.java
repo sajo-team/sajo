@@ -7,6 +7,7 @@ import com.sajo.trading_service.ai_risk.domain.AiPromptKey;
 import com.sajo.trading_service.ai_risk.domain.AiPromptStatus;
 import com.sajo.trading_service.ai_risk.domain.AiPromptVersion;
 import com.sajo.trading_service.ai_risk.repository.command.AiPromptVersionCommandRepository;
+import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -172,20 +173,68 @@ class AiPromptVersionCommandServiceTest {
                 ))
                 .willReturn(Optional.empty());
 
+        ConstraintViolationException constraintViolationException = new ConstraintViolationException(
+                "duplicate active prompt",
+                null,
+                "uq_ai_prompt_active"
+        );
+
+        DataIntegrityViolationException dataIntegrityViolationException =
+                new DataIntegrityViolationException(
+                        "prompt version conflict",
+                        constraintViolationException
+                );
+
         given(promptVersionCommandRepository
                 .saveAndFlush(any(AiPromptVersion.class)))
-                .willThrow(new DataIntegrityViolationException(
-                        "duplicate active prompt"
-                ));
+                .willThrow(dataIntegrityViolationException);
 
-        // when
         BusinessException exception = assertThrows(
                 BusinessException.class,
                 () -> promptVersionCommandService.create(request)
         );
 
-        // then
         assertThat(exception.getMessage())
                 .isEqualTo("프롬프트 등록 중 충돌이 발생했습니다.");
+    }
+
+    @Test
+    @DisplayName("프롬프트 충돌과 무관한 데이터 무결성 예외는 그대로 전파한다")
+    void createWithUnexpectedDataIntegrityViolation() {
+        AiPromptVersionCreateRequest request =
+                new AiPromptVersionCreateRequest(
+                        AiPromptKey.RISK_ANALYSIS,
+                        "위험 분석 프롬프트",
+                        "테스트"
+                );
+
+        given(promptVersionCommandRepository
+                .findByPromptKeyAndStatus(
+                        AiPromptKey.RISK_ANALYSIS,
+                        AiPromptStatus.ACTIVE
+                ))
+                .willReturn(Optional.empty());
+
+        given(promptVersionCommandRepository
+                .findTopByPromptKeyOrderByCreatedAtDesc(
+                        AiPromptKey.RISK_ANALYSIS
+                ))
+                .willReturn(Optional.empty());
+
+        DataIntegrityViolationException unexpectedException =
+                new DataIntegrityViolationException(
+                        "unexpected database constraint violation"
+                );
+
+        given(promptVersionCommandRepository
+                .saveAndFlush(any(AiPromptVersion.class)))
+                .willThrow(unexpectedException);
+
+        DataIntegrityViolationException thrown = assertThrows(
+                DataIntegrityViolationException.class,
+                () -> promptVersionCommandService.create(request)
+        );
+
+        assertThat(thrown).isSameAs(unexpectedException);
     }
 }

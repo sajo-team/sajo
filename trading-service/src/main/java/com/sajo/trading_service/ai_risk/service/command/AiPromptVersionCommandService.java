@@ -9,6 +9,7 @@ import com.sajo.trading_service.ai_risk.domain.AiPromptVersion;
 import com.sajo.trading_service.ai_risk.exception.AiRiskErrorCode;
 import com.sajo.trading_service.ai_risk.repository.command.AiPromptVersionCommandRepository;
 import lombok.RequiredArgsConstructor;
+import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,6 +19,10 @@ import org.springframework.transaction.annotation.Transactional;
 public class AiPromptVersionCommandService {
 
     private final AiPromptVersionCommandRepository promptVersionCommandRepository;
+
+    private static final String ACTIVE_PROMPT_UNIQUE_INDEX = "uq_ai_prompt_active";
+
+    private static final String PROMPT_VERSION_UNIQUE_CONSTRAINT = "uq_ai_prompt_key_version";
 
     private String generateNextVersion(AiPromptKey promptKey){
         return promptVersionCommandRepository
@@ -30,6 +35,25 @@ public class AiPromptVersionCommandService {
     private String incrementVersion(String version){
         int current = Integer.parseInt(version.substring(1));
         return "v"+(current+1);
+    }
+
+    private boolean isPromptVersionConflict(
+            DataIntegrityViolationException exception
+    ) {
+        Throwable cause = exception;
+
+        while (cause != null) {
+            if (cause instanceof ConstraintViolationException constraintException) {
+                String constraintName = constraintException.getConstraintName();
+
+                return ACTIVE_PROMPT_UNIQUE_INDEX.equals(constraintName)
+                        || PROMPT_VERSION_UNIQUE_CONSTRAINT.equals(constraintName);
+            }
+
+            cause = cause.getCause();
+        }
+
+        return false;
     }
 
     @Transactional
@@ -56,9 +80,14 @@ public class AiPromptVersionCommandService {
 
             return AiPromptVersionCreateResponse.from(saved);
         } catch(DataIntegrityViolationException e){
-            throw new BusinessException(
-                    AiRiskErrorCode.AI_PROMPT_VERSION_CONFLICT
-            );
+
+            if (isPromptVersionConflict(e)) {
+                throw new BusinessException(
+                        AiRiskErrorCode.AI_PROMPT_VERSION_CONFLICT
+                );
+            }
+
+            throw e;
         }
     }
 }
