@@ -16,6 +16,9 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.UUID;
 
+/**
+ * 현재가 조회
+ */
 @RestController
 @Validated
 @RequiredArgsConstructor
