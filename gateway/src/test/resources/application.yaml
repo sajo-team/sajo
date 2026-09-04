@@ -2,3 +2,9 @@ spring:
   cloud:
     config:
       enabled: false
+
+# 테스트 전용 값 - 실제 운영 키와 무관
+sajo:
+  jwt:
+    secret: gateway-test-only-jwt-secret-value-not-used-anywhere-else
+    access-token-validity-seconds: 3600
