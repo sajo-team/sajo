@@ -76,14 +76,14 @@ public class GlobalExceptionHandler {
         return ErrorResponse.toResponseEntity(ErrorResponseCode.METHOD_NOT_ALLOWED);
     }
 
-    // X-User-Id 등 필수 헤더 누락 시 401 (Gateway를 거치지 않은 직접 요청으로 간주)
+    // 필수 헤더 누락 시 400 (일반 입력값 검증 실패와 동일하게 처리)
     @ExceptionHandler(MissingRequestHeaderException.class)
     public ResponseEntity<ErrorResponse> handleMissingRequestHeaderException(
             MissingRequestHeaderException e,
             HttpServletRequest request) {
 
         log.warn("uri: {}, missing header: {}", request.getRequestURI(), e.getHeaderName());
-        return ErrorResponse.toResponseEntity(ErrorResponseCode.UNAUTHORIZED);
+        return ErrorResponse.toResponseEntity(ErrorResponseCode.INVALID_BAD_REQUEST);  // UNAUTHORIZED -> INVALID_BAD_REQUEST
     }
 
     // 인증 실패 시 (로그인 안 됨, 토큰 없음/만료 등)
