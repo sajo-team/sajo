@@ -1,5 +1,6 @@
 package com.sajo.trading_service.ai_risk.service.processor;
 
+import com.sajo.common.exception.BusinessException;
 import com.sajo.trading_service.ai_risk.client.backtest.dto.BacktestInternalResponse;
 import com.sajo.trading_service.ai_risk.client.strategy.dto.StrategyInternalResponse;
 import com.sajo.trading_service.ai_risk.document.AiAnalysisHistory;
@@ -8,6 +9,7 @@ import com.sajo.trading_service.ai_risk.event.AiRiskAnalysisRequestedEvent;
 import com.sajo.trading_service.ai_risk.exception.AiAnalysisException;
 import com.sajo.trading_service.ai_risk.exception.AiResponseParseException;
 import com.sajo.trading_service.ai_risk.exception.AiResponseValidationException;
+import com.sajo.trading_service.ai_risk.exception.AiRiskErrorCode;
 import com.sajo.trading_service.ai_risk.repository.command.AiAnalysisHistoryCommandRepository;
 import com.sajo.trading_service.ai_risk.service.analysis.AiRiskAnalyzer;
 import com.sajo.trading_service.ai_risk.service.analysis.AiRiskResponseValidator;
@@ -464,5 +466,54 @@ class AiRiskAnalysisProcessorTest {
 
         verify(resultService, never())
                 .complete(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("ACTIVE 프롬프트가 없으면 PROMPT_NOT_FOUND로 실패 처리하고 감사 이력을 저장한다")
+    void process_activePromptNotFound_savesFailureHistory() {
+        // given
+        BusinessException exception =
+                new BusinessException(AiRiskErrorCode.AI_ACTIVE_PROMPT_NOT_FOUND);
+
+        when(aiRiskAnalyzer.analyze(any(), any()))
+                .thenThrow(exception);
+
+        // when
+        processor.process(event);
+
+        // then
+        verify(resultService).fail(
+                eq(event.analysisId()),
+                eq(AiAnalysisFailureType.PROMPT_NOT_FOUND),
+                eq(exception.getMessage())
+        );
+
+        ArgumentCaptor<AiAnalysisHistory> captor =
+                ArgumentCaptor.forClass(AiAnalysisHistory.class);
+
+        verify(historyRepository).save(captor.capture());
+
+        AiAnalysisHistory history = captor.getValue();
+
+        assertThat(history.getAnalysisId())
+                .isEqualTo(event.analysisId());
+
+        assertThat(history.getPrompt())
+                .isNull();
+
+        assertThat(history.getResponse())
+                .isNull();
+
+        assertThat(history.getMetadata())
+                .isNull();
+
+        assertThat(history.getValidation().structureValid())
+                .isFalse();
+
+        assertThat(history.getValidation().contentValid())
+                .isFalse();
+
+        assertThat(history.getValidation().errors())
+                .containsExactly(exception.getMessage());
     }
 }

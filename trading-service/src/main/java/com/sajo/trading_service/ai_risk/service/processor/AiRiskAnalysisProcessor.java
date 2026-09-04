@@ -1,5 +1,6 @@
 package com.sajo.trading_service.ai_risk.service.processor;
 
+import com.sajo.common.exception.BusinessException;
 import com.sajo.trading_service.ai_risk.client.backtest.dto.BacktestInternalResponse;
 import com.sajo.trading_service.ai_risk.client.strategy.dto.StrategyInternalResponse;
 import com.sajo.trading_service.ai_risk.document.AiAnalysisHistory;
@@ -9,6 +10,7 @@ import com.sajo.trading_service.ai_risk.event.AiRiskAnalysisRequestedEvent;
 import com.sajo.trading_service.ai_risk.exception.AiAnalysisException;
 import com.sajo.trading_service.ai_risk.exception.AiResponseParseException;
 import com.sajo.trading_service.ai_risk.exception.AiResponseValidationException;
+import com.sajo.trading_service.ai_risk.exception.AiRiskErrorCode;
 import com.sajo.trading_service.ai_risk.repository.command.AiAnalysisHistoryCommandRepository;
 import com.sajo.trading_service.ai_risk.service.analysis.AiRiskAnalyzer;
 import com.sajo.trading_service.ai_risk.service.analysis.AiRiskResponseValidator;
@@ -185,6 +187,29 @@ public class AiRiskAnalysisProcessor {
         saveHistorySafely(history);
     }
 
+    private void savedPromptFailureHistory(
+            AiRiskAnalysisRequestedEvent event,
+            BusinessException exception
+    ){
+        AiAnalysisHistory history = AiAnalysisHistory.builder()
+                .analysisId(event.analysisId())
+                .userId(event.strategy().userId())
+                .strategyId(event.strategy().strategyId())
+                .backtestId(event.backtest().backtestId())
+                .requestSnapshot(Map.of(
+                        "strategy", event.strategy(),
+                        "backtest", event.backtest()
+                ))
+                .validation(new AiAnalysisHistory.ValidationSnapshot(
+                        false,
+                        false,
+                        List.of(exception.getMessage())
+                ))
+                .build();
+
+        historyCommandRepository.save(history);
+    }
+
     public void process(AiRiskAnalysisRequestedEvent event){
 
         AiRiskAnalysisOutput output = null;
@@ -237,6 +262,25 @@ public class AiRiskAnalysisProcessor {
             );
 
             saveLlmFailureHistory(event, e);
+        } catch (BusinessException e){
+          if(e.getErrorCode() == AiRiskErrorCode.AI_ACTIVE_PROMPT_NOT_FOUND){
+              aiRiskAnalysisResultService.fail(
+                      event.analysisId(),
+                      AiAnalysisFailureType.PROMPT_NOT_FOUND,
+                      e.getMessage()
+              );
+
+              savedPromptFailureHistory(event, e);
+
+              log.warn(
+                      "AI 위험 분석 실패 - 활성 프롬프트 없음. analysisId={}",
+                      event.analysisId()
+              );
+
+              return;
+          }
+
+          throw e;
         } catch (Exception e){
             log.error(
                     "AI 위험 분석 처리 중 예상하지 못한 오류 발생. analysisId={}",
