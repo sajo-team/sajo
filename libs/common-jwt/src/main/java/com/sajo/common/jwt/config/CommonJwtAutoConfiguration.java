@@ -1,4 +1,4 @@
-package com.sajo.common.config;
+package com.sajo.common.jwt.config;
 
 import com.sajo.common.jwt.JwtTokenProvider;
 import org.springframework.beans.factory.annotation.Value;

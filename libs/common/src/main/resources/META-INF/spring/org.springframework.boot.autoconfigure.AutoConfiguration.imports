@@ -4,4 +4,3 @@ com.sajo.common.config.CommonAuditorAwareAutoConfiguration
 com.sajo.common.config.CommonSecurityAutoConfiguration
 com.sajo.common.config.CommonPageableAutoConfiguration
 com.sajo.common.config.CommonFeignAutoConfiguration
-com.sajo.common.config.CommonJwtAutoConfiguration
