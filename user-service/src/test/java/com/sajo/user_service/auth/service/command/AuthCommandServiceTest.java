@@ -8,8 +8,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.UUID;
-
 import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
@@ -26,15 +24,15 @@ class AuthCommandServiceTest {
     }
 
     @Test
-    @DisplayName("로그아웃하면 해당 사용자의 refresh token을 무효화한다")
-    void logoutRevokesRefreshToken() {
+    @DisplayName("로그아웃하면 해당 세션의 refresh token만 무효화한다 (다른 기기 세션에는 영향 없음)")
+    void logoutRevokesOnlyThatSession() {
         // given
-        UUID userId = UUID.randomUUID();
+        String sessionId = "session-abc";
 
         // when
-        authCommandService.logout(userId);
+        authCommandService.logout(sessionId);
 
         // then
-        verify(refreshTokenService).revoke(userId);
+        verify(refreshTokenService).revoke(sessionId);
     }
 }
