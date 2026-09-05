@@ -48,8 +48,11 @@ public class AccountKisQueryService {
             throw new BusinessException(
                     AccountErrorCode.KIS_BALANCE_INQUIRY_FAILED, "KIS 응답의 output2가 비어 있습니다.");
         }
-        return AccountDepositResponse.from(kisBalanceResponse.output2().getFirst(), Instant.now());
-
+        try {
+            return AccountDepositResponse.from(kisBalanceResponse.output2().getFirst(), Instant.now());
+        } catch (NumberFormatException | NullPointerException e) {
+            throw new BusinessException(AccountErrorCode.KIS_BALANCE_INQUIRY_FAILED, "KIS 응답 필드 파싱 실패: " + e.getMessage());
+        }
     }
 
     // 보유종목 조회 (연속조회)
@@ -85,8 +88,13 @@ public class AccountKisQueryService {
         String nextCtxAreaFk100 = result.hasNext() ? response.ctx_area_fk100() : null;
         String nextCtxAreaNk100 = result.hasNext() ? response.ctx_area_nk100() : null;
 
-        return AccountHoldingsResponse.from(
-                response.output1(), result.hasNext(), nextCtxAreaFk100, nextCtxAreaNk100, Instant.now());
+        try {
+            return AccountHoldingsResponse.from(
+                    response.output1(), result.hasNext(), nextCtxAreaFk100, nextCtxAreaNk100, Instant.now());
+        } catch (NumberFormatException | NullPointerException e) {
+            throw new BusinessException(AccountErrorCode.KIS_BALANCE_INQUIRY_FAILED, "KIS 응답 필드 파싱 실패: " + e.getMessage());
+        }
+
     }
 
     // kis access token 발급
