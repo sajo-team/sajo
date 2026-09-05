@@ -14,8 +14,6 @@ spring:
   cloud:
     config:
       enabled: false
-    discovery:
-      enabled: false
 
   kafka:
     consumer:
@@ -26,12 +24,6 @@ spring:
   ai:
     openai:
       api-key: dummy-key-for-tests
-
-eureka:
-  client:
-    enabled: false
-    register-with-eureka: false
-    fetch-registry: false
 
 kis:
   base-url: http://localhost:9999
