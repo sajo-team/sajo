@@ -1,7 +1,6 @@
 package com.sajo.trading_service.ai_risk.service.command;
 
 import com.sajo.common.exception.BusinessException;
-import com.sajo.common.response.GeneralResponse;
 import com.sajo.trading_service.ai_risk.client.backtest.BacktestFeignClient;
 import com.sajo.trading_service.ai_risk.client.backtest.dto.BacktestInternalResponse;
 import com.sajo.trading_service.ai_risk.client.strategy.StrategyFeignClient;

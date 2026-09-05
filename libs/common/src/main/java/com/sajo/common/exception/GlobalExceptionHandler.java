@@ -17,6 +17,7 @@ import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -82,6 +83,18 @@ public class GlobalExceptionHandler {
 
         log.warn("uri: {}", request.getRequestURI(), e);
         return ErrorResponse.toResponseEntity(ErrorResponseCode.METHOD_NOT_ALLOWED);
+    }
+
+    // X-User-Id 등 필수 헤더 누락 시 401 - Gateway를 거치지 않은/설정 누락된 요청은
+    // "잘못된 입력"이 아니라 "인증 정보 없음"에 해당하므로, 바로 아래 AuthenticationException과
+    // 동일한 컨벤션(로그인 안 됨/토큰 없음 = 401)을 따른다.
+    @ExceptionHandler(MissingRequestHeaderException.class)
+    public ResponseEntity<ErrorResponse> handleMissingRequestHeaderException(
+            MissingRequestHeaderException e,
+            HttpServletRequest request) {
+
+        log.warn("uri: {}, missing header: {}", request.getRequestURI(), e.getHeaderName());
+        return ErrorResponse.toResponseEntity(ErrorResponseCode.UNAUTHORIZED);
     }
 
     // 인증 실패 시 (로그인 안 됨, 토큰 없음/만료 등)

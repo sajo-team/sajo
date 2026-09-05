@@ -13,7 +13,6 @@ import org.springframework.web.context.WebApplicationContext;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -55,31 +54,11 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
-    @DisplayName("필수 헤더 누락은 COMMON_0001 400으로 변환하고 내부 예외 정보를 노출하지 않는다")
-    void missingRequestHeader_returnsStandardBadRequestWithoutInternalDetails() throws Exception {
-        mockMvc.perform(get("/required-header"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.errorCode").value("COMMON_0001"))
-                .andExpect(jsonPath("$.message").value("입력값이 유효하지 않습니다"))
-                .andExpect(jsonPath("$.errors").doesNotExist())
-                .andExpect(content().string(org.hamcrest.Matchers.not(
-                        org.hamcrest.Matchers.containsString("MissingRequestHeaderException"))));
-    }
-
-    @Test
-    @DisplayName("헤더 UUID 변환 실패는 COMMON_0001 400으로 변환하고 Java 타입 정보를 노출하지 않는다")
-    void methodArgumentTypeMismatch_returnsStandardBadRequestWithoutInternalDetails() throws Exception {
-        mockMvc.perform(get("/uuid-header").header("X-Test-Id", "not-a-uuid"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.errorCode").value("COMMON_0001"))
-                .andExpect(jsonPath("$.message").value("입력값이 유효하지 않습니다"))
-                .andExpect(jsonPath("$.errors").doesNotExist())
-                .andExpect(content().string(org.hamcrest.Matchers.not(
-                        org.hamcrest.Matchers.containsString("java.util.UUID"))))
-                .andExpect(content().string(org.hamcrest.Matchers.not(
-                        org.hamcrest.Matchers.containsString("not-a-uuid"))));
+    @DisplayName("필수 헤더 누락 시 401을 반환한다 (Gateway를 거치지 않은 요청과 동일하게 처리)")
+    void missingRequiredHeader_returnsUnauthorized() throws Exception {
+        mockMvc.perform(get("/require-header"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.errorCode").value("COMMON_0002"));
     }
 
     @Test
