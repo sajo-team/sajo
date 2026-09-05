@@ -63,7 +63,7 @@ class AccountCommandControllerTest {
         // when & then
         mockMvc.perform(
                         post("/api/v1/accounts")
-                                .param("userId", userId.toString())
+                                .header("X-User-Id", userId.toString())
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request))
                 )
@@ -83,7 +83,7 @@ class AccountCommandControllerTest {
         // when & then
         mockMvc.perform(
                         post("/api/v1/accounts")
-                                .param("userId", userId.toString())
+                                .header("X-User-Id", userId.toString())
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request))
                 )
@@ -102,7 +102,7 @@ class AccountCommandControllerTest {
         // when & then
         mockMvc.perform(
                         post("/api/v1/accounts")
-                                .param("userId", userId.toString())
+                                .header("X-User-Id", userId.toString())
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request))
                 )
@@ -125,7 +125,7 @@ class AccountCommandControllerTest {
         // when & then
         mockMvc.perform(
                         post("/api/v1/accounts")
-                                .param("userId", userId.toString())
+                                .header("X-User-Id", userId.toString())
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request))
                 )
@@ -141,11 +141,29 @@ class AccountCommandControllerTest {
         UUID userId = UUID.randomUUID();
 
         // when & then
-        mockMvc.perform(delete("/api/v1/accounts").param("userId", userId.toString()))
+        mockMvc.perform(delete("/api/v1/accounts").header("X-User-Id", userId.toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true));
 
         verify(accountDeleteFacade).deleteAccount(userId);
+    }
+
+    @Test
+    @DisplayName("X-User-Id 헤더 없이 요청하면 401을 반환한다 (Gateway를 거치지 않은 요청)")
+    void createAccountWithoutUserIdHeader() throws Exception {
+        // given
+        AccountCreateRequest request =
+                new AccountCreateRequest("app-key", "secret-key", "12345678-01", AccountType.REAL);
+
+        // when & then
+        mockMvc.perform(
+                        post("/api/v1/accounts")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request))
+                )
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.errorCode").value("COMMON_0002"));
     }
 
     @Test
@@ -157,7 +175,7 @@ class AccountCommandControllerTest {
                 .given(accountDeleteFacade).deleteAccount(userId);
 
         // when & then
-        mockMvc.perform(delete("/api/v1/accounts").param("userId", userId.toString()))
+        mockMvc.perform(delete("/api/v1/accounts").header("X-User-Id", userId.toString()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.errorCode").value("ACCOUNT_0006"));
