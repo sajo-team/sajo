@@ -8,6 +8,7 @@ import com.sajo.user_service.account.service.query.AccountKisQueryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -22,8 +23,7 @@ public class AccountQueryController {
 
     @GetMapping("/accounts/me/deposit")
     public ResponseEntity<GeneralResponse<AccountDepositResponse>> getDeposit(
-            @RequestParam UUID userId //Todo: 인증 구현 후 수정
-
+            @RequestHeader("X-User-Id") UUID userId
     ) {
         AccountDepositResponse response = accountKisQueryService.getDeposit(userId);
         return GeneralResponse.toResponseEntity(GeneralResponseCode.OK, response);
@@ -31,7 +31,7 @@ public class AccountQueryController {
 
     @GetMapping("/accounts/me/holdings")
     public ResponseEntity<GeneralResponse<AccountHoldingsResponse>> getHoldings(
-            @RequestParam UUID userId, //Todo: 인증 구현 후 수정
+            @RequestHeader("X-User-Id") UUID userId,
             @RequestParam(required = false) String ctxAreaFk100,
             @RequestParam(required = false) String ctxAreaNk100
     ) {

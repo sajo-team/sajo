@@ -48,7 +48,7 @@ class AccountQueryControllerTest {
         given(accountKisQueryService.getDeposit(userId)).willReturn(response);
 
         // when & then
-        mockMvc.perform(get("/api/v1/accounts/me/deposit").param("userId", userId.toString()))
+        mockMvc.perform(get("/api/v1/accounts/me/deposit").header("X-User-Id", userId.toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.depositTotal").value(1_000_000))
@@ -68,7 +68,7 @@ class AccountQueryControllerTest {
                 .willThrow(new BusinessException(AccountErrorCode.ACCOUNT_NOT_FOUND));
 
         // when & then
-        mockMvc.perform(get("/api/v1/accounts/me/deposit").param("userId", userId.toString()))
+        mockMvc.perform(get("/api/v1/accounts/me/deposit").header("X-User-Id", userId.toString()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.errorCode").value("ACCOUNT_0006"));
     }
@@ -82,9 +82,17 @@ class AccountQueryControllerTest {
                 .willThrow(new BusinessException(AccountErrorCode.KIS_BALANCE_INQUIRY_FAILED));
 
         // when & then
-        mockMvc.perform(get("/api/v1/accounts/me/deposit").param("userId", userId.toString()))
+        mockMvc.perform(get("/api/v1/accounts/me/deposit").header("X-User-Id", userId.toString()))
                 .andExpect(status().isBadGateway())
                 .andExpect(jsonPath("$.errorCode").value("ACCOUNT_0009"));
+    }
+
+    @Test
+    @DisplayName("X-User-Id 헤더가 없으면 예수금 조회는 401을 반환한다")
+    void getDepositWithoutUserHeader() throws Exception {
+        // when & then
+        mockMvc.perform(get("/api/v1/accounts/me/deposit"))
+                .andExpect(status().isUnauthorized());
     }
 
     @Test
@@ -101,7 +109,7 @@ class AccountQueryControllerTest {
         given(accountKisQueryService.getHoldings(eq(userId), isNull(), isNull())).willReturn(response);
 
         // when & then
-        mockMvc.perform(get("/api/v1/accounts/me/holdings").param("userId", userId.toString()))
+        mockMvc.perform(get("/api/v1/accounts/me/holdings").header("X-User-Id", userId.toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.holdings[0].stockCode").value("005930"))
                 .andExpect(jsonPath("$.data.holdings[0].stockName").value("삼성전자"))
@@ -122,7 +130,7 @@ class AccountQueryControllerTest {
 
         // when & then
         mockMvc.perform(get("/api/v1/accounts/me/holdings")
-                        .param("userId", userId.toString())
+                        .header("X-User-Id", userId.toString())
                         .param("ctxAreaFk100", "prev-fk")
                         .param("ctxAreaNk100", "prev-nk"))
                 .andExpect(status().isOk())
@@ -138,7 +146,7 @@ class AccountQueryControllerTest {
                 .willThrow(new BusinessException(AccountErrorCode.ACCOUNT_NOT_FOUND));
 
         // when & then
-        mockMvc.perform(get("/api/v1/accounts/me/holdings").param("userId", userId.toString()))
+        mockMvc.perform(get("/api/v1/accounts/me/holdings").header("X-User-Id", userId.toString()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.errorCode").value("ACCOUNT_0006"));
     }
@@ -153,9 +161,17 @@ class AccountQueryControllerTest {
 
         // when & then
         mockMvc.perform(get("/api/v1/accounts/me/holdings")
-                        .param("userId", userId.toString())
+                        .header("X-User-Id", userId.toString())
                         .param("ctxAreaFk100", "only-fk"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errorCode").value("ACCOUNT_0010"));
+    }
+
+    @Test
+    @DisplayName("X-User-Id 헤더가 없으면 보유종목 조회는 401을 반환한다")
+    void getHoldingsWithoutUserHeader() throws Exception {
+        // when & then
+        mockMvc.perform(get("/api/v1/accounts/me/holdings"))
+                .andExpect(status().isUnauthorized());
     }
 }
