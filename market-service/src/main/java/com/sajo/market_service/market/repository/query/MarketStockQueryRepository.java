@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Optional;
+import java.util.List;
 import java.util.UUID;
 
 public interface MarketStockQueryRepository extends JpaRepository<MarketStock, UUID> {
@@ -23,4 +24,15 @@ public interface MarketStockQueryRepository extends JpaRepository<MarketStock, U
     Page<MarketStock> searchByStockNameOrStockCode(@Param("keyword") String keyword, Pageable pageable);
 
     Optional<MarketStock> findByStockCode(String stockCode);
+
+    @Query("""
+            select stock.id as stockId, stock.stockCode as stockCode
+            from MarketStock stock
+            where (:lastStockCode is null or stock.stockCode > :lastStockCode)
+            order by stock.stockCode asc
+            """)
+    List<MarketStockCollectionTarget> findCollectionTargetsAfterStockCode(
+            @Param("lastStockCode") String lastStockCode,
+            Pageable pageable
+    );
 }

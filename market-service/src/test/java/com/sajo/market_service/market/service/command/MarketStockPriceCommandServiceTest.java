@@ -83,6 +83,23 @@ class MarketStockPriceCommandServiceTest {
     }
 
     @Test
+    @DisplayName("이미 식별된 종목 수집은 stockCode 재조회 없이 stockId를 사용한다")
+    void collectsIdentifiedStockWithoutLookingUpStockCodeAgain() {
+        LocalDate tradeDate = LocalDate.of(2026, 9, 1);
+        List<DailyPriceResponse> prices = List.of(dailyPrice(tradeDate));
+        given(userAccountFeignClient.getKisToken(userId)).willReturn(credentials);
+        given(kisApiClient.getDailyPrices(credentials, STOCK_CODE, tradeDate, tradeDate)).willReturn(prices);
+        given(persistenceService.saveDailyPrices(stockId, tradeDate, tradeDate, prices)).willReturn(1);
+
+        int saved = service.collectAndSaveDailyPricesForIdentifiedStock(
+                userId, stockId, STOCK_CODE, tradeDate, tradeDate);
+
+        assertThat(saved).isEqualTo(1);
+        verify(marketStockCommandRepository, never()).findByStockCode(any());
+        verify(persistenceService).saveDailyPrices(stockId, tradeDate, tradeDate, prices);
+    }
+
+    @Test
     @DisplayName("외부 API 호출 Service에는 Transaction을 두지 않고 저장 Service에만 Transaction을 둔다")
     void separatesExternalCallsFromPersistenceTransaction() throws Exception {
         Method collectionMethod = MarketStockPriceCommandService.class.getMethod(
