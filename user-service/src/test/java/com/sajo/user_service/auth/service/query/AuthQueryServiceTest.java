@@ -66,9 +66,10 @@ class AuthQueryServiceTest {
 
         given(userQueryRepository.findByEmail("test@sajo.com")).willReturn(Optional.of(user));
         given(passwordEncoder.matches("raw-password", "encoded-password")).willReturn(true);
-        given(jwtTokenProvider.createAccessToken(userId, "USER")).willReturn("issued-access-token");
+        given(refreshTokenService.issue(userId))
+                .willReturn(Optional.of(new RefreshTokenService.IssueResult("issued-refresh-token", "session-1")));
+        given(jwtTokenProvider.createAccessToken(userId, "USER", "session-1")).willReturn("issued-access-token");
         given(jwtTokenProvider.getAccessTokenValiditySeconds()).willReturn(3600L);
-        given(refreshTokenService.issue(userId)).willReturn(Optional.of("issued-refresh-token"));
 
         // when
         LoginResponse response = authQueryService.login(request);
@@ -89,9 +90,9 @@ class AuthQueryServiceTest {
 
         given(userQueryRepository.findByEmail("test@sajo.com")).willReturn(Optional.of(user));
         given(passwordEncoder.matches("raw-password", "encoded-password")).willReturn(true);
-        given(jwtTokenProvider.createAccessToken(userId, "USER")).willReturn("issued-access-token");
-        given(jwtTokenProvider.getAccessTokenValiditySeconds()).willReturn(3600L);
         given(refreshTokenService.issue(userId)).willReturn(Optional.empty());
+        given(jwtTokenProvider.createAccessToken(userId, "USER", null)).willReturn("issued-access-token");
+        given(jwtTokenProvider.getAccessTokenValiditySeconds()).willReturn(3600L);
 
         // when
         LoginResponse response = authQueryService.login(request);
@@ -165,7 +166,7 @@ class AuthQueryServiceTest {
     }
 
     @Test
-    @DisplayName("유효한 refresh token이면 새 access/refresh token을 발급한다")
+    @DisplayName("유효한 refresh token이면 새 access/refresh token을 발급하고 같은 sessionId를 유지한다")
     void refreshSucceeds() {
         // given
         User user = User.of("test@sajo.com", "encoded-password", "테스트");
@@ -174,9 +175,9 @@ class AuthQueryServiceTest {
         RefreshRequest request = new RefreshRequest("old-refresh-token");
 
         given(refreshTokenService.rotate("old-refresh-token"))
-                .willReturn(Optional.of(new RefreshTokenService.RotationResult(userId, "new-refresh-token")));
+                .willReturn(Optional.of(new RefreshTokenService.RotationResult(userId, "session-1", "new-refresh-token")));
         given(userQueryRepository.findById(userId)).willReturn(Optional.of(user));
-        given(jwtTokenProvider.createAccessToken(userId, "USER")).willReturn("new-access-token");
+        given(jwtTokenProvider.createAccessToken(userId, "USER", "session-1")).willReturn("new-access-token");
         given(jwtTokenProvider.getAccessTokenValiditySeconds()).willReturn(3600L);
 
         // when
@@ -211,7 +212,7 @@ class AuthQueryServiceTest {
         UUID userId = UUID.randomUUID();
         RefreshRequest request = new RefreshRequest("old-refresh-token");
         given(refreshTokenService.rotate("old-refresh-token"))
-                .willReturn(Optional.of(new RefreshTokenService.RotationResult(userId, "new-refresh-token")));
+                .willReturn(Optional.of(new RefreshTokenService.RotationResult(userId, "session-1", "new-refresh-token")));
         given(userQueryRepository.findById(userId)).willReturn(Optional.empty());
 
         // when & then

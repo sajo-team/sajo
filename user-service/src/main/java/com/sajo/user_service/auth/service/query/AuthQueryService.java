@@ -12,7 +12,15 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
-// 로그인/재발급은 상태 변경이 없는 조회 작업(자격 확인 + 토큰 발급)이라 Query 계층에 둔다
+import java.util.Optional;
+
+// 로그인/재발급은 상태 변경이 없는 조회 작업(자격 확인 + 토큰 발급)이라 Query 계층에 둔다.
+//
+// 다만 login()/refresh()는 실제로 Redis 상태(로그인 실패 카운터, refresh token 세션)를
+// 변경한다 - 리뷰 반영: DB(JPA) 관점에서는 조회만 하는 게 맞지만, 인증/세션이라는
+// 도메인에서는 "토큰 발급"을 팀 컨벤션상 Query로 취급하기로 한다(로그인 자체가 본질적으로
+// "자격을 확인하고 그 결과로 토큰을 내려주는" 조회에 가까운 작업이라고 보기 때문).
+// 이 주석은 그 컨벤션을 명시적으로 남겨두기 위한 것이다.
 @Service
 @RequiredArgsConstructor
 public class AuthQueryService {
@@ -35,7 +43,8 @@ public class AuthQueryService {
     // 전체를 감싸는 트랜잭션을 씌우면 loginAttemptService/refreshTokenService의
     // Redis I/O(외부 호출)까지 그 트랜잭션 범위 안에 들어가 버려서, Redis가 느려질 때
     // DB 커넥션을 불필요하게 붙잡고 있게 된다(CLAUDE.md 7절 - 외부 호출은 트랜잭션
-    // 경계 밖에 둔다).
+    // 경계 밖에 둔다). 팀 컨벤션상 Query Service에 기본 적용하는 @Transactional(readOnly)
+    // 원칙에 대한 의도적인 예외다.
     public LoginResponse login(LoginRequest request) {
         // 이메일 존재 여부와 무관하게 이메일 자체를 키로 잠금 여부를 먼저 확인한다
         // (자격 확인보다 앞서 체크해야 무차별 대입 자체가 자격 확인 로직까지 안 감)
@@ -54,15 +63,21 @@ public class AuthQueryService {
 
         loginAttemptService.recordSuccess(request.email());
 
-        String accessToken = jwtTokenProvider.createAccessToken(user.getId(), user.getRole().name());
-        String refreshToken = refreshTokenService.issue(user.getId()).orElse(null);
+        // 다중 기기 로그인 지원 - 이번 로그인에 새 세션(sessionId)을 부여하고, access
+        // token에도 실어서 이후 로그아웃 시 "이 기기의 세션만" 지목할 수 있게 한다.
+        Optional<RefreshTokenService.IssueResult> issueResult = refreshTokenService.issue(user.getId());
+        String sessionId = issueResult.map(RefreshTokenService.IssueResult::sessionId).orElse(null);
+        String refreshToken = issueResult.map(RefreshTokenService.IssueResult::refreshToken).orElse(null);
+
+        String accessToken = jwtTokenProvider.createAccessToken(user.getId(), user.getRole().name(), sessionId);
         return LoginResponse.of(accessToken, refreshToken, jwtTokenProvider.getAccessTokenValiditySeconds());
     }
 
     // Refresh Token으로 새 Access Token(+ 회전된 새 Refresh Token)을 발급한다.
     // 회전 시점에 사용자의 role을 다시 조회해서 access token에 반영한다 - 로그인 이후
-    // role이 바뀐 경우, 기존 access token이 자연 만료될 때까지 기다리지 않고 다음
-    // refresh 때 곧바로 반영되도록 하기 위함이다.
+    // role이 바뀐 경우, 기존 access token 자연 만료를 기다리지 않고 다음 refresh 때
+    // 곧바로 반영되도록 하기 위함이다. 회전된 세션(sessionId)도 그대로 새 access token에
+    // 실어서, 이후 로그아웃이 계속 같은 세션을 정확히 지목할 수 있게 한다.
     public LoginResponse refresh(RefreshRequest request) {
         RefreshTokenService.RotationResult rotationResult = refreshTokenService.rotate(request.refreshToken())
                 .orElseThrow(() -> new BusinessException(UserErrorCode.INVALID_REFRESH_TOKEN));
@@ -70,7 +85,8 @@ public class AuthQueryService {
         User user = userQueryRepository.findById(rotationResult.userId())
                 .orElseThrow(() -> new BusinessException(UserErrorCode.INVALID_REFRESH_TOKEN));
 
-        String accessToken = jwtTokenProvider.createAccessToken(user.getId(), user.getRole().name());
+        String accessToken = jwtTokenProvider.createAccessToken(
+                user.getId(), user.getRole().name(), rotationResult.sessionId());
         return LoginResponse.of(
                 accessToken, rotationResult.newRefreshToken(), jwtTokenProvider.getAccessTokenValiditySeconds());
     }
