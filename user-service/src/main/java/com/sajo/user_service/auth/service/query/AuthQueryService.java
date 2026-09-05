@@ -3,6 +3,7 @@ package com.sajo.user_service.auth.service.query;
 import com.sajo.common.exception.BusinessException;
 import com.sajo.common.jwt.JwtTokenProvider;
 import com.sajo.user_service.auth.controller.dto.request.LoginRequest;
+import com.sajo.user_service.auth.controller.dto.request.RefreshRequest;
 import com.sajo.user_service.auth.controller.dto.response.LoginResponse;
 import com.sajo.user_service.auth.domain.User;
 import com.sajo.user_service.auth.exception.UserErrorCode;
@@ -11,7 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
-// 로그인은 상태 변경이 없는 조회 작업(자격 확인 + 토큰 발급)이라 Query 계층에 둔다
+// 로그인/재발급은 상태 변경이 없는 조회 작업(자격 확인 + 토큰 발급)이라 Query 계층에 둔다
 @Service
 @RequiredArgsConstructor
 public class AuthQueryService {
@@ -26,13 +27,15 @@ public class AuthQueryService {
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
     private final LoginAttemptService loginAttemptService;
+    private final RefreshTokenService refreshTokenService;
 
-    // 메서드 레벨 @Transactional을 의도적으로 두지 않는다 - 리뷰 반영: 이 메서드가 하는
-    // DB 접근은 userQueryRepository.findByEmail() 한 줄뿐이고, UserQueryRepository가
-    // 상속하는 JpaRepository가 그 호출 자체를 이미 자기 트랜잭션으로 처리한다. 여기에
-    // 메서드 전체를 감싸는 트랜잭션을 씌우면 loginAttemptService의 Redis I/O(외부 호출)까지
-    // 그 트랜잭션 범위 안에 들어가 버려서, Redis가 느려질 때 DB 커넥션을 불필요하게 붙잡고
-    // 있게 된다(CLAUDE.md 7절 - 외부 호출은 트랜잭션 경계 밖에 둔다).
+    // 메서드 레벨 @Transactional을 의도적으로 두지 않는다 - 이 메서드가 하는 DB 접근은
+    // userQueryRepository.findByEmail() 한 줄뿐이고, UserQueryRepository가 상속하는
+    // JpaRepository가 그 호출 자체를 이미 자기 트랜잭션으로 처리한다. 여기에 메서드
+    // 전체를 감싸는 트랜잭션을 씌우면 loginAttemptService/refreshTokenService의
+    // Redis I/O(외부 호출)까지 그 트랜잭션 범위 안에 들어가 버려서, Redis가 느려질 때
+    // DB 커넥션을 불필요하게 붙잡고 있게 된다(CLAUDE.md 7절 - 외부 호출은 트랜잭션
+    // 경계 밖에 둔다).
     public LoginResponse login(LoginRequest request) {
         // 이메일 존재 여부와 무관하게 이메일 자체를 키로 잠금 여부를 먼저 확인한다
         // (자격 확인보다 앞서 체크해야 무차별 대입 자체가 자격 확인 로직까지 안 감)
@@ -52,6 +55,23 @@ public class AuthQueryService {
         loginAttemptService.recordSuccess(request.email());
 
         String accessToken = jwtTokenProvider.createAccessToken(user.getId(), user.getRole().name());
-        return LoginResponse.of(accessToken, jwtTokenProvider.getAccessTokenValiditySeconds());
+        String refreshToken = refreshTokenService.issue(user.getId()).orElse(null);
+        return LoginResponse.of(accessToken, refreshToken, jwtTokenProvider.getAccessTokenValiditySeconds());
+    }
+
+    // Refresh Token으로 새 Access Token(+ 회전된 새 Refresh Token)을 발급한다.
+    // 회전 시점에 사용자의 role을 다시 조회해서 access token에 반영한다 - 로그인 이후
+    // role이 바뀐 경우, 기존 access token이 자연 만료될 때까지 기다리지 않고 다음
+    // refresh 때 곧바로 반영되도록 하기 위함이다.
+    public LoginResponse refresh(RefreshRequest request) {
+        RefreshTokenService.RotationResult rotationResult = refreshTokenService.rotate(request.refreshToken())
+                .orElseThrow(() -> new BusinessException(UserErrorCode.INVALID_REFRESH_TOKEN));
+
+        User user = userQueryRepository.findById(rotationResult.userId())
+                .orElseThrow(() -> new BusinessException(UserErrorCode.INVALID_REFRESH_TOKEN));
+
+        String accessToken = jwtTokenProvider.createAccessToken(user.getId(), user.getRole().name());
+        return LoginResponse.of(
+                accessToken, rotationResult.newRefreshToken(), jwtTokenProvider.getAccessTokenValiditySeconds());
     }
 }
