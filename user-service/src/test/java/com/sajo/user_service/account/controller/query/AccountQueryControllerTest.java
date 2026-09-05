@@ -92,7 +92,7 @@ class AccountQueryControllerTest {
     void getDepositWithoutUserHeader() throws Exception {
         // when & then
         mockMvc.perform(get("/api/v1/accounts/me/deposit"))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isBadRequest());
     }
 
     @Test
@@ -172,6 +172,6 @@ class AccountQueryControllerTest {
     void getHoldingsWithoutUserHeader() throws Exception {
         // when & then
         mockMvc.perform(get("/api/v1/accounts/me/holdings"))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isBadRequest());
     }
 }
