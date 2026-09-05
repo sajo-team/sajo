@@ -1,4 +1,4 @@
-package com.sajo.user_service.auth.service.query;
+package com.sajo.user_service.auth.service.command;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -11,6 +11,10 @@ import java.util.List;
 
 // 이메일 기준 로그인 실패 횟수를 Redis에 기록해 무차별 대입 공격을 막는다.
 // 성공하면 카운터를 지우고, 실패가 임계치를 넘으면 일정 시간 로그인 자체를 막는다.
+//
+// command 패키지에 있는 이유 - 리뷰 반영: recordFailure()/recordSuccess()가 Redis
+// 상태를 실제로 변경하는 작업이라, CLAUDE.md 3절의 Command/Query 분리 기준 및
+// 프로젝트 내 기존 선례(KisTokenCacheCommandService)에 맞춰 command 패키지에 둔다.
 //
 // StringRedisTemplate을 쓰는 이유: CommonRedisAutoConfiguration이 제공하는 기본
 // redisTemplate은 값(value)을 JSON으로 직렬화(GenericJacksonJsonRedisSerializer)하는데,

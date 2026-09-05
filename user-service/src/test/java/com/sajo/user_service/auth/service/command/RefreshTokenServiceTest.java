@@ -1,4 +1,4 @@
-package com.sajo.user_service.auth.service.query;
+package com.sajo.user_service.auth.service.command;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -61,6 +61,32 @@ class RefreshTokenServiceTest {
         assertThat(result.get().userId()).isEqualTo(userId);
         assertThat(result.get().sessionId()).isEqualTo(issued.sessionId());
         assertThat(result.get().newRefreshToken()).isNotEqualTo(issued.refreshToken());
+    }
+
+    // 리뷰 반영 - AuthCommandService.refresh()가 실제 회전 전에 DB로 사용자 존재를
+    // 먼저 확인할 수 있도록, 아무것도 바꾸지 않는 순수 조회 메서드를 검증한다.
+    @Test
+    @DisplayName("peekUserId는 발급된 토큰의 userId를 회전 없이 그대로 반환한다")
+    void peekUserIdReturnsUserIdWithoutRotating() {
+        // given
+        UUID userId = UUID.randomUUID();
+        RefreshTokenService.IssueResult issued = refreshTokenService.issue(userId).orElseThrow();
+
+        // when
+        Optional<UUID> peeked = refreshTokenService.peekUserId(issued.refreshToken());
+
+        // then
+        assertThat(peeked).contains(userId);
+
+        // and - peek 자체는 아무것도 바꾸지 않아야 하므로, 같은 토큰으로 여전히 정상 회전 가능해야 한다
+        assertThat(refreshTokenService.rotate(issued.refreshToken())).isPresent();
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 토큰을 peekUserId로 조회하면 빈 Optional을 반환한다")
+    void peekUserIdReturnsEmptyForUnknownToken() {
+        // when & then
+        assertThat(refreshTokenService.peekUserId("no-such-token")).isEmpty();
     }
 
     @Test

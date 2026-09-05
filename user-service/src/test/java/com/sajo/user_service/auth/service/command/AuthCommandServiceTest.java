@@ -8,8 +8,6 @@ import com.sajo.user_service.auth.controller.dto.response.LoginResponse;
 import com.sajo.user_service.auth.domain.User;
 import com.sajo.user_service.auth.exception.UserErrorCode;
 import com.sajo.user_service.auth.repository.query.UserQueryRepository;
-import com.sajo.user_service.auth.service.query.LoginAttemptService;
-import com.sajo.user_service.auth.service.query.RefreshTokenService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -34,7 +32,8 @@ import static org.mockito.Mockito.verifyNoInteractions;
 // 리뷰 반영 - login()/refresh()/logout() 전부 Redis 상태(로그인 실패 카운터, refresh
 // token 세션)를 실제로 변경하는 작업이라 Command로 통합했다 (예전에는 login/refresh가
 // "팀 컨벤션상 Query로 취급한다"는 주석과 함께 Query 계층에 있었으나, 그 컨벤션이
-// 실제로 합의된 적이 없어 CLAUDE.md 10절에 따라 Command로 옮김).
+// 실제로 합의된 적이 없어 CLAUDE.md 10절에 따라 Command로 옮김). LoginAttemptService/
+// RefreshTokenService도 같은 이유로 이제 command 패키지에 있다.
 @ExtendWith(MockitoExtension.class)
 class AuthCommandServiceTest {
 
@@ -180,9 +179,10 @@ class AuthCommandServiceTest {
         ReflectionTestUtils.setField(user, "id", userId);
         RefreshRequest request = new RefreshRequest("old-refresh-token");
 
+        given(refreshTokenService.peekUserId("old-refresh-token")).willReturn(Optional.of(userId));
+        given(userQueryRepository.findById(userId)).willReturn(Optional.of(user));
         given(refreshTokenService.rotate("old-refresh-token"))
                 .willReturn(Optional.of(new RefreshTokenService.RotationResult(userId, "session-1", "new-refresh-token")));
-        given(userQueryRepository.findById(userId)).willReturn(Optional.of(user));
         given(jwtTokenProvider.createAccessToken(userId, "USER", "session-1")).willReturn("new-access-token");
         given(jwtTokenProvider.getAccessTokenValiditySeconds()).willReturn(3600L);
 
@@ -194,11 +194,11 @@ class AuthCommandServiceTest {
     }
 
     @Test
-    @DisplayName("유효하지 않은(또는 재사용 감지된) refresh token이면 INVALID_REFRESH_TOKEN 예외를 던진다")
-    void refreshFailsWhenTokenInvalid() {
+    @DisplayName("토큰 자체를 모르면(peekUserId 실패) INVALID_REFRESH_TOKEN 예외를 던지고 DB/회전을 시도하지 않는다")
+    void refreshFailsWhenTokenCompletelyUnknown() {
         // given
-        RefreshRequest request = new RefreshRequest("bad-or-reused-token");
-        given(refreshTokenService.rotate("bad-or-reused-token")).willReturn(Optional.empty());
+        RefreshRequest request = new RefreshRequest("unknown-token");
+        given(refreshTokenService.peekUserId("unknown-token")).willReturn(Optional.empty());
 
         // when & then
         assertThatThrownBy(() -> authCommandService.refresh(request))
@@ -209,16 +209,22 @@ class AuthCommandServiceTest {
                 });
 
         verifyNoInteractions(userQueryRepository, jwtTokenProvider);
+        verify(refreshTokenService, never()).rotate(anyString());
     }
 
+    // 리뷰 반영 - 순서 문제(High)를 직접 검증하는 핵심 테스트: DB 조회가 실패(사용자가
+    // 존재하지 않음)하면 실제 회전(rotate)이 전혀 호출되지 않아야 한다. 예전 순서(rotate
+    // 먼저 → findById 나중)였다면 이 시점에 이미 Redis에서 토큰이 회전되어버린 뒤였다 -
+    // 즉 DB 실패로 예외가 나가는 순간 옛 토큰은 이미 무효화됐지만 새 토큰은 클라이언트에게
+    // 전달되지 못해 그 세션이 복구 불가능한 상태가 됐다. 지금 순서(DB 확인 → 회전)라면
+    // DB 실패 시 회전 자체가 아예 일어나지 않아 옛 토큰이 그대로 유효하게 남는다.
     @Test
-    @DisplayName("회전은 됐지만 그 사이 사용자가 삭제된 경우에도 INVALID_REFRESH_TOKEN 예외를 던진다")
-    void refreshFailsWhenUserNoLongerExists() {
+    @DisplayName("회전 전에 사용자가 존재하는지 먼저 확인하고, 없으면 회전을 아예 시도하지 않는다")
+    void refreshFailsWhenUserNoLongerExistsAndNeverRotates() {
         // given
         UUID userId = UUID.randomUUID();
         RefreshRequest request = new RefreshRequest("old-refresh-token");
-        given(refreshTokenService.rotate("old-refresh-token"))
-                .willReturn(Optional.of(new RefreshTokenService.RotationResult(userId, "session-1", "new-refresh-token")));
+        given(refreshTokenService.peekUserId("old-refresh-token")).willReturn(Optional.of(userId));
         given(userQueryRepository.findById(userId)).willReturn(Optional.empty());
 
         // when & then
@@ -228,6 +234,35 @@ class AuthCommandServiceTest {
                     BusinessException businessException = (BusinessException) exception;
                     assertThat(businessException.getErrorCode()).isEqualTo(UserErrorCode.INVALID_REFRESH_TOKEN);
                 });
+
+        // 핵심 검증 - 회전 자체가 호출되지 않아야 옛 토큰이 그대로 살아있다
+        verify(refreshTokenService, never()).rotate(anyString());
+        verifyNoInteractions(jwtTokenProvider);
+    }
+
+    @Test
+    @DisplayName("DB 확인 이후 회전 시점에 재사용이 감지되면 INVALID_REFRESH_TOKEN 예외를 던진다")
+    void refreshFailsWhenRotateDetectsReuseAfterDbCheck() {
+        // given - peekUserId는 성공했지만(토큰 자체는 한때 유효했음), 그 사이 다른 요청이
+        // 먼저 회전을 완료해 실제 rotate() 시점에는 재사용으로 감지되는 경합 상황을 재현
+        UUID userId = UUID.randomUUID();
+        User user = User.of("test@sajo.com", "encoded-password", "테스트");
+        ReflectionTestUtils.setField(user, "id", userId);
+        RefreshRequest request = new RefreshRequest("old-refresh-token");
+
+        given(refreshTokenService.peekUserId("old-refresh-token")).willReturn(Optional.of(userId));
+        given(userQueryRepository.findById(userId)).willReturn(Optional.of(user));
+        given(refreshTokenService.rotate("old-refresh-token")).willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> authCommandService.refresh(request))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode()).isEqualTo(UserErrorCode.INVALID_REFRESH_TOKEN);
+                });
+
+        verifyNoInteractions(jwtTokenProvider);
     }
 
     @Test

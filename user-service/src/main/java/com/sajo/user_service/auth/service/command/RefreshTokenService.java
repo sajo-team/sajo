@@ -1,4 +1,4 @@
-package com.sajo.user_service.auth.service.query;
+package com.sajo.user_service.auth.service.command;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -14,6 +14,11 @@ import java.util.Optional;
 import java.util.UUID;
 
 // Refresh Token 발급/검증/회전을 Redis로 관리한다.
+//
+// command 패키지에 있는 이유 - 리뷰 반영: issue()/rotate()/revoke() 전부 Redis 상태를
+// 실제로 변경하는 작업이다(회전은 "기존 토큰 무효화 + 새 토큰 생성"이라는 명백한
+// 상태 변경). CLAUDE.md 3절의 Command/Query 분리 기준 및 프로젝트 내 기존 선례
+// (KisTokenCacheCommandService)에 맞춰 command 패키지에 둔다.
 //
 // 다중 기기(세션) 로그인 지원 - 리뷰 반영: 로그인마다 새로운 sessionId를 부여하고,
 // "현재 유효한 토큰"을 사용자 단위가 아니라 세션 단위로 추적한다. 이렇게 해야
@@ -109,6 +114,27 @@ public class RefreshTokenService {
             return Optional.of(new IssueResult(token, sessionId));
         } catch (RuntimeException e) {
             log.warn("Redis 기록 실패로 refresh token을 발급하지 못함(fail-open) - access token만 발급됨", e);
+            return Optional.empty();
+        }
+    }
+
+    // 제시된 토큰이 어느 userId에 속하는지만 조회한다(회전하지 않는 순수 읽기) - 리뷰
+    // 반영: AuthCommandService.refresh()가 실제 회전(rotate) 전에 그 사용자가 아직
+    // 존재하는지 DB로 먼저 확인할 수 있게 하기 위한 용도다. 이 조회 자체는 아무것도
+    // 바꾸지 않으므로, 여러 요청이 동시에 이 메서드를 호출해도 안전하다 - 실제
+    // 동시성 보장(정확히 하나만 성공)은 이후의 rotate() 호출이 담당한다.
+    public Optional<UUID> peekUserId(String presentedToken) {
+        String combined = stringRedisTemplate.opsForValue().get(TOKEN_KEY_PREFIX + presentedToken);
+        if (combined == null) {
+            return Optional.empty();
+        }
+        int sepIndex = combined.indexOf(COMBINED_VALUE_SEPARATOR);
+        if (sepIndex < 0) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(UUID.fromString(combined.substring(0, sepIndex)));
+        } catch (IllegalArgumentException e) {
             return Optional.empty();
         }
     }

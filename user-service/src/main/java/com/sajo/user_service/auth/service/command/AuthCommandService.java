@@ -8,20 +8,17 @@ import com.sajo.user_service.auth.controller.dto.response.LoginResponse;
 import com.sajo.user_service.auth.domain.User;
 import com.sajo.user_service.auth.exception.UserErrorCode;
 import com.sajo.user_service.auth.repository.query.UserQueryRepository;
-import com.sajo.user_service.auth.service.query.LoginAttemptService;
-import com.sajo.user_service.auth.service.query.RefreshTokenService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.util.Optional;
+import java.util.UUID;
 
-// 로그인/재발급/로그아웃 - 리뷰 반영: login()/refresh()는 자격 확인 자체는 조회성 작업이지만
-// 실제로는 Redis 상태(로그인 실패 카운터, refresh token 세션)를 변경한다. 이전에는 이를
-// "팀 컨벤션상 Query로 취급한다"는 주석과 함께 Query 계층에 두었으나, 그 컨벤션이 실제로
-// 팀 내에서 합의된 적이 없어(CLAUDE.md 10절 - 합의되지 않은 규칙을 새 팀 규칙으로 가정하지
-// 않는다) Command로 옮긴다. 같은 자원(refresh token 세션)을 다루는 logout()과도 이제
-// 위치가 일관된다.
+// 로그인/재발급/로그아웃 - login()/refresh()가 실제로 Redis 상태(로그인 실패 카운터,
+// refresh token 세션)를 변경하므로 Command 계층에 둔다. 하위 서비스인
+// LoginAttemptService/RefreshTokenService도 같은 이유로 command 패키지에 있다
+// (같은 파일 참고).
 @Service
 @RequiredArgsConstructor
 public class AuthCommandService {
@@ -74,15 +71,26 @@ public class AuthCommandService {
     }
 
     // Refresh Token으로 새 Access Token(+ 회전된 새 Refresh Token)을 발급한다.
-    // 회전 시점에 사용자의 role을 다시 조회해서 access token에 반영한다 - 로그인 이후
-    // role이 바뀐 경우, 기존 access token 자연 만료를 기다리지 않고 다음 refresh 때
-    // 곧바로 반영되도록 하기 위함이다. 회전된 세션(sessionId)도 그대로 새 access token에
-    // 실어서, 이후 로그아웃이 계속 같은 세션을 정확히 지목할 수 있게 한다.
+    //
+    // 순서 - 리뷰 반영: DB 조회(findById)를 실제 회전(rotate)보다 먼저 수행한다. 예전에는
+    // rotate()를 먼저 호출해 Redis에서 토큰 회전을 완료한 뒤 findById()를 호출했는데,
+    // 그 사이 DB 조회가 실패하면(일시적 장애 등) 이미 회전되어 무효화된 옛 토큰도,
+    // 클라이언트에 전달되지 못한 새 토큰도 둘 다 쓸 수 없어 그 세션이 복구 불가능한
+    // 상태가 됐다. peekUserId()는 아무것도 바꾸지 않는 순수 조회라, 이걸로 먼저 사용자
+    // 존재를 확인한 뒤에만 실제 회전을 진행하면, DB 조회가 실패해도 토큰은 아직
+    // 회전되지 않은 채로 남아있어 옛 토큰으로 안전하게 재시도할 수 있다.
     public LoginResponse refresh(RefreshRequest request) {
-        RefreshTokenService.RotationResult rotationResult = refreshTokenService.rotate(request.refreshToken())
+        UUID userId = refreshTokenService.peekUserId(request.refreshToken())
                 .orElseThrow(() -> new BusinessException(UserErrorCode.INVALID_REFRESH_TOKEN));
 
-        User user = userQueryRepository.findById(rotationResult.userId())
+        User user = userQueryRepository.findById(userId)
+                .orElseThrow(() -> new BusinessException(UserErrorCode.INVALID_REFRESH_TOKEN));
+
+        // 회전 시점에 사용자의 role을 다시 조회해서 access token에 반영한다 - 로그인 이후
+        // role이 바뀐 경우, 기존 access token 자연 만료를 기다리지 않고 다음 refresh 때
+        // 곧바로 반영되도록 하기 위함이다. 회전된 세션(sessionId)도 그대로 새 access
+        // token에 실어서, 이후 로그아웃이 계속 같은 세션을 정확히 지목할 수 있게 한다.
+        RefreshTokenService.RotationResult rotationResult = refreshTokenService.rotate(request.refreshToken())
                 .orElseThrow(() -> new BusinessException(UserErrorCode.INVALID_REFRESH_TOKEN));
 
         String accessToken = jwtTokenProvider.createAccessToken(
@@ -94,11 +102,11 @@ public class AuthCommandService {
     // sessionId 기준으로 로그아웃한다 - 다중 기기 로그인 지원: 이 기기(세션)의 refresh
     // token만 무효화되고, 같은 계정으로 로그인된 다른 기기의 세션에는 영향이 없다.
     //
-    // sessionId가 없는 경우(null/blank) - 리뷰 반영: 로그인 시점에 Redis 장애로 fail-open
-    // 되어(RefreshTokenService.issue() 참고) sessionId 없이 access token이 발급된 세션이
-    // 이 경우에 해당한다. 이런 세션은 애초에 revoke할 대상 자체가 없으므로, "로그아웃 요청은
-    // 실패해도 클라이언트 입장에서 성공한 것처럼 처리되는 게 맞다"는 revoke()의 기존
-    // 설계 철학과 일관되게 그냥 아무것도 하지 않고 성공 처리한다(400을 반환하지 않는다).
+    // sessionId가 없는 경우(null/blank) - 로그인 시점에 Redis 장애로 fail-open되어
+    // (RefreshTokenService.issue() 참고) sessionId 없이 access token이 발급된 세션이
+    // 이 경우에 해당한다. 이런 세션은 애초에 revoke할 대상 자체가 없으므로, "로그아웃
+    // 요청은 실패해도 클라이언트 입장에서 성공한 것처럼 처리되는 게 맞다"는 revoke()의
+    // 기존 설계 철학과 일관되게 그냥 아무것도 하지 않고 성공 처리한다(400을 반환하지 않는다).
     public void logout(String sessionId) {
         if (sessionId == null || sessionId.isBlank()) {
             return;
