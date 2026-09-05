@@ -179,4 +179,16 @@ public class Order extends BaseUpdatableEntity {
         }
         this.status = OrderStatus.PROCESSING;
     }
+
+    public void retry() {
+        if (this.status != OrderStatus.PROCESSING) {
+            throw new BusinessException(
+                    TradingErrorCode.ORDER_STATUS_CHANGE_NOT_ALLOWED
+            );
+        }
+
+        this.status = OrderStatus.REQUESTED;
+        this.failureCode = null;
+        this.failureMessage = null;
+    }
 }

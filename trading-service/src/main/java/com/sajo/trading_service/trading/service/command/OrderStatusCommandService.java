@@ -66,4 +66,17 @@ public class OrderStatusCommandService {
 
         return order;
     }
+
+    @Transactional
+    public void retry(UUID orderId) {
+        Order order =
+                orderCommandRepository.findByIdForUpdate(orderId)
+                        .orElseThrow(() ->
+                                new BusinessException(
+                                        TradingErrorCode.ORDER_NOT_FOUND
+                                )
+                        );
+
+        order.retry();
+    }
 }

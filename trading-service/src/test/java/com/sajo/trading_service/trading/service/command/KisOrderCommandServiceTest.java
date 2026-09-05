@@ -208,7 +208,15 @@ class KisOrderCommandServiceTest {
         when(orderStatusCommandService.startProcessing(orderId))
                 .thenReturn(order);
 
-        givenCommonAccountResponses();
+        when(accountClient.getOrderInfo(userId))
+                .thenReturn(
+                        new AccountOrderInfoResponse(
+                                "12345678-01",
+                                AccountType.VIRTUAL,
+                                "12345678",
+                                "01"
+                        )
+                );
 
         when(accountClient.getHolding(
                 userId,
@@ -258,7 +266,15 @@ class KisOrderCommandServiceTest {
         when(orderStatusCommandService.startProcessing(orderId))
                 .thenReturn(order);
 
-        givenCommonAccountResponses();
+        when(accountClient.getOrderInfo(userId))
+                .thenReturn(
+                        new AccountOrderInfoResponse(
+                                "12345678-01",
+                                AccountType.VIRTUAL,
+                                "12345678",
+                                "01"
+                        )
+                );
 
         when(accountClient.getHolding(
                 userId,
@@ -770,7 +786,7 @@ class KisOrderCommandServiceTest {
                 );
     }
     @Test
-    @DisplayName("Account Service 처리 중 예상하지 못한 예외가 발생하면 FAILED 처리한다")
+    @DisplayName("Account Service 처리 중 예상하지 못한 예외가 발생하면 REQUESTED 재시도를 요청한다")
     void executeOrderAccountUnexpectedError() {
         // given
         Order order = createOrder(OrderType.BUY);
@@ -786,10 +802,13 @@ class KisOrderCommandServiceTest {
 
         // then
         verify(orderStatusCommandService)
+                .retry(orderId);
+
+        verify(orderStatusCommandService, never())
                 .fail(
-                        orderId,
-                        "ACCOUNT_SERVICE_UNKNOWN_ERROR",
-                        "Account Service 처리 중 예상하지 못한 오류가 발생했습니다."
+                        any(),
+                        any(),
+                        any()
                 );
 
         verifyNoInteractions(kisOrderClient);
@@ -897,5 +916,152 @@ class KisOrderCommandServiceTest {
                         any(),
                         any()
                 );
+    }
+
+    @Test
+    @DisplayName("Account Service 호출 중 RetryableException이 발생하면 REQUESTED 재시도를 요청한다")
+    void executeOrderAccountRetryableException() {
+        // given
+        Order order = createOrder(OrderType.BUY);
+
+        when(orderStatusCommandService.startProcessing(orderId))
+                .thenReturn(order);
+
+        RetryableException retryableException =
+                mock(RetryableException.class);
+
+        when(accountClient.getAccessToken(userId))
+                .thenThrow(retryableException);
+
+        // when
+        kisOrderCommandService.executeOrder(orderId);
+
+        // then
+        verify(orderStatusCommandService)
+                .retry(orderId);
+
+        verify(orderStatusCommandService, never())
+                .fail(
+                        any(),
+                        any(),
+                        any()
+                );
+
+        verifyNoInteractions(kisOrderClient);
+    }
+
+    @Test
+    @DisplayName("Account Service가 5xx 응답을 반환하면 REQUESTED 재시도를 요청한다")
+    void executeOrderAccountServerError() {
+        // given
+        Order order = createOrder(OrderType.BUY);
+
+        when(orderStatusCommandService.startProcessing(orderId))
+                .thenReturn(order);
+
+        FeignException feignException =
+                mock(FeignException.class);
+
+        when(feignException.status())
+                .thenReturn(500);
+
+        when(accountClient.getAccessToken(userId))
+                .thenThrow(feignException);
+
+        // when
+        kisOrderCommandService.executeOrder(orderId);
+
+        // then
+        verify(orderStatusCommandService)
+                .retry(orderId);
+
+        verify(orderStatusCommandService, never())
+                .fail(
+                        any(),
+                        any(),
+                        any()
+                );
+
+        verifyNoInteractions(kisOrderClient);
+    }
+
+    @Test
+    @DisplayName("Account Service가 4xx 응답을 반환하면 FAILED 처리한다")
+    void executeOrderAccountClientError() {
+        // given
+        Order order = createOrder(OrderType.BUY);
+
+        when(orderStatusCommandService.startProcessing(orderId))
+                .thenReturn(order);
+
+        FeignException feignException =
+                mock(FeignException.class);
+
+        when(feignException.status())
+                .thenReturn(400);
+
+        when(accountClient.getAccessToken(userId))
+                .thenThrow(feignException);
+
+        // when
+        kisOrderCommandService.executeOrder(orderId);
+
+        // then
+        verify(orderStatusCommandService)
+                .fail(
+                        orderId,
+                        "ACCOUNT_SERVICE_HTTP_400",
+                        "계좌 정보를 확인하는 중 오류가 발생했습니다."
+                );
+
+        verify(orderStatusCommandService, never())
+                .retry(orderId);
+
+        verifyNoInteractions(kisOrderClient);
+    }
+
+    @Test
+    @DisplayName("실전 계좌이면 FAILED 처리하고 KIS를 호출하지 않는다")
+    void executeOrderRealAccountNotSupported() {
+        // given
+        Order order = createOrder(OrderType.BUY);
+
+        when(orderStatusCommandService.startProcessing(orderId))
+                .thenReturn(order);
+
+        when(accountClient.getAccessToken(userId))
+                .thenReturn(
+                        new AccountTokenResponse(
+                                "access-token",
+                                "app-key",
+                                "secret-key"
+                        )
+                );
+
+        when(accountClient.getOrderInfo(userId))
+                .thenReturn(
+                        new AccountOrderInfoResponse(
+                                "12345678-01",
+                                AccountType.REAL,
+                                "12345678",
+                                "01"
+                        )
+                );
+
+        // when
+        kisOrderCommandService.executeOrder(orderId);
+
+        // then
+        verify(orderStatusCommandService)
+                .fail(
+                        orderId,
+                        "UNSUPPORTED_ACCOUNT_TYPE",
+                        "모의투자 계좌만 주문할 수 있습니다."
+                );
+
+        verify(accountClient, never())
+                .getOrderableAmount(any());
+
+        verifyNoInteractions(kisOrderClient);
     }
 }

@@ -7,6 +7,7 @@ import com.sajo.trading_service.trading.client.KisOrderClient;
 import com.sajo.trading_service.trading.client.dto.request.KisOrderRequest;
 import com.sajo.trading_service.trading.client.dto.response.*;
 import com.sajo.trading_service.trading.domain.Order;
+import com.sajo.trading_service.trading.domain.enums.AccountType;
 import com.sajo.trading_service.trading.domain.enums.OrderType;
 import feign.FeignException;
 import feign.RetryableException;
@@ -48,6 +49,15 @@ public class KisOrderCommandService {
             infoResponse =
                     accountClient.getOrderInfo(order.getUserId());
 
+            if (infoResponse.accountType() != AccountType.VIRTUAL) {
+                orderStatusCommandService.fail(
+                        orderId,
+                        "UNSUPPORTED_ACCOUNT_TYPE",
+                        "모의투자 계좌만 주문할 수 있습니다."
+                );
+                return;
+            }
+
             if (order.getOrderType() == OrderType.BUY) {
                 amountResponse =
                         accountClient.getOrderableAmount(order.getUserId());
@@ -76,13 +86,38 @@ public class KisOrderCommandService {
             );
             return;
 
-        } catch (FeignException e) {
-            orderStatusCommandService.fail(
+        } catch (RetryableException e) {
+            log.warn(
+                    "Account Service 일시 장애로 주문을 재시도 상태로 복구합니다. orderId={}",
                     orderId,
-                    "ACCOUNT_SERVICE_HTTP_" + e.status(),
-                    "Account Service 호출에 실패했습니다."
+                    e
             );
+
+            orderStatusCommandService.retry(orderId);
             return;
+
+        } catch (FeignException e) {
+
+            if (e.status() >= 500 || e.status() == 429) {
+                log.warn(
+                        "Account Service 일시 오류로 주문을 재시도 상태로 복구합니다. orderId={}, status={}",
+                        orderId,
+                        e.status(),
+                        e
+                );
+
+                orderStatusCommandService.retry(orderId);
+
+            } else {
+                orderStatusCommandService.fail(
+                        orderId,
+                        "ACCOUNT_SERVICE_HTTP_" + e.status(),
+                        "계좌 정보를 확인하는 중 오류가 발생했습니다."
+                );
+            }
+
+            return;
+
         } catch (RuntimeException e) {
             log.error(
                     "Account Service 처리 중 예상하지 못한 오류가 발생했습니다. orderId={}",
@@ -90,11 +125,7 @@ public class KisOrderCommandService {
                     e
             );
 
-            orderStatusCommandService.fail(
-                    orderId,
-                    "ACCOUNT_SERVICE_UNKNOWN_ERROR",
-                    "Account Service 처리 중 예상하지 못한 오류가 발생했습니다."
-            );
+            orderStatusCommandService.retry(orderId);
             return;
         }
 
