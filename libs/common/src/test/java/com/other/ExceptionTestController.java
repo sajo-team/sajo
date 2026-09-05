@@ -6,7 +6,14 @@ import com.sajo.common.feign.FeignApiException;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.util.UUID;
 
 @RestController
 @Validated
@@ -24,7 +31,17 @@ public class ExceptionTestController {
 
     @GetMapping("/require-header")
     public String requireHeader(@RequestHeader("X-User-Id") String userId) {
-        return "ok";
+        return userId;
+    }
+
+    @GetMapping("/required-header")
+    public String requiredHeader(@RequestHeader("X-Test-Id") String testId) {
+        return testId;
+    }
+
+    @GetMapping("/uuid-header")
+    public String uuidHeader(@RequestHeader("X-Test-Id") UUID testId) {
+        return testId.toString();
     }
 
     @GetMapping("/business-error")

@@ -21,7 +21,7 @@ class QuoteResponseTest {
                 "정상처리 되었습니다.",
                 new KisQuoteResponse.KisQuoteOutput(
                         "70000", "69000", "70500", "68800", "69500", "500", "0.7194",
-                        "123456", "8610000000", "4180000", "15.20", "1.35", "4605.00", "51850.00"
+                        "123456", "8610000000", "4180000", "15.20", "1.35", "4605.00", "51850.00", "20260904", "143000"
                 )
         );
 
@@ -42,6 +42,7 @@ class QuoteResponseTest {
         assertEquals(new BigDecimal("1.35"), quote.pbr());
         assertEquals(new BigDecimal("4605.00"), quote.eps());
         assertEquals(new BigDecimal("51850.00"), quote.bps());
+        assertEquals("2026-09-04T14:30:00+09:00", quote.baseTime());
     }
 
     @Test
@@ -52,7 +53,7 @@ class QuoteResponseTest {
                 "정상처리 되었습니다.",
                 new KisQuoteResponse.KisQuoteOutput(
                         "70000", "", null, "", null, "", null,
-                        "", null, "", "", null, "", ""
+                        "", null, "", "", null, "", "", "20260904", "143000"
                 )
         );
 
@@ -63,6 +64,30 @@ class QuoteResponseTest {
         assertNull(quote.highPrice());
         assertNull(quote.changeRate());
         assertNull(quote.per());
+    }
+
+    @Test
+    void returnsNullBaseTimeWhenBusinessDateIsMissingOrBlank() {
+        assertNull(QuoteResponse.from(responseWithBaseTime(null, "143000"), "005930").baseTime());
+        assertNull(QuoteResponse.from(responseWithBaseTime(" ", "143000"), "005930").baseTime());
+    }
+
+    @Test
+    void returnsNullBaseTimeWhenBusinessDateIsMalformedOrDoesNotExist() {
+        assertNull(QuoteResponse.from(responseWithBaseTime("invalid", "143000"), "005930").baseTime());
+        assertNull(QuoteResponse.from(responseWithBaseTime("20260230", "143000"), "005930").baseTime());
+    }
+
+    @Test
+    void returnsNullBaseTimeWhenContractTimeIsMissingOrBlank() {
+        assertNull(QuoteResponse.from(responseWithBaseTime("20260904", null), "005930").baseTime());
+        assertNull(QuoteResponse.from(responseWithBaseTime("20260904", " "), "005930").baseTime());
+    }
+
+    @Test
+    void returnsNullBaseTimeWhenContractTimeIsMalformedOrDoesNotExist() {
+        assertNull(QuoteResponse.from(responseWithBaseTime("20260904", "invalid"), "005930").baseTime());
+        assertNull(QuoteResponse.from(responseWithBaseTime("20260904", "246000"), "005930").baseTime());
     }
 
     @Test
@@ -78,5 +103,11 @@ class QuoteResponseTest {
 
         assertEquals(MarketErrorCode.KIS_QUOTE_RESPONSE_INVALID, nullResponseException.getErrorCode());
         assertEquals(MarketErrorCode.KIS_QUOTE_RESPONSE_INVALID, nullOutputException.getErrorCode());
+    }
+
+    private KisQuoteResponse responseWithBaseTime(String businessDate, String contractTime) {
+        return new KisQuoteResponse("0", "MCA00000", "정상",
+                new KisQuoteResponse.KisQuoteOutput(
+                        "70000", "", "", "", "", "", "", "", "", "", "", "", "", "", businessDate, contractTime));
     }
 }
