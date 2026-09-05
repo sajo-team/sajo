@@ -11,11 +11,13 @@ import com.sajo.user_service.account.controller.dto.response.ApprovalKeyResponse
 import com.sajo.user_service.account.domain.Account;
 import com.sajo.user_service.account.exception.AccountErrorCode;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.UUID;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AccountKisQueryService {
@@ -51,7 +53,8 @@ public class AccountKisQueryService {
         try {
             return AccountDepositResponse.from(kisBalanceResponse.output2().getFirst(), Instant.now());
         } catch (NumberFormatException | NullPointerException e) {
-            throw new BusinessException(AccountErrorCode.KIS_BALANCE_INQUIRY_FAILED, "KIS 응답 필드 파싱 실패: " + e.getMessage());
+            log.warn("KIS 예수금 응답 필드 파싱 실패. userId={}", userId, e);
+            throw new BusinessException(AccountErrorCode.KIS_BALANCE_INQUIRY_FAILED, "KIS 응답 필드 파싱에 실패했습니다.");
         }
     }
 
@@ -94,7 +97,8 @@ public class AccountKisQueryService {
             return AccountHoldingsResponse.from(
                     response.output1(), result.hasNext(), nextCtxAreaFk100, nextCtxAreaNk100, Instant.now());
         } catch (NumberFormatException | NullPointerException e) {
-            throw new BusinessException(AccountErrorCode.KIS_BALANCE_INQUIRY_FAILED, "KIS 응답 필드 파싱 실패: " + e.getMessage());
+            log.warn("KIS 보유종목 응답 필드 파싱 실패. userId={}", userId, e);
+            throw new BusinessException(AccountErrorCode.KIS_BALANCE_INQUIRY_FAILED, "KIS 응답 필드 파싱에 실패했습니다.");
         }
 
     }
