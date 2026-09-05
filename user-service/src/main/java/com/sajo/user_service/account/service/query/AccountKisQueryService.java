@@ -1,8 +1,8 @@
 package com.sajo.user_service.account.service.query;
 
 import com.sajo.common.exception.BusinessException;
-import com.sajo.user_service.account.client.KisClient;
 import com.sajo.user_service.account.client.KisContinuationResult;
+import com.sajo.user_service.account.client.KisTrClient;
 import com.sajo.user_service.account.client.dto.response.KisBalanceResponse;
 import com.sajo.user_service.account.controller.dto.response.AccessTokenResponse;
 import com.sajo.user_service.account.controller.dto.response.AccountDepositResponse;
@@ -22,7 +22,7 @@ public class AccountKisQueryService {
 
     private final AccountQueryService accountQueryService;
     private final KisTokenCacheQueryService kisTokenCacheQueryService;
-    private final KisClient client;
+    private final KisTrClient client;
 
     // 예수금 조회
     public AccountDepositResponse getDeposit(UUID userId) {

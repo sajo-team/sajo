@@ -1,7 +1,7 @@
 package com.sajo.user_service.account.service.query;
 
 import com.sajo.common.exception.BusinessException;
-import com.sajo.user_service.account.client.KisClient;
+import com.sajo.user_service.account.client.KisTrClient;
 import com.sajo.user_service.account.client.KisContinuationResult;
 import com.sajo.user_service.account.client.dto.response.KisBalanceHoldingResponse;
 import com.sajo.user_service.account.client.dto.response.KisBalanceResponse;
@@ -40,14 +40,14 @@ class AccountKisQueryServiceTest {
     private KisTokenCacheQueryService kisTokenCacheQueryService;
 
     @Mock
-    private KisClient kisClient;
+    private KisTrClient kisTrClient;
 
     private AccountKisQueryService accountKisQueryService;
 
     @BeforeEach
     void setUp() {
         accountKisQueryService =
-                new AccountKisQueryService(accountQueryService, kisTokenCacheQueryService, kisClient);
+                new AccountKisQueryService(accountQueryService, kisTokenCacheQueryService, kisTrClient);
     }
 
     @Test
@@ -63,7 +63,7 @@ class AccountKisQueryServiceTest {
         given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
         given(kisTokenCacheQueryService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL))
                 .willReturn("issued-token");
-        given(kisClient.inquireBalance(
+        given(kisTrClient.inquireBalance(
                 "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.REAL))
                 .willReturn(kisBalanceResponse);
 
@@ -78,10 +78,10 @@ class AccountKisQueryServiceTest {
         assertThat(result.netAssetAmount()).isEqualTo(1_400_000L);
         assertThat(result.totalProfitLoss()).isEqualTo(50_000L);
 
-        InOrder inOrder = inOrder(accountQueryService, kisTokenCacheQueryService, kisClient);
+        InOrder inOrder = inOrder(accountQueryService, kisTokenCacheQueryService, kisTrClient);
         inOrder.verify(accountQueryService).getAccountByUserId(userId);
         inOrder.verify(kisTokenCacheQueryService).getAccessToken(userId, "app-key", "secret-key", AccountType.REAL);
-        inOrder.verify(kisClient).inquireBalance(
+        inOrder.verify(kisTrClient).inquireBalance(
                 "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.REAL);
     }
 
@@ -102,7 +102,7 @@ class AccountKisQueryServiceTest {
                             .isEqualTo(AccountErrorCode.ACCOUNT_NOT_FOUND);
                 });
 
-        verifyNoInteractions(kisTokenCacheQueryService, kisClient);
+        verifyNoInteractions(kisTokenCacheQueryService, kisTrClient);
     }
 
     @Test
@@ -118,7 +118,7 @@ class AccountKisQueryServiceTest {
         given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
         given(kisTokenCacheQueryService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL))
                 .willReturn("issued-token");
-        given(kisClient.inquireBalance(
+        given(kisTrClient.inquireBalance(
                 "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.REAL))
                 .willReturn(kisBalanceResponse);
 
@@ -177,7 +177,7 @@ class AccountKisQueryServiceTest {
         given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
         given(kisTokenCacheQueryService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL))
                 .willReturn("issued-token");
-        given(kisClient.inquireBalance(
+        given(kisTrClient.inquireBalance(
                 "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.REAL, null, null))
                 .willReturn(continuationResult);
 
@@ -210,7 +210,7 @@ class AccountKisQueryServiceTest {
         given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
         given(kisTokenCacheQueryService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL))
                 .willReturn("issued-token");
-        given(kisClient.inquireBalance(
+        given(kisTrClient.inquireBalance(
                 "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.REAL,
                 "prev-fk", "prev-nk"))
                 .willReturn(continuationResult);
@@ -239,7 +239,7 @@ class AccountKisQueryServiceTest {
                             .isEqualTo(AccountErrorCode.INVALID_CONTINUATION_CURSOR);
                 });
 
-        verifyNoInteractions(accountQueryService, kisTokenCacheQueryService, kisClient);
+        verifyNoInteractions(accountQueryService, kisTokenCacheQueryService, kisTrClient);
     }
 
     @Test
@@ -259,7 +259,7 @@ class AccountKisQueryServiceTest {
                             .isEqualTo(AccountErrorCode.ACCOUNT_NOT_FOUND);
                 });
 
-        verifyNoInteractions(kisTokenCacheQueryService, kisClient);
+        verifyNoInteractions(kisTokenCacheQueryService, kisTrClient);
     }
 
     private static KisBalanceHoldingResponse holding() {

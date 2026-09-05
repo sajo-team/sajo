@@ -1,6 +1,6 @@
 package com.sajo.user_service.account.service.command;
 
-import com.sajo.user_service.account.client.KisClient;
+import com.sajo.user_service.account.client.KisOAuthClient;
 import com.sajo.user_service.account.client.dto.response.KisAccessTokenResponse;
 import com.sajo.user_service.account.domain.Account;
 import com.sajo.user_service.account.domain.AccountType;
@@ -16,7 +16,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AccountCreateFacade {
 
-    private final KisClient kisClient;
+    private final KisOAuthClient kisOAuthClient;
     private final AccountQueryService accountQueryService;
     private final AccountCommandService accountCommandService;
     private final KisTokenCacheCommandService kisTokenCacheCommandService;
@@ -28,7 +28,7 @@ public class AccountCreateFacade {
         accountQueryService.validateCreatable(userId, accountNo);
 
         // 2. appKey/secretKey 유효성 검증 - 트랜잭션 밖에서 실행
-        KisAccessTokenResponse kisResponse = kisClient.getAccessToken(appKey, secretKey, accountType);
+        KisAccessTokenResponse kisResponse = kisOAuthClient.getAccessToken(appKey, secretKey, accountType);
 
         // 3. 최종 재확인 + 저장
         Account account = accountCommandService.createAccount(userId, appKey, secretKey, accountNo, accountType);

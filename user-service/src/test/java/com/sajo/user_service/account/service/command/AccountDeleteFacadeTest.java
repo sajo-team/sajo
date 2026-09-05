@@ -1,7 +1,7 @@
 package com.sajo.user_service.account.service.command;
 
 import com.sajo.common.exception.BusinessException;
-import com.sajo.user_service.account.client.KisClient;
+import com.sajo.user_service.account.client.KisOAuthClient;
 import com.sajo.user_service.account.domain.Account;
 import com.sajo.user_service.account.domain.AccountType;
 import com.sajo.user_service.account.exception.AccountErrorCode;
@@ -28,7 +28,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 class AccountDeleteFacadeTest {
 
     @Mock
-    private KisClient kisClient;
+    private KisOAuthClient kisOAuthClient;
 
     @Mock
     private KisTokenCacheQueryService cacheQueryService;
@@ -44,7 +44,7 @@ class AccountDeleteFacadeTest {
     @BeforeEach
     void setUp() {
         accountDeleteFacade =
-                new AccountDeleteFacade(kisClient, cacheQueryService, cacheCommandService, accountCommandService);
+                new AccountDeleteFacade(kisOAuthClient, cacheQueryService, cacheCommandService, accountCommandService);
     }
 
     private Account account(UUID userId) {
@@ -65,7 +65,7 @@ class AccountDeleteFacadeTest {
         accountDeleteFacade.deleteAccount(userId);
 
         // then
-        verify(kisClient).revokeAccessToken("app-key", "secret-key", "cached-token", AccountType.REAL);
+        verify(kisOAuthClient).revokeAccessToken("app-key", "secret-key", "cached-token", AccountType.REAL);
         verify(cacheCommandService).evictKisTokenCaches(userId);
     }
 
@@ -82,7 +82,7 @@ class AccountDeleteFacadeTest {
         accountDeleteFacade.deleteAccount(userId);
 
         // then
-        verifyNoInteractions(kisClient);
+        verifyNoInteractions(kisOAuthClient);
         verify(cacheCommandService).evictKisTokenCaches(userId);
     }
 
@@ -103,7 +103,7 @@ class AccountDeleteFacadeTest {
                             .isEqualTo(AccountErrorCode.ACCOUNT_NOT_FOUND);
                 });
 
-        verifyNoInteractions(kisClient);
+        verifyNoInteractions(kisOAuthClient);
         verifyNoInteractions(cacheQueryService);
         verifyNoInteractions(cacheCommandService);
     }
@@ -117,7 +117,7 @@ class AccountDeleteFacadeTest {
         given(accountCommandService.deleteAccount(userId)).willReturn(account);
         given(cacheQueryService.peekAccessToken(userId)).willReturn(Optional.of("cached-token"));
         willThrow(new BusinessException(AccountErrorCode.KIS_TOKEN_ISSUE_FAILED))
-                .given(kisClient).revokeAccessToken("app-key", "secret-key", "cached-token", AccountType.REAL);
+                .given(kisOAuthClient).revokeAccessToken("app-key", "secret-key", "cached-token", AccountType.REAL);
 
         // when & then
         assertThatCode(() -> accountDeleteFacade.deleteAccount(userId)).doesNotThrowAnyException();
