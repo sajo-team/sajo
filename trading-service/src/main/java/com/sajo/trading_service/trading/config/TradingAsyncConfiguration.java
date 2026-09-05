@@ -1,6 +1,5 @@
 package com.sajo.trading_service.trading.config;
 
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableAsync;
@@ -8,8 +7,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import java.util.concurrent.Executor;
+import java.util.concurrent.ThreadPoolExecutor;
 
-@Slf4j
 @Configuration
 @EnableAsync
 @EnableScheduling
@@ -26,14 +25,7 @@ public class TradingAsyncConfiguration {
         executor.setThreadNamePrefix("kis-order-");
 
         executor.setRejectedExecutionHandler(
-                (task, threadPoolExecutor) ->
-                        log.error(
-                                "KIS 주문 비동기 작업 제출 거부. "
-                                        + "activeCount={}, poolSize={}, queueSize={}",
-                                threadPoolExecutor.getActiveCount(),
-                                threadPoolExecutor.getPoolSize(),
-                                threadPoolExecutor.getQueue().size()
-                        )
+                new ThreadPoolExecutor.CallerRunsPolicy()
         );
 
         executor.initialize();
