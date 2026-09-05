@@ -163,13 +163,16 @@ public class KisClient {
                 log.warn("KIS 에러 응답 파싱 실패. body={}", e.getResponseBodyAsString());
                 kisError = null;
             }
+
             String message = kisError != null ? kisError.error_description() : e.getMessage();
 
-            log.warn("KIS 요청 실패. status={}, errorCode={}, message={}",
-                    e.getStatusCode(), kisError != null ? kisError.error_code() : null, message);
+            log.warn("KIS 요청 실패. status={}, errorCode={}, message={}, body={}",
+                    e.getStatusCode(), kisError != null ? kisError.error_code() : null, message,
+                    e.getResponseBodyAsString());
 
             // rate limit은 자격증명 문제가 아니므로 별도로 구분
-            if (kisError != null && RATE_LIMIT_ERROR_CODES.contains(kisError.error_code())) {
+            if (kisError != null && kisError.error_code() != null
+                    && RATE_LIMIT_ERROR_CODES.contains(kisError.error_code())) {
                 throw new BusinessException(AccountErrorCode.KIS_RATE_LIMITED);
             }
 

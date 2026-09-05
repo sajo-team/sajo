@@ -364,6 +364,35 @@ class KisClientTest {
     }
 
     @Test
+    @DisplayName("잔고조회 - 4xx 응답 바디가 oauth 에러 포맷(error_code)이 아니어도(rt_cd/msg_cd 포맷) "
+            + "NPE 없이 INVALID_KIS_CREDENTIALS 예외를 던진다")
+    void inquireBalanceFailsWithHttp4xxInDifferentErrorShape() {
+        // given
+        setUp();
+        server.expect(requestTo("https://kis.example/uapi/domestic-stock/v1/trading/inquire-balance"
+                        + "?CANO=12345678&ACNT_PRDT_CD=01&AFHR_FLPR_YN=N&OFL_YN=&INQR_DVSN=02&UNPR_DVSN=01"
+                        + "&FUND_STTL_ICLD_YN=N&FNCG_AMT_AUTO_RDPT_YN=N&PRCS_DVSN=00"
+                        + "&CTX_AREA_FK100=&CTX_AREA_NK100="))
+                .andRespond(withStatus(HttpStatus.FORBIDDEN)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .body("""
+                                {"rt_cd":"1","msg_cd":"EGW00123","msg1":"유효하지 않은 토큰입니다."}
+                                """));
+
+        // when & then
+        assertThatThrownBy(() -> client.inquireBalance(
+                "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.VIRTUAL))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(AccountErrorCode.INVALID_KIS_CREDENTIALS);
+                });
+
+        server.verify();
+    }
+
+    @Test
     @DisplayName("잔고조회 - 5xx 응답이면 KIS_BALANCE_INQUIRY_FAILED 예외를 던진다")
     void inquireBalanceFailsWithHttp5xx() {
         // given
