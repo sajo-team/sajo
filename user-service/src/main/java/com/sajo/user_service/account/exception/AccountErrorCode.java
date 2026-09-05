@@ -22,7 +22,12 @@ public enum AccountErrorCode implements ErrorCode {
     ACCOUNT_NOT_FOUND(HttpStatus.NOT_FOUND,"ACCOUNT_0006" , "해당 계좌를 찾을 수 없습니다" ),
 
     KIS_RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "ACCOUNT_0007", "KIS 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요"),
-    INVALID_ACCOUNT_NO_FORMAT(HttpStatus.INTERNAL_SERVER_ERROR, "ACCOUNT_0008", "계좌번호 형식이 올바르지 않습니다");
+
+    INVALID_ACCOUNT_NO_FORMAT(HttpStatus.INTERNAL_SERVER_ERROR, "ACCOUNT_0008", "계좌번호 형식이 올바르지 않습니다"),
+
+    KIS_BALANCE_INQUIRY_FAILED(HttpStatus.BAD_GATEWAY, "ACCOUNT_0009", "KIS 잔고 조회에 실패했습니다"),
+
+    INVALID_CONTINUATION_CURSOR(HttpStatus.BAD_REQUEST, "ACCOUNT_0010", "ctxAreaFk100/ctxAreaNk100은 둘 다 있거나 둘 다 없어야 합니다");
 
     private final HttpStatus status;
     private final String errorCode;

@@ -1,6 +1,7 @@
 package com.sajo.user_service.account.service.query;
 
-import com.sajo.user_service.account.client.KisClient;
+import com.sajo.user_service.account.client.KisOAuthClient;
+import com.sajo.user_service.account.client.KisTrClient;
 import com.sajo.user_service.account.client.dto.response.KisAccessTokenResponse;
 import com.sajo.user_service.account.client.dto.response.KisApprovalKeyResponse;
 import com.sajo.user_service.account.controller.dto.response.AccessTokenResponse;
@@ -36,7 +37,10 @@ class AccountKisQueryServiceCacheTest {
     private AccountQueryService accountQueryService;
 
     @MockitoBean
-    private KisClient kisClient;
+    private KisOAuthClient kisOAuthClient;
+
+    @MockitoBean
+    private KisTrClient kisTrClient;
 
     @Test
     @DisplayName("같은 userId로 두 번 호출하면 KIS 호출은 캐시로 한 번만 일어나지만, "
@@ -50,7 +54,7 @@ class AccountKisQueryServiceCacheTest {
                 new KisAccessTokenResponse("issued-token", "Bearer", 86400f, "2026-01-01 00:00:00");
 
         given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
-        given(kisClient.getAccessToken("app-key", "secret-key", AccountType.REAL)).willReturn(kisResponse);
+        given(kisOAuthClient.getAccessToken("app-key", "secret-key", AccountType.REAL)).willReturn(kisResponse);
 
         // when
         AccessTokenResponse first = accountKisQueryService.getKisAccessToken(userId);
@@ -58,7 +62,7 @@ class AccountKisQueryServiceCacheTest {
 
         // then
         assertThat(second).isEqualTo(first);
-        verify(kisClient, times(1)).getAccessToken("app-key", "secret-key", AccountType.REAL);
+        verify(kisOAuthClient, times(1)).getAccessToken("app-key", "secret-key", AccountType.REAL);
         verify(accountQueryService, times(2)).getAccountByUserId(userId);
     }
 
@@ -75,9 +79,9 @@ class AccountKisQueryServiceCacheTest {
 
         given(accountQueryService.getAccountByUserId(userId1)).willReturn(account1);
         given(accountQueryService.getAccountByUserId(userId2)).willReturn(account2);
-        given(kisClient.getAccessToken("app-key-1", "secret-key-1", AccountType.REAL))
+        given(kisOAuthClient.getAccessToken("app-key-1", "secret-key-1", AccountType.REAL))
                 .willReturn(new KisAccessTokenResponse("token-1", "Bearer", 86400f, "2026-01-01 00:00:00"));
-        given(kisClient.getAccessToken("app-key-2", "secret-key-2", AccountType.REAL))
+        given(kisOAuthClient.getAccessToken("app-key-2", "secret-key-2", AccountType.REAL))
                 .willReturn(new KisAccessTokenResponse("token-2", "Bearer", 86400f, "2026-01-01 00:00:00"));
 
         // when
@@ -87,8 +91,8 @@ class AccountKisQueryServiceCacheTest {
         // then
         assertThat(result1.accessToken()).isEqualTo("token-1");
         assertThat(result2.accessToken()).isEqualTo("token-2");
-        verify(kisClient, times(1)).getAccessToken("app-key-1", "secret-key-1", AccountType.REAL);
-        verify(kisClient, times(1)).getAccessToken("app-key-2", "secret-key-2", AccountType.REAL);
+        verify(kisOAuthClient, times(1)).getAccessToken("app-key-1", "secret-key-1", AccountType.REAL);
+        verify(kisOAuthClient, times(1)).getAccessToken("app-key-2", "secret-key-2", AccountType.REAL);
     }
 
     @Test
@@ -101,7 +105,7 @@ class AccountKisQueryServiceCacheTest {
         KisApprovalKeyResponse kisResponse = new KisApprovalKeyResponse("issued-approval-key");
 
         given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
-        given(kisClient.getApprovalKey("app-key", "secret-key", AccountType.REAL)).willReturn(kisResponse);
+        given(kisOAuthClient.getApprovalKey("app-key", "secret-key", AccountType.REAL)).willReturn(kisResponse);
 
         // when
         ApprovalKeyResponse first = accountKisQueryService.getKisApprovalKey(userId);
@@ -109,7 +113,7 @@ class AccountKisQueryServiceCacheTest {
 
         // then
         assertThat(second).isEqualTo(first);
-        verify(kisClient, times(1)).getApprovalKey("app-key", "secret-key", AccountType.REAL);
+        verify(kisOAuthClient, times(1)).getApprovalKey("app-key", "secret-key", AccountType.REAL);
         verify(accountQueryService, times(2)).getAccountByUserId(userId);
     }
 
@@ -122,9 +126,9 @@ class AccountKisQueryServiceCacheTest {
                 userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
 
         given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
-        given(kisClient.getAccessToken("app-key", "secret-key", AccountType.REAL))
+        given(kisOAuthClient.getAccessToken("app-key", "secret-key", AccountType.REAL))
                 .willReturn(new KisAccessTokenResponse("issued-token", "Bearer", 86400f, "2026-01-01 00:00:00"));
-        given(kisClient.getApprovalKey("app-key", "secret-key", AccountType.REAL))
+        given(kisOAuthClient.getApprovalKey("app-key", "secret-key", AccountType.REAL))
                 .willReturn(new KisApprovalKeyResponse("issued-approval-key"));
 
         // when
@@ -134,8 +138,8 @@ class AccountKisQueryServiceCacheTest {
         // then
         assertThat(accessToken.accessToken()).isEqualTo("issued-token");
         assertThat(approvalKey.approvalKey()).isEqualTo("issued-approval-key");
-        verify(kisClient, times(1)).getAccessToken("app-key", "secret-key", AccountType.REAL);
-        verify(kisClient, times(1)).getApprovalKey("app-key", "secret-key", AccountType.REAL);
+        verify(kisOAuthClient, times(1)).getAccessToken("app-key", "secret-key", AccountType.REAL);
+        verify(kisOAuthClient, times(1)).getApprovalKey("app-key", "secret-key", AccountType.REAL);
     }
 
     @Configuration
