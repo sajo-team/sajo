@@ -243,6 +243,25 @@ class AccountKisQueryServiceTest {
     }
 
     @Test
+    @DisplayName("ctxAreaFk100은 빈 문자열, ctxAreaNk100은 정상 값이면 INVALID_CONTINUATION_CURSOR 예외를 던진다 "
+            + "(빈 문자열도 null과 동일하게 '커서 없음'으로 취급)")
+    void getHoldingsFailsWhenOneCursorIsBlank() {
+        // given
+        UUID userId = UUID.randomUUID();
+
+        // when & then
+        assertThatThrownBy(() -> accountKisQueryService.getHoldings(userId, "", "next-nk"))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(AccountErrorCode.INVALID_CONTINUATION_CURSOR);
+                });
+
+        verifyNoInteractions(accountQueryService, kisTokenCacheQueryService, kisTrClient);
+    }
+
+    @Test
     @DisplayName("보유종목 조회 시 계좌가 없으면 ACCOUNT_NOT_FOUND 예외를 그대로 전파하고 KIS는 호출하지 않는다")
     void getHoldingsFailsWhenAccountNotFound() {
         // given

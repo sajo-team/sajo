@@ -34,14 +34,15 @@ public class KisTrClient extends AbstractKisClient {
         ).body();
     }
 
-    // kis 주식 잔고 조회 요청 (보유종목 연속조회용) - ctxAreaFk100/ctxAreaNk100이 둘 다 null이면 최초 조회
+    // kis 주식 잔고 조회 요청 (보유종목 연속조회용) - ctxAreaFk100/ctxAreaNk100이 둘 다 null이거나 빈 문자열이면 최초 조회
     public KisContinuationResult<KisBalanceResponse> inquireBalance(
             String accessToken, String appKey, String secretKey, String cano, String accountProductCode,
             AccountType accountType, String ctxAreaFk100, String ctxAreaNk100
     ) {
         RestClient restClient = selectRestClient(accountType);
         String trId = accountType == AccountType.REAL ? BALANCE_TR_ID_REAL : BALANCE_TR_ID_VIRTUAL;
-        boolean isFirstCall = ctxAreaFk100 == null && ctxAreaNk100 == null;
+        boolean isFirstCall = (ctxAreaFk100 == null || ctxAreaFk100.isBlank())
+                && (ctxAreaNk100 == null || ctxAreaNk100.isBlank());
         String trCont = isFirstCall ? "" : "N"; // 공백: 초기 조회, N: 다음 데이터 조회
 
         String uri = UriComponentsBuilder.fromPath(INQUIRE_BALANCE)

@@ -220,6 +220,28 @@ class KisTrClientTest {
     }
 
     @Test
+    @DisplayName("잔고조회(연속조회) - 커서가 null이 아닌 빈 문자열이어도 최초 조회로 처리해 tr_cont 공백/CTX_AREA 공란으로 요청한다")
+    void inquiresBalanceTreatsBlankCursorAsFirstCall() {
+        // given
+        setUp();
+        server.expect(requestTo("https://kis.example/uapi/domestic-stock/v1/trading/inquire-balance"
+                        + "?CANO=12345678&ACNT_PRDT_CD=01&AFHR_FLPR_YN=N&OFL_YN=&INQR_DVSN=02&UNPR_DVSN=01"
+                        + "&FUND_STTL_ICLD_YN=N&FNCG_AMT_AUTO_RDPT_YN=N&PRCS_DVSN=00"
+                        + "&CTX_AREA_FK100=&CTX_AREA_NK100="))
+                .andExpect(header("tr_cont", ""))
+                .andRespond(withSuccess("""
+                        {"rt_cd":"0","msg_cd":"MSG_CD","msg1":"정상처리 되었습니다","output1":[],"output2":[{}]}
+                        """, MediaType.APPLICATION_JSON));
+
+        // when
+        client.inquireBalance(
+                "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.VIRTUAL, "", "");
+
+        // then
+        server.verify();
+    }
+
+    @Test
     @DisplayName("잔고조회(연속조회, 최초 호출) - 커서 없이 호출하면 tr_cont 공백/CTX_AREA 공란으로 요청하고, "
             + "응답 tr_cont가 M이면 hasNext=true를 반환한다")
     void inquiresBalanceFirstPageHasNext() {

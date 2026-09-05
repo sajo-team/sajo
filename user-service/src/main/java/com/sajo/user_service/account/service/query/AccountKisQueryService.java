@@ -57,8 +57,10 @@ public class AccountKisQueryService {
 
     // 보유종목 조회 (연속조회)
     public AccountHoldingsResponse getHoldings(UUID userId, String ctxAreaFk100, String ctxAreaNk100) {
-        // KIS 연속조회 프로토콜상 둘은 항상 한 쌍으로 다녀야 함
-        if ((ctxAreaFk100 == null) != (ctxAreaNk100 == null)) {
+        // KIS 연속조회 프로토콜상 둘은 항상 한 쌍으로 다녀야 함 - null과 빈 문자열 모두 "커서 없음"으로 취급
+        boolean fk100Blank = ctxAreaFk100 == null || ctxAreaFk100.isBlank();
+        boolean nk100Blank = ctxAreaNk100 == null || ctxAreaNk100.isBlank();
+        if (fk100Blank != nk100Blank) {
             throw new BusinessException(AccountErrorCode.INVALID_CONTINUATION_CURSOR);
         }
 
