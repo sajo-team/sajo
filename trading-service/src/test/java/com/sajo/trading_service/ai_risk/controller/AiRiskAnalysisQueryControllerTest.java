@@ -134,15 +134,15 @@ class AiRiskAnalysisQueryControllerTest {
     }
  
     @Test
-    @DisplayName("X-User-Id 헤더 없이 상세 조회를 요청하면 401을 반환한다 (Gateway를 거치지 않은 요청)")
+    @DisplayName("X-User-Id 헤더 없이 상세 조회를 요청하면 400을 반환한다 (Gateway를 거치지 않은 요청)")
     void getAnalysis_withoutUserIdHeader() throws Exception {
         // given
         UUID analysisId = UUID.randomUUID();
  
         // when & then
         mockMvc.perform(get("/api/v1/ai/analyses/{analysisId}", analysisId))
-                .andExpect(status().isUnauthorized())
+                .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.errorCode").value("COMMON_0002"));
+                .andExpect(jsonPath("$.errorCode").value("COMMON_0001"));
     }
 }

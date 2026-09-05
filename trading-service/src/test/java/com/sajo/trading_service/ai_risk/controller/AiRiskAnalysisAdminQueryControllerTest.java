@@ -80,12 +80,12 @@ class AiRiskAnalysisAdminQueryControllerTest {
     }
  
     @Test
-    @DisplayName("X-User-Role 헤더 없이 요청하면 401을 반환한다 (Gateway를 거치지 않은 요청)")
+    @DisplayName("X-User-Role 헤더 없이 요청하면 400을 반환한다 (Gateway를 거치지 않은 요청)")
     void getFailureHistory_withoutRoleHeader_unauthorized() throws Exception {
         // when & then
         mockMvc.perform(get("/api/v1/admin/ai/analyses/failures"))
-                .andExpect(status().isUnauthorized())
+                .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.errorCode").value("COMMON_0002"));
+                .andExpect(jsonPath("$.errorCode").value("COMMON_0001"));
     }
 }

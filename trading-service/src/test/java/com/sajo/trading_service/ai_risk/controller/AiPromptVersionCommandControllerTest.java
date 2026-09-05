@@ -81,7 +81,7 @@ class AiPromptVersionCommandControllerTest {
     }
  
     @Test
-    @DisplayName("X-User-Role 헤더 없이 요청하면 401을 반환한다 (Gateway를 거치지 않은 요청)")
+    @DisplayName("X-User-Role 헤더 없이 요청하면 400을 반환한다 (Gateway를 거치지 않은 요청)")
     void create_withoutRoleHeader_unauthorized() throws Exception {
         // given
         AiPromptVersionCreateRequest request =
@@ -93,8 +93,8 @@ class AiPromptVersionCommandControllerTest {
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request))
                 )
-                .andExpect(status().isUnauthorized())
+                .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
-                .andExpect(jsonPath("$.errorCode").value("COMMON_0002"));
+                .andExpect(jsonPath("$.errorCode").value("COMMON_0001"));
     }
 }
