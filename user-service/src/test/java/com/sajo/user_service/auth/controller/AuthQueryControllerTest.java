@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sajo.common.exception.BusinessException;
 import com.sajo.common.exception.GlobalExceptionHandler;
 import com.sajo.user_service.auth.controller.dto.request.LoginRequest;
+import com.sajo.user_service.auth.controller.dto.request.RefreshRequest;
 import com.sajo.user_service.auth.controller.dto.response.LoginResponse;
 import com.sajo.user_service.auth.exception.UserErrorCode;
 import com.sajo.user_service.auth.service.query.AuthQueryService;
@@ -36,11 +37,12 @@ class AuthQueryControllerTest {
     private AuthQueryService authQueryService;
 
     @Test
-    @DisplayName("로그인에 성공하면 200과 access token을 반환한다")
+    @DisplayName("로그인에 성공하면 200과 access/refresh token을 반환한다")
     void loginSucceeds() throws Exception {
         // given
         LoginRequest request = new LoginRequest("test@sajo.com", "password1");
-        given(authQueryService.login(request)).willReturn(LoginResponse.of("issued-token", 3600L));
+        given(authQueryService.login(request))
+                .willReturn(LoginResponse.of("issued-access-token", "issued-refresh-token", 3600L));
 
         // when & then
         mockMvc.perform(
@@ -50,7 +52,8 @@ class AuthQueryControllerTest {
                 )
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.data.accessToken").value("issued-token"))
+                .andExpect(jsonPath("$.data.accessToken").value("issued-access-token"))
+                .andExpect(jsonPath("$.data.refreshToken").value("issued-refresh-token"))
                 .andExpect(jsonPath("$.data.tokenType").value("Bearer"));
     }
 
@@ -106,5 +109,60 @@ class AuthQueryControllerTest {
                 .andExpect(status().isTooManyRequests())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.errorCode").value("USER_0003"));
+    }
+
+    @Test
+    @DisplayName("유효한 refresh token이면 200과 새 access/refresh token을 반환한다")
+    void refreshSucceeds() throws Exception {
+        // given
+        RefreshRequest request = new RefreshRequest("old-refresh-token");
+        given(authQueryService.refresh(request))
+                .willReturn(LoginResponse.of("new-access-token", "new-refresh-token", 3600L));
+
+        // when & then
+        mockMvc.perform(
+                        post("/api/v1/auth/refresh")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request))
+                )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.accessToken").value("new-access-token"))
+                .andExpect(jsonPath("$.data.refreshToken").value("new-refresh-token"));
+    }
+
+    @Test
+    @DisplayName("refresh token이 비어있으면 400을 반환한다")
+    void refreshFailsWhenTokenBlank() throws Exception {
+        // given
+        RefreshRequest request = new RefreshRequest("");
+
+        // when & then
+        mockMvc.perform(
+                        post("/api/v1/auth/refresh")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request))
+                )
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
+    @DisplayName("유효하지 않은 refresh token이면 401을 반환한다")
+    void refreshFailsWhenTokenInvalid() throws Exception {
+        // given
+        RefreshRequest request = new RefreshRequest("bad-token");
+        willThrow(new BusinessException(UserErrorCode.INVALID_REFRESH_TOKEN))
+                .given(authQueryService).refresh(request);
+
+        // when & then
+        mockMvc.perform(
+                        post("/api/v1/auth/refresh")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request))
+                )
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.errorCode").value("USER_0004"));
     }
 }

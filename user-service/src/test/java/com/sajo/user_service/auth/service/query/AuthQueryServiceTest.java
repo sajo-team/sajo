@@ -3,6 +3,7 @@ package com.sajo.user_service.auth.service.query;
 import com.sajo.common.exception.BusinessException;
 import com.sajo.common.jwt.JwtTokenProvider;
 import com.sajo.user_service.auth.controller.dto.request.LoginRequest;
+import com.sajo.user_service.auth.controller.dto.request.RefreshRequest;
 import com.sajo.user_service.auth.controller.dto.response.LoginResponse;
 import com.sajo.user_service.auth.domain.User;
 import com.sajo.user_service.auth.exception.UserErrorCode;
@@ -43,16 +44,19 @@ class AuthQueryServiceTest {
     @Mock
     private LoginAttemptService loginAttemptService;
 
+    @Mock
+    private RefreshTokenService refreshTokenService;
+
     private AuthQueryService authQueryService;
 
     @BeforeEach
     void setUp() {
         authQueryService = new AuthQueryService(
-                userQueryRepository, passwordEncoder, jwtTokenProvider, loginAttemptService);
+                userQueryRepository, passwordEncoder, jwtTokenProvider, loginAttemptService, refreshTokenService);
     }
 
     @Test
-    @DisplayName("이메일과 비밀번호가 맞으면 토큰을 발급하고 실패 카운터를 지운다")
+    @DisplayName("이메일과 비밀번호가 맞으면 access/refresh token을 발급하고 실패 카운터를 지운다")
     void loginSucceeds() {
         // given
         User user = User.of("test@sajo.com", "encoded-password", "테스트");
@@ -62,15 +66,39 @@ class AuthQueryServiceTest {
 
         given(userQueryRepository.findByEmail("test@sajo.com")).willReturn(Optional.of(user));
         given(passwordEncoder.matches("raw-password", "encoded-password")).willReturn(true);
-        given(jwtTokenProvider.createAccessToken(userId, "USER")).willReturn("issued-token");
+        given(jwtTokenProvider.createAccessToken(userId, "USER")).willReturn("issued-access-token");
         given(jwtTokenProvider.getAccessTokenValiditySeconds()).willReturn(3600L);
+        given(refreshTokenService.issue(userId)).willReturn(Optional.of("issued-refresh-token"));
 
         // when
         LoginResponse response = authQueryService.login(request);
 
         // then
-        assertThat(response).isEqualTo(LoginResponse.of("issued-token", 3600L));
+        assertThat(response).isEqualTo(LoginResponse.of("issued-access-token", "issued-refresh-token", 3600L));
         verify(loginAttemptService).recordSuccess("test@sajo.com");
+    }
+
+    @Test
+    @DisplayName("refresh token 발급이 실패해도(Redis 장애) 로그인 자체는 access token으로 성공한다")
+    void loginSucceedsWithNullRefreshTokenWhenIssueFails() {
+        // given - RefreshTokenService의 fail-open 정책을 재현 (빈 Optional 반환)
+        User user = User.of("test@sajo.com", "encoded-password", "테스트");
+        UUID userId = UUID.randomUUID();
+        ReflectionTestUtils.setField(user, "id", userId);
+        LoginRequest request = new LoginRequest("test@sajo.com", "raw-password");
+
+        given(userQueryRepository.findByEmail("test@sajo.com")).willReturn(Optional.of(user));
+        given(passwordEncoder.matches("raw-password", "encoded-password")).willReturn(true);
+        given(jwtTokenProvider.createAccessToken(userId, "USER")).willReturn("issued-access-token");
+        given(jwtTokenProvider.getAccessTokenValiditySeconds()).willReturn(3600L);
+        given(refreshTokenService.issue(userId)).willReturn(Optional.empty());
+
+        // when
+        LoginResponse response = authQueryService.login(request);
+
+        // then
+        assertThat(response.accessToken()).isEqualTo("issued-access-token");
+        assertThat(response.refreshToken()).isNull();
     }
 
     @Test
@@ -89,7 +117,7 @@ class AuthQueryServiceTest {
                 });
 
         // 잠긴 상태면 자격 확인 자체를 안 해야 한다 (무차별 대입이 DB/BCrypt까지 못 가도록)
-        verifyNoInteractions(userQueryRepository, passwordEncoder, jwtTokenProvider);
+        verifyNoInteractions(userQueryRepository, passwordEncoder, jwtTokenProvider, refreshTokenService);
     }
 
     @Test
@@ -111,7 +139,7 @@ class AuthQueryServiceTest {
         verify(passwordEncoder).matches(eq("raw-password"), anyString());
         verify(loginAttemptService).recordFailure("unknown@sajo.com");
         verify(loginAttemptService, never()).recordSuccess(anyString());
-        verifyNoInteractions(jwtTokenProvider);
+        verifyNoInteractions(jwtTokenProvider, refreshTokenService);
     }
 
     @Test
@@ -133,6 +161,65 @@ class AuthQueryServiceTest {
                 });
 
         verify(loginAttemptService).recordFailure("test@sajo.com");
-        verifyNoInteractions(jwtTokenProvider);
+        verifyNoInteractions(jwtTokenProvider, refreshTokenService);
+    }
+
+    @Test
+    @DisplayName("유효한 refresh token이면 새 access/refresh token을 발급한다")
+    void refreshSucceeds() {
+        // given
+        User user = User.of("test@sajo.com", "encoded-password", "테스트");
+        UUID userId = UUID.randomUUID();
+        ReflectionTestUtils.setField(user, "id", userId);
+        RefreshRequest request = new RefreshRequest("old-refresh-token");
+
+        given(refreshTokenService.rotate("old-refresh-token"))
+                .willReturn(Optional.of(new RefreshTokenService.RotationResult(userId, "new-refresh-token")));
+        given(userQueryRepository.findById(userId)).willReturn(Optional.of(user));
+        given(jwtTokenProvider.createAccessToken(userId, "USER")).willReturn("new-access-token");
+        given(jwtTokenProvider.getAccessTokenValiditySeconds()).willReturn(3600L);
+
+        // when
+        LoginResponse response = authQueryService.refresh(request);
+
+        // then
+        assertThat(response).isEqualTo(LoginResponse.of("new-access-token", "new-refresh-token", 3600L));
+    }
+
+    @Test
+    @DisplayName("유효하지 않은(또는 재사용 감지된) refresh token이면 INVALID_REFRESH_TOKEN 예외를 던진다")
+    void refreshFailsWhenTokenInvalid() {
+        // given
+        RefreshRequest request = new RefreshRequest("bad-or-reused-token");
+        given(refreshTokenService.rotate("bad-or-reused-token")).willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> authQueryService.refresh(request))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode()).isEqualTo(UserErrorCode.INVALID_REFRESH_TOKEN);
+                });
+
+        verifyNoInteractions(userQueryRepository, jwtTokenProvider);
+    }
+
+    @Test
+    @DisplayName("회전은 됐지만 그 사이 사용자가 삭제된 경우에도 INVALID_REFRESH_TOKEN 예외를 던진다")
+    void refreshFailsWhenUserNoLongerExists() {
+        // given
+        UUID userId = UUID.randomUUID();
+        RefreshRequest request = new RefreshRequest("old-refresh-token");
+        given(refreshTokenService.rotate("old-refresh-token"))
+                .willReturn(Optional.of(new RefreshTokenService.RotationResult(userId, "new-refresh-token")));
+        given(userQueryRepository.findById(userId)).willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> authQueryService.refresh(request))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode()).isEqualTo(UserErrorCode.INVALID_REFRESH_TOKEN);
+                });
     }
 }
