@@ -58,8 +58,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     ) throws ServletException, IOException {
  
         if (isPermitAll(request)) {
-            // permitAll 경로도 X-User-Id/X-User-Role은 항상 제거 (스푸핑 방지)
-            filterChain.doFilter(new UserIdHeaderRequestWrapper(request, null, null), response);
+            // permitAll 경로도 X-User-Id/X-User-Role/X-Session-Id는 항상 제거 (스푸핑 방지)
+            filterChain.doFilter(new UserIdHeaderRequestWrapper(request, null, null, null), response);
             return;
         }
  
@@ -81,7 +81,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
  
         filterChain.doFilter(
-                new UserIdHeaderRequestWrapper(request, claims.userId().toString(), claims.role()),
+                new UserIdHeaderRequestWrapper(request, claims.userId().toString(), claims.role(), claims.sessionId()),
                 response
         );
     }

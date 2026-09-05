@@ -29,25 +29,52 @@ class JwtAuthenticationFilterTest {
     }
  
     @Test
-    @DisplayName("유효한 토큰이면 통과시키고, downstream에는 검증된 userId/role로 X-User-Id/X-User-Role을 세팅한다")
+    @DisplayName("유효한 토큰이면 통과시키고, downstream에는 검증된 userId/role/sessionId로 헤더를 세팅한다")
     void validTokenSetsUserIdAndRoleHeaders() throws Exception {
         // given
         UUID userId = UUID.randomUUID();
-        String token = jwtTokenProvider.createAccessToken(userId, "ADMIN");
- 
+        String sessionId = UUID.randomUUID().toString();
+        String token = jwtTokenProvider.createAccessToken(userId, "ADMIN", sessionId);
+
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/accounts");
         request.addHeader("Authorization", "Bearer " + token);
         MockHttpServletResponse response = new MockHttpServletResponse();
         MockFilterChain chain = new MockFilterChain();
- 
+
         // when
         filter.doFilter(request, response, chain);
- 
+
         // then
         HttpServletRequest downstreamRequest = (HttpServletRequest) chain.getRequest();
         assertThat(downstreamRequest).isNotNull();
         assertThat(downstreamRequest.getHeader("X-User-Id")).isEqualTo(userId.toString());
         assertThat(downstreamRequest.getHeader("X-User-Role")).isEqualTo("ADMIN");
+        assertThat(downstreamRequest.getHeader("X-Session-Id")).isEqualTo(sessionId);
+    }
+
+    // 다중 기기 로그인 지원 - 리뷰 반영: 클라이언트가 X-Session-Id를 직접 실어 보내도
+    // 검증된 값으로 덮어써야 한다 (다른 세션인 척 사칭 방지)
+    @Test
+    @DisplayName("클라이언트가 X-Session-Id를 직접 실어 보내도 검증된 값으로 덮어쓴다 (세션 사칭 방지)")
+    void clientSuppliedSessionIdIsOverridden() throws Exception {
+        // given
+        UUID userId = UUID.randomUUID();
+        String realSessionId = UUID.randomUUID().toString();
+        String spoofedSessionId = UUID.randomUUID().toString();
+        String token = jwtTokenProvider.createAccessToken(userId, "USER", realSessionId);
+
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/accounts");
+        request.addHeader("Authorization", "Bearer " + token);
+        request.addHeader("X-Session-Id", spoofedSessionId);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        MockFilterChain chain = new MockFilterChain();
+
+        // when
+        filter.doFilter(request, response, chain);
+
+        // then
+        HttpServletRequest downstreamRequest = (HttpServletRequest) chain.getRequest();
+        assertThat(downstreamRequest.getHeader("X-Session-Id")).isEqualTo(realSessionId);
     }
  
     @Test
@@ -246,5 +273,6 @@ class JwtAuthenticationFilterTest {
         HttpServletRequest downstreamRequest = (HttpServletRequest) chain.getRequest();
         assertThat(downstreamRequest.getHeader("X-User-Id")).isEqualTo(userId.toString());
         assertThat(downstreamRequest.getHeader("X-User-Role")).isNull();
+        assertThat(downstreamRequest.getHeader("X-Session-Id")).isNull();
     }
 }
