@@ -125,8 +125,21 @@ public class KisOrderCommandService {
                     e
             );
 
-            orderStatusCommandService.retry(orderId);
-            return;
+            try {
+                orderStatusCommandService.fail(
+                        orderId,
+                        "ACCOUNT_UNEXPECTED_ERROR",
+                        "계좌 정보 처리 중 예상하지 못한 오류가 발생했습니다."
+                );
+            } catch (RuntimeException statusException) {
+                log.error(
+                        "Account 예상하지 못한 오류 후 FAILED 상태 저장 실패. orderId={}",
+                        orderId,
+                        statusException
+                );
+            }
+
+            throw e;
         }
 
         /*
@@ -246,17 +259,26 @@ public class KisOrderCommandService {
 
         } catch (RuntimeException e) {
             log.error(
-                    "KIS 주문 호출 또는 응답 처리 중 예상하지 못한 오류가 발생했습니다. orderId={}",
+                    "KIS 주문 처리 중 예상하지 못한 오류가 발생했습니다. orderId={}",
                     orderId,
                     e
             );
 
-            orderStatusCommandService.timeout(
-                    orderId,
-                    "KIS_UNKNOWN_ERROR",
-                    "KIS 주문 결과를 확인할 수 없습니다."
-            );
-            return;
+            try {
+                orderStatusCommandService.timeout(
+                        orderId,
+                        "KIS_UNEXPECTED_ERROR",
+                        "KIS 주문 처리 중 예상하지 못한 오류가 발생했습니다."
+                );
+            } catch (RuntimeException statusException) {
+                log.error(
+                        "KIS 예상하지 못한 오류 후 TIMEOUT 상태 저장 실패. orderId={}",
+                        orderId,
+                        statusException
+                );
+            }
+
+            throw e;
         }
 
         /*

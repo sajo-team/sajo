@@ -44,7 +44,10 @@ class OrderRecoveryCommandServiceTest {
     @DisplayName("오래된 REQUESTED 주문은 KIS 주문 실행을 다시 시도한다")
     void recoverRequestedOrders() {
         // given
-        when(orderQueryRepository.findStaleRequestedOrderIds(any(Instant.class)))
+        when(orderQueryRepository.findStaleRequestedOrderIds(
+                any(Instant.class),
+                any(Instant.class)
+        ))
                 .thenReturn(List.of(orderId1, orderId2));
 
         // when

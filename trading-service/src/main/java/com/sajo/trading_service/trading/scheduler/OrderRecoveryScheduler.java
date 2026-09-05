@@ -13,9 +13,8 @@ public class OrderRecoveryScheduler {
 
     private final OrderRecoveryCommandService orderRecoveryCommandService;
 
-    @Scheduled(fixedDelay = 60_000)
+    @Scheduled(fixedDelay = 10_000)
     public void recoverStaleOrders() {
-
         orderRecoveryCommandService.recoverRequestedOrders();
         orderRecoveryCommandService.recoverProcessingOrders();
     }

@@ -15,7 +15,9 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class OrderRecoveryCommandService {
 
-    private static final long STALE_MINUTES = 5L;
+    private static final long REQUESTED_STALE_MINUTES = 5L;
+    private static final long ACCOUNT_RETRY_STALE_SECONDS = 30L;
+    private static final long PROCESSING_STALE_MINUTES = 5L;
 
     private final OrderQueryRepository orderQueryRepository;
     private final OrderStatusCommandService orderStatusCommandService;
@@ -23,11 +25,23 @@ public class OrderRecoveryCommandService {
 
     public void recoverRequestedOrders() {
 
-        Instant cutoff =
-                Instant.now().minus(STALE_MINUTES, ChronoUnit.MINUTES);
+        Instant normalCutoff =
+                Instant.now().minus(
+                        REQUESTED_STALE_MINUTES,
+                        ChronoUnit.MINUTES
+                );
+
+        Instant retryCutoff =
+                Instant.now().minus(
+                        ACCOUNT_RETRY_STALE_SECONDS,
+                        ChronoUnit.SECONDS
+                );
 
         List<UUID> orderIds =
-                orderQueryRepository.findStaleRequestedOrderIds(cutoff);
+                orderQueryRepository.findStaleRequestedOrderIds(
+                        normalCutoff,
+                        retryCutoff
+                );
 
         for (UUID orderId : orderIds) {
             orderRecoveryExecutor.execute(orderId);
@@ -37,7 +51,10 @@ public class OrderRecoveryCommandService {
     public void recoverProcessingOrders() {
 
         Instant cutoff =
-                Instant.now().minus(STALE_MINUTES, ChronoUnit.MINUTES);
+                Instant.now().minus(
+                        PROCESSING_STALE_MINUTES,
+                        ChronoUnit.MINUTES
+                );
 
         List<UUID> orderIds =
                 orderQueryRepository.findStaleProcessingOrderIds(cutoff);

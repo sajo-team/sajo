@@ -22,6 +22,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.UUID;
 
+import static org.assertj.core.api.AssertionsForClassTypes.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
@@ -786,7 +787,7 @@ class KisOrderCommandServiceTest {
                 );
     }
     @Test
-    @DisplayName("Account Service 처리 중 예상하지 못한 예외가 발생하면 REQUESTED 재시도를 요청한다")
+    @DisplayName("Account Service 처리 중 예상하지 못한 예외가 발생하면 FAILED 처리 후 예외를 전파한다")
     void executeOrderAccountUnexpectedError() {
         // given
         Order order = createOrder(OrderType.BUY);
@@ -797,25 +798,28 @@ class KisOrderCommandServiceTest {
         when(accountClient.getAccessToken(userId))
                 .thenThrow(new RuntimeException("unexpected"));
 
-        // when
-        kisOrderCommandService.executeOrder(orderId);
+        // when & then
+        assertThatThrownBy(() ->
+                kisOrderCommandService.executeOrder(orderId)
+        )
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("unexpected");
 
-        // then
         verify(orderStatusCommandService)
-                .retry(orderId);
+                .fail(
+                        orderId,
+                        "ACCOUNT_UNEXPECTED_ERROR",
+                        "계좌 정보 처리 중 예상하지 못한 오류가 발생했습니다."
+                );
 
         verify(orderStatusCommandService, never())
-                .fail(
-                        any(),
-                        any(),
-                        any()
-                );
+                .retry(orderId);
 
         verifyNoInteractions(kisOrderClient);
     }
 
     @Test
-    @DisplayName("KIS 주문 처리 중 예상하지 못한 예외가 발생하면 TIMEOUT 처리한다")
+    @DisplayName("KIS 주문 처리 중 예상하지 못한 예외가 발생하면 TIMEOUT 처리 후 예외를 전파한다")
     void executeOrderKisUnexpectedError() {
         // given
         Order order = createOrder(OrderType.BUY);
@@ -843,15 +847,18 @@ class KisOrderCommandServiceTest {
                 new RuntimeException("unexpected")
         );
 
-        // when
-        kisOrderCommandService.executeOrder(orderId);
+        // when & then
+        assertThatThrownBy(() ->
+                kisOrderCommandService.executeOrder(orderId)
+        )
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("unexpected");
 
-        // then
         verify(orderStatusCommandService)
                 .timeout(
                         orderId,
-                        "KIS_UNKNOWN_ERROR",
-                        "KIS 주문 결과를 확인할 수 없습니다."
+                        "KIS_UNEXPECTED_ERROR",
+                        "KIS 주문 처리 중 예상하지 못한 오류가 발생했습니다."
                 );
 
         verify(orderStatusCommandService, never())

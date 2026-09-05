@@ -18,14 +18,19 @@ public interface OrderQueryRepository extends JpaRepository<Order, UUID> {
     Optional<Order> findByIdAndUserId(UUID orderId, UUID userId);
 
     @Query("""
-    select o.id
-    from Order o
-    where o.status = com.sajo.trading_service.trading.domain.enums.OrderStatus.REQUESTED
-      and o.updatedAt < :cutoff
-      and o.deletedAt is null
-    """)
+select o.id
+from Order o
+where o.status = com.sajo.trading_service.trading.domain.enums.OrderStatus.REQUESTED
+  and o.deletedAt is null
+  and (
+        (o.accountRetryCount = 0 and o.updatedAt < :normalCutoff)
+        or
+        (o.accountRetryCount > 0 and o.updatedAt < :retryCutoff)
+      )
+""")
     List<UUID> findStaleRequestedOrderIds(
-            @Param("cutoff") Instant cutoff
+            @Param("normalCutoff") Instant normalCutoff,
+            @Param("retryCutoff") Instant retryCutoff
     );
 
     @Query("""
