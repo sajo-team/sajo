@@ -127,7 +127,44 @@ class JwtAuthenticationFilterTest {
         assertThat(downstreamRequest.getHeader("X-User-Id")).isNull();
         assertThat(downstreamRequest.getHeader("X-User-Role")).isNull();
     }
- 
+
+    // 리뷰 반영 - access token이 만료된 상태에서 호출되는 게 refresh의 정상 흐름이므로
+    // 이 필터 단계에서 막히면 안 된다. 이게 permitAll에서 빠지면 Gateway가 만료된
+    // 토큰을 보고 먼저 401을 반환해서 refresh 자체가 영영 호출될 수 없다.
+    @Test
+    @DisplayName("토큰 재발급(POST /api/v1/auth/refresh)은 토큰 없이 통과한다")
+    void refreshEndpointIsPermitAll() throws Exception {
+        // given
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/auth/refresh");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        MockFilterChain chain = new MockFilterChain();
+
+        // when
+        filter.doFilter(request, response, chain);
+
+        // then
+        assertThat(chain.getRequest()).isNotNull();
+        assertThat(response.getStatus()).isNotEqualTo(401);
+    }
+
+    // 로그아웃은 인증된 사용자만 호출해야 하므로 permitAll에 들어가면 안 된다 -
+    // 반대 방향(의도적으로 permitAll이 아닌 것)도 함께 확인해둔다.
+    @Test
+    @DisplayName("로그아웃(POST /api/v1/auth/logout)은 permitAll이 아니라 토큰이 필요하다")
+    void logoutEndpointRequiresToken() throws Exception {
+        // given
+        MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/auth/logout");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        MockFilterChain chain = new MockFilterChain();
+
+        // when
+        filter.doFilter(request, response, chain);
+
+        // then
+        assertThat(response.getStatus()).isEqualTo(401);
+        assertThat(chain.getRequest()).isNull();
+    }
+
     @Test
     @DisplayName("회원가입(POST /api/v1/users)은 토큰 없이 통과한다")
     void signUpEndpointIsPermitAll() throws Exception {

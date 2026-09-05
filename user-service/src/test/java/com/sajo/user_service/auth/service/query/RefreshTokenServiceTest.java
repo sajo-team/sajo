@@ -11,8 +11,14 @@ import org.testcontainers.junit.jupiter.EnabledIfDockerAvailable;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -115,5 +121,41 @@ class RefreshTokenServiceTest {
         // then - A는 무효화됐지만 B는 영향 없어야 한다
         assertThat(refreshTokenService.rotate(tokenA)).isEmpty();
         assertThat(refreshTokenService.rotate(tokenB)).isPresent();
+    }
+
+    // 리뷰 반영 - 같은 토큰으로 거의 동시에 두 요청이 rotate()를 시도하면(네트워크 재시도,
+    // 다중 탭 등), 원자성이 없었다면 둘 다 검증을 통과해 정상 사용자의 세션이 재사용
+    // 오탐으로 무효화될 수 있었다. 실제로 여러 스레드를 동시에 출발시켜, 정확히 하나만
+    // 성공하고 나머지는 전부 실패하는지(=이미 회전된 토큰으로 처리되는지) 검증한다.
+    @Test
+    @DisplayName("같은 토큰으로 동시에 여러 요청이 회전을 시도해도 정확히 하나만 성공한다")
+    void concurrentRotateWithSameTokenOnlyOneSucceeds() throws Exception {
+        // given
+        UUID userId = UUID.randomUUID();
+        String token = refreshTokenService.issue(userId).orElseThrow();
+        int threadCount = 10;
+
+        ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+        CyclicBarrier barrier = new CyclicBarrier(threadCount);
+        List<Future<Optional<RefreshTokenService.RotationResult>>> futures = new ArrayList<>();
+
+        // when - 모든 스레드가 barrier에서 동시에 출발하도록 맞춰서 rotate()를 호출한다
+        for (int i = 0; i < threadCount; i++) {
+            futures.add(executor.submit(() -> {
+                barrier.await();
+                return refreshTokenService.rotate(token);
+            }));
+        }
+
+        long successCount = 0;
+        for (Future<Optional<RefreshTokenService.RotationResult>> future : futures) {
+            if (future.get().isPresent()) {
+                successCount++;
+            }
+        }
+        executor.shutdown();
+
+        // then - 원자성이 보장되므로 정확히 하나만 성공해야 한다
+        assertThat(successCount).isEqualTo(1);
     }
 }
