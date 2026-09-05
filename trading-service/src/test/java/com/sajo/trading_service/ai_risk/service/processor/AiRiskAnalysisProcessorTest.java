@@ -1,5 +1,6 @@
 package com.sajo.trading_service.ai_risk.service.processor;
 
+import com.sajo.common.exception.BusinessException;
 import com.sajo.trading_service.ai_risk.client.backtest.dto.BacktestInternalResponse;
 import com.sajo.trading_service.ai_risk.client.strategy.dto.StrategyInternalResponse;
 import com.sajo.trading_service.ai_risk.document.AiAnalysisHistory;
@@ -8,6 +9,7 @@ import com.sajo.trading_service.ai_risk.event.AiRiskAnalysisRequestedEvent;
 import com.sajo.trading_service.ai_risk.exception.AiAnalysisException;
 import com.sajo.trading_service.ai_risk.exception.AiResponseParseException;
 import com.sajo.trading_service.ai_risk.exception.AiResponseValidationException;
+import com.sajo.trading_service.ai_risk.exception.AiRiskErrorCode;
 import com.sajo.trading_service.ai_risk.repository.command.AiAnalysisHistoryCommandRepository;
 import com.sajo.trading_service.ai_risk.service.analysis.AiRiskAnalyzer;
 import com.sajo.trading_service.ai_risk.service.analysis.AiRiskResponseValidator;
@@ -119,7 +121,10 @@ class AiRiskAnalysisProcessorTest {
         assertThat(history.getBacktestId()).isEqualTo(backtestId);
 
         assertThat(history.getPrompt().version())
-                .isEqualTo("TEMP");
+                .isEqualTo("v3");
+
+        assertThat(history.getPrompt().content())
+                .isEqualTo("테스트 시스템 프롬프트");
 
         assertThat(history.getResponse().rawResponse())
                 .isEqualTo("{\"riskLevel\":\"HIGH\"}");
@@ -222,7 +227,7 @@ class AiRiskAnalysisProcessorTest {
     }
 
     @Test
-    @DisplayName("AI 응답 파싱에 실패하면 원본 응답을 이력에 저장한다")
+    @DisplayName("AI 응답 파싱에 실패하면 사용한 프롬프트와 원본 응답을 이력에 저장한다")
     void process_parseFailure() {
         String rawResponse = "invalid json";
 
@@ -230,6 +235,10 @@ class AiRiskAnalysisProcessorTest {
                 new AiResponseParseException(
                         "AI 응답 변환에 실패했습니다.",
                         rawResponse,
+                        "v3",
+                        "테스트 시스템 프롬프트",
+                        "gpt-5-mini",
+                        100L,
                         new RuntimeException("parse error")
                 );
 
@@ -253,6 +262,12 @@ class AiRiskAnalysisProcessorTest {
 
         AiAnalysisHistory history = captor.getValue();
 
+        assertThat(history.getPrompt()).isNotNull();
+
+        assertThat(history.getPrompt().version()).isEqualTo("v3");
+
+        assertThat(history.getPrompt().content()).isEqualTo("테스트 시스템 프롬프트");
+
         assertThat(history.getResponse().rawResponse())
                 .isEqualTo(rawResponse);
 
@@ -264,6 +279,12 @@ class AiRiskAnalysisProcessorTest {
 
         assertThat(history.getValidation().errors())
                 .containsExactly("AI 응답 변환에 실패했습니다.");
+
+        assertThat(history.getMetadata().model())
+                .isEqualTo("gpt-5-mini");
+
+        assertThat(history.getMetadata().latencyMs())
+                .isEqualTo(100L);
     }
 
     @Test
@@ -273,6 +294,10 @@ class AiRiskAnalysisProcessorTest {
                 new AiAnalysisException(
                         AiAnalysisFailureType.LLM_API_ERROR,
                         "LLM API 호출에 실패했습니다.",
+                        "v3",
+                        "테스트 시스템 프롬프트",
+                        "gpt-5-mini",
+                        150L,
                         new RuntimeException("OpenAI error")
                 );
 
@@ -298,6 +323,22 @@ class AiRiskAnalysisProcessorTest {
 
         assertThat(history.getAnalysisId())
                 .isEqualTo(analysisId);
+
+        assertThat(history.getPrompt()).isNotNull();
+
+        assertThat(history.getPrompt().version())
+                .isEqualTo("v3");
+
+        assertThat(history.getPrompt().content())
+                .isEqualTo("테스트 시스템 프롬프트");
+
+        assertThat(history.getMetadata()).isNotNull();
+
+        assertThat(history.getMetadata().model())
+                .isEqualTo("gpt-5-mini");
+
+        assertThat(history.getMetadata().latencyMs())
+                .isEqualTo(150L);
 
         assertThat(history.getValidation().structureValid())
                 .isFalse();
@@ -359,7 +400,7 @@ class AiRiskAnalysisProcessorTest {
                 result,
                 "{\"riskLevel\":\"HIGH\"}",
                 "테스트 시스템 프롬프트",
-                "TEMP",
+                "v3",
                 "gpt-5-mini",
                 100L
         );
@@ -425,5 +466,63 @@ class AiRiskAnalysisProcessorTest {
 
         verify(resultService, never())
                 .complete(any(), any(), any(), any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("ACTIVE 프롬프트가 없으면 PROMPT_NOT_FOUND로 실패 처리하고 감사 이력을 저장한다")
+    void process_activePromptNotFound_savesFailureHistory() {
+        AiAnalysisException exception =
+                new AiAnalysisException(
+                        AiAnalysisFailureType.PROMPT_NOT_FOUND,
+                        "활성화된 AI 프롬프트를 찾을 수 없습니다.",
+                        null,
+                        null,
+                        "gpt-5-mini",
+                        0L,
+                        new BusinessException(
+                                AiRiskErrorCode.AI_ACTIVE_PROMPT_NOT_FOUND
+                        )
+                );
+
+        when(aiRiskAnalyzer.analyze(strategy, backtest))
+                .thenThrow(exception);
+
+        processor.process(event);
+
+        verify(resultService).fail(
+                analysisId,
+                AiAnalysisFailureType.PROMPT_NOT_FOUND,
+                "활성화된 AI 프롬프트를 찾을 수 없습니다."
+        );
+
+        verifyNoInteractions(responseValidator);
+
+        ArgumentCaptor<AiAnalysisHistory> captor =
+                ArgumentCaptor.forClass(AiAnalysisHistory.class);
+
+        verify(historyRepository).save(captor.capture());
+
+        AiAnalysisHistory history = captor.getValue();
+
+        assertThat(history.getAnalysisId())
+                .isEqualTo(analysisId);
+
+        assertThat(history.getPrompt())
+                .isNull();
+
+        assertThat(history.getResponse())
+                .isNull();
+
+        assertThat(history.getMetadata())
+                .isNull();
+
+        assertThat(history.getValidation().structureValid())
+                .isFalse();
+
+        assertThat(history.getValidation().contentValid())
+                .isFalse();
+
+        assertThat(history.getValidation().errors())
+                .containsExactly("활성화된 AI 프롬프트를 찾을 수 없습니다.");
     }
 }

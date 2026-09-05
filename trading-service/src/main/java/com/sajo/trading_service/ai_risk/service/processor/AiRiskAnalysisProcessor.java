@@ -1,7 +1,5 @@
 package com.sajo.trading_service.ai_risk.service.processor;
 
-import com.sajo.trading_service.ai_risk.client.backtest.dto.BacktestInternalResponse;
-import com.sajo.trading_service.ai_risk.client.strategy.dto.StrategyInternalResponse;
 import com.sajo.trading_service.ai_risk.document.AiAnalysisHistory;
 import com.sajo.trading_service.ai_risk.domain.AiAnalysisFailureType;
 import com.sajo.trading_service.ai_risk.domain.AiValidationType;
@@ -17,14 +15,10 @@ import com.sajo.trading_service.ai_risk.service.analysis.dto.AiRiskAnalysisResul
 import com.sajo.trading_service.ai_risk.service.command.AiRiskAnalysisResultService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.event.TransactionPhase;
-import org.springframework.transaction.event.TransactionalEventListener;
 
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 @Slf4j
 @Service
@@ -112,7 +106,6 @@ public class AiRiskAnalysisProcessor {
         saveHistorySafely(history);
     }
 
-    // TODO: 프롬프트 버전 관리 구현 시 실패 이력에도 prompt version/content 저장
     private void saveParseFailureHistory(
             AiRiskAnalysisRequestedEvent event,
             AiResponseParseException exception
@@ -125,6 +118,14 @@ public class AiRiskAnalysisProcessor {
                 .requestSnapshot(Map.of(
                         "strategy", event.strategy(),
                         "backtest", event.backtest()
+                ))
+                .prompt(new AiAnalysisHistory.PromptSnapshot(
+                        exception.getPromptVersion(),
+                        exception.getPromptContent()
+                ))
+                .metadata(new AiAnalysisHistory.MetadataSnapshot(
+                        exception.getModel(),
+                        exception.getLatencyMs()
                 ))
                 .response(new AiAnalysisHistory.ResponseSnapshot(
                         exception.getRawResponse()
@@ -152,6 +153,37 @@ public class AiRiskAnalysisProcessor {
     }
 
     private void saveLlmFailureHistory(
+            AiRiskAnalysisRequestedEvent event,
+            AiAnalysisException exception
+    ){
+        AiAnalysisHistory history = AiAnalysisHistory.builder()
+                .analysisId(event.analysisId())
+                .userId(event.strategy().userId())
+                .strategyId(event.strategy().strategyId())
+                .backtestId(event.backtest().backtestId())
+                .requestSnapshot(Map.of(
+                        "strategy", event.strategy(),
+                        "backtest", event.backtest()
+                ))
+                .prompt(new AiAnalysisHistory.PromptSnapshot(
+                        exception.getPromptVersion(),
+                        exception.getPromptContent()
+                ))
+                .validation(new AiAnalysisHistory.ValidationSnapshot(
+                        false,
+                        false,
+                        List.of(exception.getMessage())
+                ))
+                .metadata(new AiAnalysisHistory.MetadataSnapshot(
+                        exception.getModel(),
+                        exception.getLatencyMs()
+                ))
+                .build();
+
+        saveHistorySafely(history);
+    }
+
+    private void savedPromptFailureHistory(
             AiRiskAnalysisRequestedEvent event,
             AiAnalysisException exception
     ){
@@ -225,7 +257,12 @@ public class AiRiskAnalysisProcessor {
                     e.getMessage()
             );
 
-            saveLlmFailureHistory(event, e);
+            if(e.getFailureType() == AiAnalysisFailureType.PROMPT_NOT_FOUND){
+                savedPromptFailureHistory(event, e);
+            } else {
+                saveLlmFailureHistory(event, e);
+            }
+
         } catch (Exception e){
             log.error(
                     "AI 위험 분석 처리 중 예상하지 못한 오류 발생. analysisId={}",

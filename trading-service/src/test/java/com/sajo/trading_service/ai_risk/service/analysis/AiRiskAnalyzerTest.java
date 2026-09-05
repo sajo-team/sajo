@@ -1,13 +1,18 @@
 package com.sajo.trading_service.ai_risk.service.analysis;
 
+import com.sajo.common.exception.BusinessException;
 import com.sajo.trading_service.ai_risk.client.backtest.dto.BacktestInternalResponse;
 import com.sajo.trading_service.ai_risk.client.strategy.dto.StrategyInternalResponse;
 import com.sajo.trading_service.ai_risk.domain.AiAnalysisFailureType;
+import com.sajo.trading_service.ai_risk.domain.AiPromptKey;
+import com.sajo.trading_service.ai_risk.domain.AiPromptVersion;
 import com.sajo.trading_service.ai_risk.domain.RiskFactorType;
 import com.sajo.trading_service.ai_risk.domain.RiskLevel;
 import com.sajo.trading_service.ai_risk.exception.AiAnalysisException;
 import com.sajo.trading_service.ai_risk.exception.AiResponseParseException;
+import com.sajo.trading_service.ai_risk.exception.AiRiskErrorCode;
 import com.sajo.trading_service.ai_risk.service.analysis.dto.AiRiskAnalysisOutput;
+import com.sajo.trading_service.ai_risk.service.query.AiPromptVersionQueryService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -24,8 +29,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Answers.RETURNS_DEEP_STUBS;
 import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.Mockito.*;
 
 @Tag("unit")
 @Tag("ai-risk")
@@ -34,6 +39,7 @@ class AiRiskAnalyzerTest {
 
     private ChatClient chatClient;
     private AiRiskAnalyzer aiRiskAnalyzer;
+    private AiPromptVersionQueryService promptVersionQueryService;
 
     private StrategyInternalResponse strategy;
     private BacktestInternalResponse backtest;
@@ -84,7 +90,18 @@ class AiRiskAnalyzerTest {
     @BeforeEach
     void setup(){
         chatClient = mock(ChatClient.class, RETURNS_DEEP_STUBS);
-        aiRiskAnalyzer = new AiRiskAnalyzer(chatClient);
+        promptVersionQueryService = mock(AiPromptVersionQueryService.class);
+        aiRiskAnalyzer = new AiRiskAnalyzer(chatClient, promptVersionQueryService);
+
+        AiPromptVersion activePrompt = AiPromptVersion.create(
+                AiPromptKey.RISK_ANALYSIS,
+                "v3",
+                "주식 자동매매 전략의 위험을 분석하세요.",
+                "테스트 프롬프트"
+        );
+
+        when(promptVersionQueryService.getActivePrompt(AiPromptKey.RISK_ANALYSIS))
+                .thenReturn(activePrompt);
 
         UUID userId = UUID.randomUUID();
         UUID strategyId = UUID.randomUUID();
@@ -125,7 +142,7 @@ class AiRiskAnalyzerTest {
 
         assertThat(output).isNotNull();
         assertThat(output.rawResponse()).isEqualTo(rawResponse);
-        assertThat(output.promptVersion()).isEqualTo("TEMP");
+        assertThat(output.promptVersion()).isEqualTo("v3");
         assertThat(output.model()).isEqualTo("gpt-5-mini");
         assertThat(output.latencyMs()).isGreaterThanOrEqualTo(0L);
 
@@ -149,7 +166,7 @@ class AiRiskAnalyzerTest {
     }
 
     @Test
-    @DisplayName("LLM API 호출 중 예외가 발생하면 LLM_API_ERROR가 발생한다")
+    @DisplayName("LLM API 호출 중 예외가 발생하면 프롬프트 정보를 포함한 LLM_API_ERROR가 발생한다")
     void analyze_llmApiFailure_throwsException() {
         when(chatClient.prompt()
                 .system(anyString())
@@ -174,11 +191,26 @@ class AiRiskAnalyzerTest {
 
                     assertThat(aiException.getCause())
                             .isInstanceOf(RuntimeException.class);
+
+                    assertThat(aiException.getPromptVersion())
+                            .isEqualTo("v3");
+
+                    assertThat(aiException.getPromptContent())
+                            .contains("주식 자동매매 전략의 위험을 분석하세요.");
+
+                    assertThat(aiException.getPromptContent())
+                            .contains("[응답 규칙]");
+
+                    assertThat(aiException.getModel())
+                            .isEqualTo("gpt-5-mini");
+
+                    assertThat(aiException.getLatencyMs())
+                            .isGreaterThanOrEqualTo(0L);
                 });
     }
 
     @Test
-    @DisplayName("LLM 응답을 파싱할 수 없으면 원본 응답을 포함한 AiResponseParseException이 발생한다")
+    @DisplayName("LLM 응답 파싱에 실패하면 원본 응답과 프롬프트 정보를 포함한 예외가 발생한다")
     void analyze_parseFailure_throwsExceptionWithRawResponse() {
         String rawResponse = "이것은 JSON 응답이 아닙니다.";
 
@@ -198,15 +230,101 @@ class AiRiskAnalyzerTest {
                             (AiResponseParseException) exception;
 
                     assertThat(parseException.getFailureType())
-                            .isEqualTo(
-                                    AiAnalysisFailureType.RESPONSE_PARSE_ERROR
-                            );
+                            .isEqualTo(AiAnalysisFailureType.RESPONSE_PARSE_ERROR);
 
                     assertThat(parseException.getMessage())
                             .isEqualTo("AI 응답 변환에 실패했습니다.");
 
                     assertThat(parseException.getRawResponse())
                             .isEqualTo(rawResponse);
+
+                    assertThat(parseException.getPromptVersion())
+                            .isEqualTo("v3");
+
+                    assertThat(parseException.getPromptContent())
+                            .contains("주식 자동매매 전략의 위험을 분석하세요.");
+
+                    assertThat(parseException.getPromptContent())
+                            .contains("[응답 규칙]");
+
+                    assertThat(parseException.getModel())
+                            .isEqualTo("gpt-5-mini");
+
+                    assertThat(parseException.getLatencyMs())
+                            .isGreaterThanOrEqualTo(0L);
                 });
+    }
+
+    @Test
+    @DisplayName("ACTIVE 프롬프트의 내용과 버전을 AI 위험 분석에 적용한다")
+    void analyze_usesActivePrompt() {
+        String rawResponse = """
+            {
+              "riskLevel": "LOW",
+              "summary": "위험이 낮습니다.",
+              "riskFactors": [],
+              "reasoning": "백테스트 결과가 안정적입니다.",
+              "recommendations": []
+            }
+            """;
+
+        when(chatClient.prompt()
+                .system(argThat((String prompt) ->
+                        prompt.contains(
+                                "주식 자동매매 전략의 위험을 분석하세요."
+                        )
+                        && prompt.contains("[응답 규칙]")
+                ))
+                .user(anyString())
+                .call()
+                .content())
+                .thenReturn(rawResponse);
+
+        AiRiskAnalysisOutput output =
+                aiRiskAnalyzer.analyze(strategy, backtest);
+
+        assertThat(output.promptVersion()).isEqualTo("v3");
+
+        assertThat(output.promptContent())
+                .contains("주식 자동매매 전략의 위험을 분석하세요.");
+
+        assertThat(output.promptContent())
+                .contains("[응답 규칙]");
+    }
+
+    @Test
+    @DisplayName("ACTIVE 프롬프트가 없으면 PROMPT_NOT_FOUND 분석 예외가 발생한다")
+    void analyze_activePromptNotFound_throwsAnalysisException() {
+        BusinessException cause =
+                new BusinessException(
+                        AiRiskErrorCode.AI_ACTIVE_PROMPT_NOT_FOUND
+                );
+
+        when(promptVersionQueryService.getActivePrompt(
+                AiPromptKey.RISK_ANALYSIS
+        )).thenThrow(cause);
+
+        assertThatThrownBy(() ->
+                aiRiskAnalyzer.analyze(strategy, backtest)
+        )
+                .isInstanceOf(AiAnalysisException.class)
+                .satisfies(exception -> {
+                    AiAnalysisException aiException =
+                            (AiAnalysisException) exception;
+
+                    assertThat(aiException.getFailureType())
+                            .isEqualTo(AiAnalysisFailureType.PROMPT_NOT_FOUND);
+
+                    assertThat(aiException.getMessage())
+                            .isEqualTo("활성화된 AI 프롬프트를 찾을 수 없습니다.");
+
+                    assertThat(aiException.getPromptVersion()).isNull();
+                    assertThat(aiException.getPromptContent()).isNull();
+
+                    assertThat(aiException.getCause())
+                            .isSameAs(cause);
+                });
+
+        verifyNoInteractions(chatClient);
     }
 }
