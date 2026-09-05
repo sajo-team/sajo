@@ -11,6 +11,7 @@ import com.sajo.trading_service.ai_risk.domain.AiRiskAnalysis;
 import com.sajo.trading_service.ai_risk.exception.AiRiskErrorCode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
