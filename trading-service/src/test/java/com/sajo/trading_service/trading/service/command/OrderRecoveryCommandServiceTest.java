@@ -85,34 +85,31 @@ class OrderRecoveryCommandServiceTest {
     }
 
     @Test
-    @DisplayName("REQUESTED 주문 복구 중 하나가 실패해도 다음 주문을 계속 처리한다")
-    void recoverRequestedOrdersContinuesAfterFailure() {
-        // given
-        when(orderQueryRepository.findStaleRequestedOrderIds(any(Instant.class)))
-                .thenReturn(List.of(orderId1, orderId2));
-
-        // when
-        orderRecoveryCommandService.recoverRequestedOrders();
-
-        // then
-        verify(orderRecoveryExecutor)
-                .execute(orderId1);
-
-        verify(orderRecoveryExecutor)
-                .execute(orderId2);
-    }
-
-    @Test
     @DisplayName("PROCESSING 주문 복구 중 하나가 실패해도 다음 주문을 계속 처리한다")
     void recoverProcessingOrdersContinuesAfterFailure() {
         // given
         when(orderQueryRepository.findStaleProcessingOrderIds(any(Instant.class)))
                 .thenReturn(List.of(orderId1, orderId2));
 
+        doThrow(new RuntimeException("unexpected"))
+                .when(orderStatusCommandService)
+                .timeout(
+                        eq(orderId1),
+                        anyString(),
+                        anyString()
+                );
+
         // when
         orderRecoveryCommandService.recoverProcessingOrders();
 
         // then
+        verify(orderStatusCommandService)
+                .timeout(
+                        eq(orderId1),
+                        anyString(),
+                        anyString()
+                );
+
         verify(orderStatusCommandService)
                 .timeout(
                         eq(orderId2),

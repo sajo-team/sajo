@@ -370,6 +370,22 @@ class OrderTest {
                 );
     }
 
+    @Test
+    @DisplayName("PROCESSING 주문은 REQUESTED 상태로 재시도할 수 있다")
+    void retryFromProcessing() {
+        // given
+        Order order = createOrder();
+
+        order.startProcessing();
+
+        // when
+        order.retry();
+
+        // then
+        assertThat(order.getStatus())
+                .isEqualTo(OrderStatus.REQUESTED);
+    }
+
     private Order createOrder() {
         return Order.create(
                 UUID.randomUUID(),

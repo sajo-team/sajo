@@ -21,7 +21,7 @@ public interface OrderQueryRepository extends JpaRepository<Order, UUID> {
     select o.id
     from Order o
     where o.status = com.sajo.trading_service.trading.domain.enums.OrderStatus.REQUESTED
-      and o.createdAt < :cutoff
+      and o.updatedAt < :cutoff
       and o.deletedAt is null
     """)
     List<UUID> findStaleRequestedOrderIds(
