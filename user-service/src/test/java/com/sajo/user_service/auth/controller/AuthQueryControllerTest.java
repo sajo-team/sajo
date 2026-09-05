@@ -88,4 +88,23 @@ class AuthQueryControllerTest {
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.errorCode").value("USER_0002"));
     }
+
+    @Test
+    @DisplayName("로그인 시도 횟수를 초과하면 429를 반환한다")
+    void loginFailsWhenTooManyAttempts() throws Exception {
+        // given
+        LoginRequest request = new LoginRequest("locked@sajo.com", "password1");
+        willThrow(new BusinessException(UserErrorCode.TOO_MANY_LOGIN_ATTEMPTS))
+                .given(authQueryService).login(request);
+
+        // when & then
+        mockMvc.perform(
+                        post("/api/v1/auth/login")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(objectMapper.writeValueAsString(request))
+                )
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.success").value(false))
+                .andExpect(jsonPath("$.errorCode").value("USER_0003"));
+    }
 }
