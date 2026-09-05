@@ -10,7 +10,6 @@ import com.sajo.trading_service.trading.domain.Order;
 import com.sajo.trading_service.trading.domain.enums.AccountType;
 import com.sajo.trading_service.trading.domain.enums.OrderType;
 import com.sajo.trading_service.trading.exception.TradingErrorCode;
-import com.sajo.trading_service.trading.repository.command.OrderCommandRepository;
 import feign.FeignException;
 import feign.RetryableException;
 import org.junit.jupiter.api.BeforeEach;
@@ -21,17 +20,14 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import java.util.Optional;
 import java.util.UUID;
 
-import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class KisOrderCommandServiceTest {
-
-    @Mock
-    private OrderCommandRepository orderCommandRepository;
 
     @Mock
     private KisOrderClient kisOrderClient;
@@ -60,8 +56,8 @@ class KisOrderCommandServiceTest {
         // given
         Order order = createOrder(OrderType.BUY);
 
-        when(orderCommandRepository.findById(orderId))
-                .thenReturn(Optional.of(order));
+        when(orderStatusCommandService.startProcessing(orderId))
+                .thenReturn(order);
 
         givenCommonAccountResponses();
 
@@ -126,8 +122,8 @@ class KisOrderCommandServiceTest {
         // given
         Order order = createOrder(OrderType.BUY);
 
-        when(orderCommandRepository.findById(orderId))
-                .thenReturn(Optional.of(order));
+        when(orderStatusCommandService.startProcessing(orderId))
+                .thenReturn(order);
 
         givenCommonAccountResponses();
 
@@ -174,8 +170,8 @@ class KisOrderCommandServiceTest {
         // given
         Order order = createOrder(OrderType.BUY);
 
-        when(orderCommandRepository.findById(orderId))
-                .thenReturn(Optional.of(order));
+        when(orderStatusCommandService.startProcessing(orderId))
+                .thenReturn(order);
 
         givenCommonAccountResponses();
 
@@ -209,8 +205,8 @@ class KisOrderCommandServiceTest {
         // given
         Order order = createOrder(OrderType.SELL);
 
-        when(orderCommandRepository.findById(orderId))
-                .thenReturn(Optional.of(order));
+        when(orderStatusCommandService.startProcessing(orderId))
+                .thenReturn(order);
 
         givenCommonAccountResponses();
 
@@ -259,8 +255,8 @@ class KisOrderCommandServiceTest {
         // given
         Order order = createOrder(OrderType.SELL);
 
-        when(orderCommandRepository.findById(orderId))
-                .thenReturn(Optional.of(order));
+        when(orderStatusCommandService.startProcessing(orderId))
+                .thenReturn(order);
 
         givenCommonAccountResponses();
 
@@ -296,8 +292,8 @@ class KisOrderCommandServiceTest {
         // given
         Order order = createOrder(OrderType.BUY);
 
-        when(orderCommandRepository.findById(orderId))
-                .thenReturn(Optional.of(order));
+        when(orderStatusCommandService.startProcessing(orderId))
+                .thenReturn(order);
 
         FeignApiException exception =
                 new FeignApiException(
@@ -332,8 +328,8 @@ class KisOrderCommandServiceTest {
         // given
         Order order = createOrder(OrderType.BUY);
 
-        when(orderCommandRepository.findById(orderId))
-                .thenReturn(Optional.of(order));
+        when(orderStatusCommandService.startProcessing(orderId))
+                .thenReturn(order);
 
         givenCommonAccountResponses();
 
@@ -395,8 +391,8 @@ class KisOrderCommandServiceTest {
         // given
         Order order = createOrder(OrderType.BUY);
 
-        when(orderCommandRepository.findById(orderId))
-                .thenReturn(Optional.of(order));
+        when(orderStatusCommandService.startProcessing(orderId))
+                .thenReturn(order);
 
         givenCommonAccountResponses();
 
@@ -448,8 +444,8 @@ class KisOrderCommandServiceTest {
         // given
         Order order = createOrder(OrderType.BUY);
 
-        when(orderCommandRepository.findById(orderId))
-                .thenReturn(Optional.of(order));
+        when(orderStatusCommandService.startProcessing(orderId))
+                .thenReturn(order);
 
         givenCommonAccountResponses();
 
@@ -504,8 +500,8 @@ class KisOrderCommandServiceTest {
         // given
         Order order = createOrder(OrderType.BUY);
 
-        when(orderCommandRepository.findById(orderId))
-                .thenReturn(Optional.of(order));
+        when(orderStatusCommandService.startProcessing(orderId))
+                .thenReturn(order);
 
         givenCommonAccountResponses();
 
@@ -559,8 +555,8 @@ class KisOrderCommandServiceTest {
         // given
         Order order = createOrder(OrderType.BUY);
 
-        when(orderCommandRepository.findById(orderId))
-                .thenReturn(Optional.of(order));
+        when(orderStatusCommandService.startProcessing(orderId))
+                .thenReturn(order);
 
         givenCommonAccountResponses();
 
@@ -610,8 +606,8 @@ class KisOrderCommandServiceTest {
         // given
         Order order = createOrder(OrderType.BUY);
 
-        when(orderCommandRepository.findById(orderId))
-                .thenReturn(Optional.of(order));
+        when(orderStatusCommandService.startProcessing(orderId))
+                .thenReturn(order);
 
         givenCommonAccountResponses();
 
@@ -659,11 +655,6 @@ class KisOrderCommandServiceTest {
     @DisplayName("PROCESSING 선점에 실패하면 Account와 KIS를 호출하지 않는다")
     void executeOrderProcessingNotAllowed() {
         // given
-        Order order = createOrder(OrderType.BUY);
-
-        when(orderCommandRepository.findById(orderId))
-                .thenReturn(Optional.of(order));
-
         doThrow(
                 new BusinessException(
                         TradingErrorCode.ORDER_EXECUTION_NOT_ALLOWED

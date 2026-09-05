@@ -8,8 +8,6 @@ import com.sajo.trading_service.trading.client.dto.request.KisOrderRequest;
 import com.sajo.trading_service.trading.client.dto.response.*;
 import com.sajo.trading_service.trading.domain.Order;
 import com.sajo.trading_service.trading.domain.enums.OrderType;
-import com.sajo.trading_service.trading.exception.TradingErrorCode;
-import com.sajo.trading_service.trading.repository.command.OrderCommandRepository;
 import feign.FeignException;
 import feign.RetryableException;
 import lombok.RequiredArgsConstructor;
@@ -23,7 +21,6 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class KisOrderCommandService {
 
-    private final OrderCommandRepository orderCommandRepository;
     private final AccountClient accountClient;
     private final KisOrderClient kisOrderClient;
     private final OrderStatusCommandService orderStatusCommandService;
@@ -31,16 +28,7 @@ public class KisOrderCommandService {
     public void executeOrder(UUID orderId) {
 
         Order order =
-                orderCommandRepository.findById(orderId)
-                        .orElseThrow(() ->
-                                new BusinessException(
-                                        TradingErrorCode.ORDER_NOT_FOUND
-                                )
-                        );
-
-        // REQUESTED -> PROCESSING
-        // 동시 주문 실행 시 한 요청만 실행권을 선점
-        orderStatusCommandService.startProcessing(orderId);
+                orderStatusCommandService.startProcessing(orderId);
 
         AccountTokenResponse tokenResponse;
         AccountOrderInfoResponse infoResponse;

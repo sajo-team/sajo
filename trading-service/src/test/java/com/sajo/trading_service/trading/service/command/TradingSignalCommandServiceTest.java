@@ -6,6 +6,7 @@ import com.sajo.trading_service.trading.domain.Order;
 import com.sajo.trading_service.trading.domain.TradingLimit;
 import com.sajo.trading_service.trading.domain.enums.OrderStatus;
 import com.sajo.trading_service.trading.domain.enums.OrderType;
+import com.sajo.trading_service.trading.event.OrderRequestedEvent;
 import com.sajo.trading_service.trading.exception.TradingErrorCode;
 import com.sajo.trading_service.trading.kafka.dto.TradingSignalGeneratedEvent;
 import com.sajo.trading_service.trading.kafka.dto.TradingSignalPayload;
@@ -20,6 +21,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.time.Instant;
 import java.util.Optional;
@@ -46,6 +48,9 @@ class TradingSignalCommandServiceTest {
 
     @InjectMocks
     private TradingSignalCommandService tradingSignalCommandService;
+
+    @Mock
+    private ApplicationEventPublisher applicationEventPublisher;
 
     private UUID userId;
     private UUID strategyId;
@@ -109,6 +114,9 @@ class TradingSignalCommandServiceTest {
                 any(Instant.class)
         )).willReturn(0L);
 
+        given(orderCommandRepository.save(any(Order.class)))
+                .willAnswer(invocation -> invocation.getArgument(0));
+
         // when
         tradingSignalCommandService.processSignal(event);
 
@@ -138,6 +146,9 @@ class TradingSignalCommandServiceTest {
 
         assertThat(savedOrder.getStatus())
                 .isEqualTo(OrderStatus.REQUESTED);
+
+        verify(applicationEventPublisher)
+                .publishEvent(any(OrderRequestedEvent.class));
     }
 
     @Test
@@ -401,6 +412,9 @@ class TradingSignalCommandServiceTest {
                 any(Instant.class)
         )).willReturn(0L);
 
+        given(orderCommandRepository.save(any(Order.class)))
+                .willAnswer(invocation -> invocation.getArgument(0));
+
         // when
         tradingSignalCommandService.processSignal(event);
 
@@ -418,6 +432,9 @@ class TradingSignalCommandServiceTest {
 
         assertThat(savedOrder.getStatus())
                 .isEqualTo(OrderStatus.REQUESTED);
+
+        verify(applicationEventPublisher)
+                .publishEvent(any(OrderRequestedEvent.class));
     }
 
     private TradingSignalGeneratedEvent createEvent(

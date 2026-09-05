@@ -53,14 +53,17 @@ public class OrderStatusCommandService {
     }
 
     @Transactional
-    public void startProcessing(UUID orderId){
+    public Order startProcessing(UUID orderId){
         Order order =
                 orderCommandRepository.findByIdForUpdate(orderId)
-                        .orElseThrow(()->
+                        .orElseThrow(() ->
                                 new BusinessException(
                                         TradingErrorCode.ORDER_NOT_FOUND
                                 )
                         );
+
         order.startProcessing();
+
+        return order;
     }
 }
