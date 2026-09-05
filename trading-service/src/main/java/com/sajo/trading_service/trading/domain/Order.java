@@ -62,6 +62,9 @@ public class Order extends BaseUpdatableEntity {
     @Column(name = "failure_message")
     private String failureMessage;
 
+    @Column(name = "account_retry_count", nullable = false)
+    private Integer accountRetryCount;
+
     private Order(
             UUID userId,
             UUID autoTradingId,
@@ -83,6 +86,7 @@ public class Order extends BaseUpdatableEntity {
         this.estimatedOrderAmount =
                 signalPrice * orderQuantity.longValue();
         this.status = OrderStatus.REQUESTED;
+        this.accountRetryCount = 0;
     }
 
     public static Order create(
@@ -121,5 +125,87 @@ public class Order extends BaseUpdatableEntity {
                 signalPrice,
                 orderQuantity
         );
+    }
+
+    public void accept(String brokerOrderNo){
+        if(this.status != OrderStatus.PROCESSING
+                && this.status != OrderStatus.TIMEOUT){
+            throw new BusinessException(
+                    TradingErrorCode.ORDER_STATUS_CHANGE_NOT_ALLOWED
+            );
+        }
+
+        if(brokerOrderNo == null || brokerOrderNo.isBlank()){
+            throw new BusinessException(
+                    TradingErrorCode.INVALID_ORDER
+            );
+        }
+        this.brokerOrderNo = brokerOrderNo;
+        this.failureCode = null;
+        this.failureMessage = null;
+        this.status = OrderStatus.ACCEPTED;
+    }
+
+    public void fail(
+            String failureCode,
+            String failureMessage
+    ){
+        if(this.status != OrderStatus.PROCESSING
+                && this.status != OrderStatus.TIMEOUT){
+            throw new BusinessException(
+                    TradingErrorCode.ORDER_STATUS_CHANGE_NOT_ALLOWED
+            );
+        }
+        this.failureCode = failureCode;
+        this.failureMessage = failureMessage;
+        this.status = OrderStatus.FAILED;
+    }
+
+    public void timeout(
+            String failureCode,
+            String failureMessage
+    ){
+        if(this.status != OrderStatus.PROCESSING){
+            throw new BusinessException(
+                    TradingErrorCode.ORDER_STATUS_CHANGE_NOT_ALLOWED
+            );
+        }
+        this.failureCode = failureCode;
+        this.failureMessage = failureMessage;
+        this.status = OrderStatus.TIMEOUT;
+    }
+
+    public void startProcessing(){
+        if(this.status != OrderStatus.REQUESTED){
+            throw new BusinessException(
+                    TradingErrorCode.ORDER_EXECUTION_NOT_ALLOWED
+            );
+        }
+        this.status = OrderStatus.PROCESSING;
+    }
+
+    public void retry(
+            int maxRetryCount,
+            String failureCode,
+            String failureMessage
+    ) {
+        if (this.status != OrderStatus.PROCESSING) {
+            throw new BusinessException(
+                    TradingErrorCode.ORDER_STATUS_CHANGE_NOT_ALLOWED
+            );
+        }
+
+        this.accountRetryCount++;
+
+        if (this.accountRetryCount >= maxRetryCount) {
+            this.status = OrderStatus.FAILED;
+            this.failureCode = failureCode;
+            this.failureMessage = failureMessage;
+            return;
+        }
+
+        this.status = OrderStatus.REQUESTED;
+        this.failureCode = null;
+        this.failureMessage = null;
     }
 }

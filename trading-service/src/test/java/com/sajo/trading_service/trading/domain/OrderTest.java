@@ -170,4 +170,278 @@ class OrderTest {
                             .isEqualTo(TradingErrorCode.INVALID_ORDER);
                 });
     }
+
+    @Test
+    @DisplayName("REQUESTED 상태의 주문을 PROCESSING으로 변경할 수 있다")
+    void startProcessingFromRequested() {
+        // given
+        Order order = createOrder();
+
+        // when
+        order.startProcessing();
+
+        // then
+        assertThat(order.getStatus())
+                .isEqualTo(OrderStatus.PROCESSING);
+    }
+
+    @Test
+    @DisplayName("REQUESTED 상태가 아니면 PROCESSING으로 변경할 수 없다")
+    void startProcessingNotAllowed() {
+        // given
+        Order order = createOrder();
+        order.startProcessing();
+
+        // when & then
+        assertThatThrownBy(order::startProcessing)
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException =
+                            (BusinessException) exception;
+
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(
+                                    TradingErrorCode.ORDER_EXECUTION_NOT_ALLOWED
+                            );
+                });
+    }
+
+    @Test
+    @DisplayName("PROCESSING 상태의 주문을 ACCEPTED로 변경할 수 있다")
+    void acceptFromProcessing() {
+        // given
+        Order order = createOrder();
+        order.startProcessing();
+
+        // when
+        order.accept("123456");
+
+        // then
+        assertThat(order.getStatus())
+                .isEqualTo(OrderStatus.ACCEPTED);
+        assertThat(order.getBrokerOrderNo())
+                .isEqualTo("123456");
+        assertThat(order.getFailureCode())
+                .isNull();
+        assertThat(order.getFailureMessage())
+                .isNull();
+    }
+
+    @Test
+    @DisplayName("TIMEOUT 상태의 주문을 ACCEPTED로 변경할 수 있다")
+    void acceptFromTimeout() {
+        // given
+        Order order = createOrder();
+        order.startProcessing();
+        order.timeout(
+                "TIMEOUT",
+                "KIS 주문 응답 타임아웃"
+        );
+
+        // when
+        order.accept("123456");
+
+        // then
+        assertThat(order.getStatus())
+                .isEqualTo(OrderStatus.ACCEPTED);
+        assertThat(order.getBrokerOrderNo())
+                .isEqualTo("123456");
+        assertThat(order.getFailureCode())
+                .isNull();
+        assertThat(order.getFailureMessage())
+                .isNull();
+    }
+
+    @Test
+    @DisplayName("PROCESSING 상태의 주문을 FAILED로 변경할 수 있다")
+    void failFromProcessing() {
+        // given
+        Order order = createOrder();
+        order.startProcessing();
+
+        // when
+        order.fail(
+                "KIS_ERROR",
+                "주문이 거절되었습니다."
+        );
+
+        // then
+        assertThat(order.getStatus())
+                .isEqualTo(OrderStatus.FAILED);
+        assertThat(order.getFailureCode())
+                .isEqualTo("KIS_ERROR");
+        assertThat(order.getFailureMessage())
+                .isEqualTo("주문이 거절되었습니다.");
+    }
+
+    @Test
+    @DisplayName("TIMEOUT 상태의 주문을 FAILED로 변경할 수 있다")
+    void failFromTimeout() {
+        // given
+        Order order = createOrder();
+        order.startProcessing();
+        order.timeout(
+                "TIMEOUT",
+                "KIS 주문 응답 타임아웃"
+        );
+
+        // when
+        order.fail(
+                "KIS_REJECTED",
+                "주문 실패가 확인되었습니다."
+        );
+
+        // then
+        assertThat(order.getStatus())
+                .isEqualTo(OrderStatus.FAILED);
+        assertThat(order.getFailureCode())
+                .isEqualTo("KIS_REJECTED");
+        assertThat(order.getFailureMessage())
+                .isEqualTo("주문 실패가 확인되었습니다.");
+    }
+
+    @Test
+    @DisplayName("PROCESSING 상태의 주문을 TIMEOUT으로 변경할 수 있다")
+    void timeoutFromProcessing() {
+        // given
+        Order order = createOrder();
+        order.startProcessing();
+
+        // when
+        order.timeout(
+                "TIMEOUT",
+                "KIS 주문 응답 타임아웃"
+        );
+
+        // then
+        assertThat(order.getStatus())
+                .isEqualTo(OrderStatus.TIMEOUT);
+        assertThat(order.getFailureCode())
+                .isEqualTo("TIMEOUT");
+        assertThat(order.getFailureMessage())
+                .isEqualTo("KIS 주문 응답 타임아웃");
+    }
+
+    @Test
+    @DisplayName("허용되지 않은 상태에서는 ACCEPTED로 변경할 수 없다")
+    void acceptNotAllowed() {
+        // given
+        Order order = createOrder();
+        order.startProcessing();
+        order.fail(
+                "KIS_ERROR",
+                "주문 실패"
+        );
+
+        // when & then
+        assertThatThrownBy(() ->
+                order.accept("123456")
+        )
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception ->
+                        assertThat(
+                                ((BusinessException) exception)
+                                        .getErrorCode()
+                        ).isEqualTo(
+                                TradingErrorCode.ORDER_STATUS_CHANGE_NOT_ALLOWED
+                        )
+                );
+    }
+
+    @Test
+    @DisplayName("brokerOrderNo가 비어있으면 ACCEPTED로 변경할 수 없다")
+    void acceptWithoutBrokerOrderNo() {
+        // given
+        Order order = createOrder();
+        order.startProcessing();
+
+        // when & then
+        assertThatThrownBy(() ->
+                order.accept("")
+        )
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception ->
+                        assertThat(
+                                ((BusinessException) exception)
+                                        .getErrorCode()
+                        ).isEqualTo(
+                                TradingErrorCode.INVALID_ORDER
+                        )
+                );
+    }
+
+    @Test
+    @DisplayName("PROCESSING 주문은 최대 재시도 횟수 전까지 REQUESTED 상태로 재시도할 수 있다")
+    void retryFromProcessing() {
+        // given
+        Order order = createOrder();
+        order.startProcessing();
+
+        // when
+        order.retry(
+                3,
+                "ACCOUNT_RETRY_EXHAUSTED",
+                "계좌 정보 조회 재시도 횟수를 초과했습니다."
+        );
+
+        // then
+        assertThat(order.getStatus())
+                .isEqualTo(OrderStatus.REQUESTED);
+
+        assertThat(order.getAccountRetryCount())
+                .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("Account 재시도 횟수를 모두 소진하면 FAILED 상태가 된다")
+    void retryExhausted() {
+        // given
+        Order order = createOrder();
+
+        order.startProcessing();
+        order.retry(
+                3,
+                "ACCOUNT_RETRY_EXHAUSTED",
+                "계좌 정보 조회 재시도 횟수를 초과했습니다."
+        );
+
+        order.startProcessing();
+        order.retry(
+                3,
+                "ACCOUNT_RETRY_EXHAUSTED",
+                "계좌 정보 조회 재시도 횟수를 초과했습니다."
+        );
+
+        order.startProcessing();
+
+        // when
+        order.retry(
+                3,
+                "ACCOUNT_RETRY_EXHAUSTED",
+                "계좌 정보 조회 재시도 횟수를 초과했습니다."
+        );
+
+        // then
+        assertThat(order.getStatus())
+                .isEqualTo(OrderStatus.FAILED);
+
+        assertThat(order.getAccountRetryCount())
+                .isEqualTo(3);
+
+        assertThat(order.getFailureCode())
+                .isEqualTo("ACCOUNT_RETRY_EXHAUSTED");
+    }
+
+    private Order createOrder() {
+        return Order.create(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "005930",
+                OrderType.BUY,
+                70_000L,
+                4
+        );
+    }
 }
