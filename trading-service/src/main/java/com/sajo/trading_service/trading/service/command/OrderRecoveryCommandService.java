@@ -15,7 +15,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class OrderRecoveryCommandService {
 
-    private static final long STALE_MINUTES = 1L;
+    private static final long STALE_MINUTES = 5L;
 
     private final OrderQueryRepository orderQueryRepository;
     private final KisOrderCommandService kisOrderCommandService;

@@ -1,6 +1,6 @@
 package com.sajo.trading_service.trading.service.command;
 
-import com.sajo.trading_service.trading.repository.command.OrderCommandRepository;
+import com.sajo.trading_service.trading.repository.query.OrderQueryRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -20,10 +20,10 @@ import static org.mockito.Mockito.*;
 class OrderRecoveryCommandServiceTest {
 
     @Mock
-    private OrderCommandRepository orderCommandRepository;
+    private OrderQueryRepository orderQueryRepository;
 
     @Mock
-    private KisOrderCommandService kisOrderCommandService;
+    private OrderRecoveryExecutor orderRecoveryExecutor;
 
     @Mock
     private OrderStatusCommandService orderStatusCommandService;
@@ -44,25 +44,25 @@ class OrderRecoveryCommandServiceTest {
     @DisplayName("오래된 REQUESTED 주문은 KIS 주문 실행을 다시 시도한다")
     void recoverRequestedOrders() {
         // given
-        when(orderCommandRepository.findStaleRequestedOrderIds(any(Instant.class)))
+        when(orderQueryRepository.findStaleRequestedOrderIds(any(Instant.class)))
                 .thenReturn(List.of(orderId1, orderId2));
 
         // when
         orderRecoveryCommandService.recoverRequestedOrders();
 
         // then
-        verify(kisOrderCommandService)
-                .executeOrder(orderId1);
+        verify(orderRecoveryExecutor)
+                .execute(orderId1);
 
-        verify(kisOrderCommandService)
-                .executeOrder(orderId2);
+        verify(orderRecoveryExecutor)
+                .execute(orderId2);
     }
 
     @Test
     @DisplayName("오래된 PROCESSING 주문은 TIMEOUT 처리한다")
     void recoverProcessingOrders() {
         // given
-        when(orderCommandRepository.findStaleProcessingOrderIds(any(Instant.class)))
+        when(orderQueryRepository.findStaleProcessingOrderIds(any(Instant.class)))
                 .thenReturn(List.of(orderId1, orderId2));
 
         // when
@@ -88,38 +88,26 @@ class OrderRecoveryCommandServiceTest {
     @DisplayName("REQUESTED 주문 복구 중 하나가 실패해도 다음 주문을 계속 처리한다")
     void recoverRequestedOrdersContinuesAfterFailure() {
         // given
-        when(orderCommandRepository.findStaleRequestedOrderIds(any(Instant.class)))
+        when(orderQueryRepository.findStaleRequestedOrderIds(any(Instant.class)))
                 .thenReturn(List.of(orderId1, orderId2));
-
-        doThrow(new RuntimeException("unexpected"))
-                .when(kisOrderCommandService)
-                .executeOrder(orderId1);
 
         // when
         orderRecoveryCommandService.recoverRequestedOrders();
 
         // then
-        verify(kisOrderCommandService)
-                .executeOrder(orderId1);
+        verify(orderRecoveryExecutor)
+                .execute(orderId1);
 
-        verify(kisOrderCommandService)
-                .executeOrder(orderId2);
+        verify(orderRecoveryExecutor)
+                .execute(orderId2);
     }
 
     @Test
     @DisplayName("PROCESSING 주문 복구 중 하나가 실패해도 다음 주문을 계속 처리한다")
     void recoverProcessingOrdersContinuesAfterFailure() {
         // given
-        when(orderCommandRepository.findStaleProcessingOrderIds(any(Instant.class)))
+        when(orderQueryRepository.findStaleProcessingOrderIds(any(Instant.class)))
                 .thenReturn(List.of(orderId1, orderId2));
-
-        doThrow(new RuntimeException("unexpected"))
-                .when(orderStatusCommandService)
-                .timeout(
-                        eq(orderId1),
-                        anyString(),
-                        anyString()
-                );
 
         // when
         orderRecoveryCommandService.recoverProcessingOrders();

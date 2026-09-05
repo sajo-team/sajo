@@ -601,6 +601,58 @@ class KisOrderCommandServiceTest {
     }
 
     @Test
+    @DisplayName("KIS가 429 응답을 반환하면 TIMEOUT 처리한다")
+    void executeOrderRateLimited() {
+        // given
+        Order order = createOrder(OrderType.BUY);
+
+        when(orderStatusCommandService.startProcessing(orderId))
+                .thenReturn(order);
+
+        givenCommonAccountResponses();
+
+        when(accountClient.getOrderableAmount(userId))
+                .thenReturn(
+                        new AccountOrderableAmountResponse(
+                                1_000_000L
+                        )
+                );
+
+        FeignException feignException =
+                mock(FeignException.class);
+
+        when(feignException.status())
+                .thenReturn(429);
+
+        when(kisOrderClient.placeOrder(
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                any(KisOrderRequest.class)
+        )).thenThrow(feignException);
+
+        // when
+        kisOrderCommandService.executeOrder(orderId);
+
+        // then
+        verify(orderStatusCommandService)
+                .timeout(
+                        orderId,
+                        "KIS_RETRYABLE_HTTP_429",
+                        "KIS 주문 요청을 일시적으로 처리할 수 없습니다."
+                );
+
+        verify(orderStatusCommandService, never())
+                .fail(
+                        any(),
+                        any(),
+                        any()
+                );
+    }
+
+    @Test
     @DisplayName("KIS가 5xx 응답을 반환하면 TIMEOUT 처리한다")
     void executeOrderServerError() {
         // given

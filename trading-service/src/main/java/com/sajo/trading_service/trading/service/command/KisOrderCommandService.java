@@ -184,19 +184,29 @@ public class KisOrderCommandService {
 
         } catch (FeignException e) {
 
-            if (e.status() >= 500) {
-                // KIS 내부에서 실제 주문이 처리됐을 가능성이 있으므로 결과 불확실
+            int status = e.status();
+
+            if (status >= 500) {
                 orderStatusCommandService.timeout(
                         orderId,
                         "KIS_SERVER_ERROR",
                         "KIS 서버 오류로 주문 결과를 확인할 수 없습니다."
                 );
 
+            } else if (status == 401
+                    || status == 403
+                    || status == 429) {
+
+                orderStatusCommandService.timeout(
+                        orderId,
+                        "KIS_RETRYABLE_HTTP_" + status,
+                        "KIS 주문 요청을 일시적으로 처리할 수 없습니다."
+                );
+
             } else {
-                // 4xx는 요청 거절이 명확하므로 FAILED
                 orderStatusCommandService.fail(
                         orderId,
-                        "KIS_HTTP_" + e.status(),
+                        "KIS_HTTP_" + status,
                         "KIS 주문 요청이 실패했습니다."
                 );
             }

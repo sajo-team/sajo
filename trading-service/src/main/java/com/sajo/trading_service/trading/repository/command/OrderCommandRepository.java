@@ -50,7 +50,8 @@ public interface OrderCommandRepository extends JpaRepository<Order, UUID> {
     select o
     from Order o
     where o.id = :orderId
-""")
+      and o.deletedAt is null
+    """)
     Optional<Order> findByIdForUpdate(
             @Param("orderId") UUID orderId
     );
