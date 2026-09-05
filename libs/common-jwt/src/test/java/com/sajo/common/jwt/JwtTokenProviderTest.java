@@ -22,18 +22,38 @@ class JwtTokenProviderTest {
     private final JwtTokenProvider jwtTokenProvider = new JwtTokenProvider(SECRET, 3600);
  
     @Test
-    @DisplayName("발급한 토큰을 검증하면 동일한 userId와 role을 반환한다")
+    @DisplayName("발급한 토큰을 검증하면 동일한 userId와 role을 반환한다 (sessionId 없이 발급하면 null)")
     void createAndValidateRoundTrip() {
         // given
         UUID userId = UUID.randomUUID();
- 
+
         // when
         String token = jwtTokenProvider.createAccessToken(userId, "USER");
         JwtClaims result = jwtTokenProvider.validateAndGetClaims(token);
- 
+
         // then
         assertThat(result.userId()).isEqualTo(userId);
         assertThat(result.role()).isEqualTo("USER");
+        assertThat(result.sessionId()).isNull();
+    }
+
+    // 다중 기기 로그인 지원 - 리뷰 반영: sessionId를 명시적으로 넣어 발급하면
+    // 검증 시에도 동일한 값이 그대로 돌아와야 한다.
+    @Test
+    @DisplayName("sessionId를 포함해 발급한 토큰을 검증하면 동일한 sessionId를 반환한다")
+    void createAndValidateRoundTripWithSessionId() {
+        // given
+        UUID userId = UUID.randomUUID();
+        String sessionId = UUID.randomUUID().toString();
+
+        // when
+        String token = jwtTokenProvider.createAccessToken(userId, "USER", sessionId);
+        JwtClaims result = jwtTokenProvider.validateAndGetClaims(token);
+
+        // then
+        assertThat(result.userId()).isEqualTo(userId);
+        assertThat(result.role()).isEqualTo("USER");
+        assertThat(result.sessionId()).isEqualTo(sessionId);
     }
  
     @Test
