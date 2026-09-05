@@ -1,6 +1,6 @@
 package com.sajo.trading_service.trading.service.command;
 
-import com.sajo.trading_service.trading.repository.command.OrderCommandRepository;
+import com.sajo.trading_service.trading.repository.query.OrderQueryRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -17,9 +17,10 @@ public class OrderRecoveryCommandService {
 
     private static final long STALE_MINUTES = 1L;
 
-    private final OrderCommandRepository orderCommandRepository;
+    private final OrderQueryRepository orderQueryRepository;
     private final KisOrderCommandService kisOrderCommandService;
     private final OrderStatusCommandService orderStatusCommandService;
+    private final OrderRecoveryExecutor orderRecoveryExecutor;
 
     public void recoverRequestedOrders() {
 
@@ -27,19 +28,10 @@ public class OrderRecoveryCommandService {
                 Instant.now().minus(STALE_MINUTES, ChronoUnit.MINUTES);
 
         List<UUID> orderIds =
-                orderCommandRepository.findStaleRequestedOrderIds(cutoff);
+                orderQueryRepository.findStaleRequestedOrderIds(cutoff);
 
         for (UUID orderId : orderIds) {
-            try {
-                kisOrderCommandService.executeOrder(orderId);
-
-            } catch (RuntimeException e) {
-                log.error(
-                        "REQUESTED 주문 복구 실행 실패. orderId={}",
-                        orderId,
-                        e
-                );
-            }
+            orderRecoveryExecutor.execute(orderId);
         }
     }
 
@@ -49,7 +41,7 @@ public class OrderRecoveryCommandService {
                 Instant.now().minus(STALE_MINUTES, ChronoUnit.MINUTES);
 
         List<UUID> orderIds =
-                orderCommandRepository.findStaleProcessingOrderIds(cutoff);
+                orderQueryRepository.findStaleProcessingOrderIds(cutoff);
 
         for (UUID orderId : orderIds) {
             try {

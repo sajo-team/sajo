@@ -18,7 +18,7 @@ public class OrderStatusCommandService {
     @Transactional
     public void accept(UUID orderId, String brokerOrderNo){
         Order order =
-                orderCommandRepository.findById(orderId)
+                orderCommandRepository.findByIdForUpdate(orderId)
                         .orElseThrow(()->
                                 new BusinessException(
                                         TradingErrorCode.ORDER_NOT_FOUND
@@ -30,7 +30,7 @@ public class OrderStatusCommandService {
     @Transactional
     public void fail(UUID orderId, String failureCode, String failureMessage){
         Order order =
-                orderCommandRepository.findById(orderId)
+                orderCommandRepository.findByIdForUpdate(orderId)
                         .orElseThrow(()->
                                 new BusinessException(
                                         TradingErrorCode.ORDER_NOT_FOUND
@@ -43,7 +43,7 @@ public class OrderStatusCommandService {
     @Transactional
     public void timeout(UUID orderId, String failureCode, String failureMessage){
         Order order =
-                orderCommandRepository.findById(orderId)
+                orderCommandRepository.findByIdForUpdate(orderId)
                         .orElseThrow(()->
                                 new BusinessException(
                                         TradingErrorCode.ORDER_NOT_FOUND
