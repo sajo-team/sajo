@@ -3,9 +3,11 @@ package com.sajo.user_service.auth.service.query;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
+import java.util.List;
 
 // 이메일 기준 로그인 실패 횟수를 Redis에 기록해 무차별 대입 공격을 막는다.
 // 성공하면 카운터를 지우고, 실패가 임계치를 넘으면 일정 시간 로그인 자체를 막는다.
@@ -29,6 +31,18 @@ public class LoginAttemptService {
     private static final int MAX_ATTEMPTS = 5;
     private static final Duration LOCK_DURATION = Duration.ofMinutes(15);
 
+    // INCR와 EXPIRE를 하나의 Lua 스크립트로 묶어 원자적으로 실행한다 - 리뷰 반영:
+    // 두 호출을 따로따로 하면(increment 성공 직후 expire만 실패하는 경우) 카운터가
+    // TTL 없이 남을 수 있고, 그러면 이후 실패가 쌓여 5회에 도달했을 때 자동 만료 없이
+    // 영구 잠금이 된다(로그인에 성공하기 전까지 안 풀림). Redis의 EVAL은 스크립트
+    // 전체를 하나의 원자적 연산으로 실행하므로 이 틈이 생기지 않는다.
+    private static final RedisScript<Long> INCREMENT_AND_EXPIRE_ON_FIRST_SCRIPT = RedisScript.of(
+            "local count = redis.call('INCR', KEYS[1]) "
+                    + "if count == 1 then redis.call('EXPIRE', KEYS[1], ARGV[1]) end "
+                    + "return count",
+            Long.class
+    );
+
     private final StringRedisTemplate stringRedisTemplate;
 
     public boolean isLocked(String email) {
@@ -44,12 +58,11 @@ public class LoginAttemptService {
     public void recordFailure(String email) {
         try {
             String key = KEY_PREFIX + email;
-            Long newCount = stringRedisTemplate.opsForValue().increment(key);
-            // 새로 만들어진 키(첫 실패)일 때만 TTL을 설정한다 - 매번 설정하면 계속
-            // 실패할 때마다 만료 시각이 뒤로 밀려서 사실상 영구 잠금이 될 수 있다
-            if (newCount != null && newCount == 1L) {
-                stringRedisTemplate.expire(key, LOCK_DURATION);
-            }
+            stringRedisTemplate.execute(
+                    INCREMENT_AND_EXPIRE_ON_FIRST_SCRIPT,
+                    List.of(key),
+                    String.valueOf(LOCK_DURATION.getSeconds())
+            );
         } catch (RuntimeException e) {
             log.warn("Redis 기록 실패로 로그인 실패 횟수를 남기지 못함", e);
         }

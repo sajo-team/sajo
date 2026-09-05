@@ -10,7 +10,6 @@ import com.sajo.user_service.auth.repository.query.UserQueryRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 // 로그인은 상태 변경이 없는 조회 작업(자격 확인 + 토큰 발급)이라 Query 계층에 둔다
 @Service
@@ -28,7 +27,12 @@ public class AuthQueryService {
     private final JwtTokenProvider jwtTokenProvider;
     private final LoginAttemptService loginAttemptService;
 
-    @Transactional(readOnly = true)
+    // 메서드 레벨 @Transactional을 의도적으로 두지 않는다 - 리뷰 반영: 이 메서드가 하는
+    // DB 접근은 userQueryRepository.findByEmail() 한 줄뿐이고, UserQueryRepository가
+    // 상속하는 JpaRepository가 그 호출 자체를 이미 자기 트랜잭션으로 처리한다. 여기에
+    // 메서드 전체를 감싸는 트랜잭션을 씌우면 loginAttemptService의 Redis I/O(외부 호출)까지
+    // 그 트랜잭션 범위 안에 들어가 버려서, Redis가 느려질 때 DB 커넥션을 불필요하게 붙잡고
+    // 있게 된다(CLAUDE.md 7절 - 외부 호출은 트랜잭션 경계 밖에 둔다).
     public LoginResponse login(LoginRequest request) {
         // 이메일 존재 여부와 무관하게 이메일 자체를 키로 잠금 여부를 먼저 확인한다
         // (자격 확인보다 앞서 체크해야 무차별 대입 자체가 자격 확인 로직까지 안 감)

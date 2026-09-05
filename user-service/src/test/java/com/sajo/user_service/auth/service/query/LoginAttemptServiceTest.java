@@ -30,6 +30,7 @@ class LoginAttemptServiceTest {
     static GenericContainer<?> redis = new GenericContainer<>(DockerImageName.parse("redis:8-alpine"))
             .withExposedPorts(6379);
 
+    private StringRedisTemplate redisTemplate;
     private LoginAttemptService loginAttemptService;
 
     @BeforeEach
@@ -38,10 +39,10 @@ class LoginAttemptServiceTest {
                 new LettuceConnectionFactory(redis.getHost(), redis.getMappedPort(6379));
         connectionFactory.afterPropertiesSet();
 
-        StringRedisTemplate stringRedisTemplate = new StringRedisTemplate(connectionFactory);
-        stringRedisTemplate.afterPropertiesSet();
+        redisTemplate = new StringRedisTemplate(connectionFactory);
+        redisTemplate.afterPropertiesSet();
 
-        loginAttemptService = new LoginAttemptService(stringRedisTemplate);
+        loginAttemptService = new LoginAttemptService(redisTemplate);
     }
 
     @Test
@@ -100,6 +101,36 @@ class LoginAttemptServiceTest {
         // when & then
         assertThat(loginAttemptService.isLocked(lockedEmail)).isTrue();
         assertThat(loginAttemptService.isLocked(otherEmail)).isFalse();
+    }
+
+    // 리뷰 반영 - INCR와 EXPIRE를 Lua 스크립트로 원자적으로 묶었는지, 그 결과로 TTL이
+    // 정확히 첫 실패 때만 설정되고(이후 실패에서 다시 밀리지 않고) 실제로 걸려있는지를
+    // Redis에 직접 물어봐서 검증한다. LoginAttemptService가 쓰는 것과 동일한 키 포맷을
+    // 이 테스트도 그대로 재현해서 확인한다.
+    @Test
+    @DisplayName("첫 실패 시 TTL이 설정되고, 이후 실패에서는 TTL이 다시 밀리지 않는다")
+    void ttlIsSetOnlyOnFirstFailureAndDoesNotSlide() {
+        // given
+        String email = "ttl-check@sajo.com";
+        String key = "user-service:login-attempts:" + email;
+
+        // when - 첫 실패
+        loginAttemptService.recordFailure(email);
+        Long ttlAfterFirstFailure = redisTemplate.getExpire(key);
+
+        // then - TTL이 실제로 걸려있어야 한다 (15분 이하, 음수/미설정이 아님)
+        assertThat(ttlAfterFirstFailure).isNotNull();
+        assertThat(ttlAfterFirstFailure).isPositive();
+        assertThat(ttlAfterFirstFailure).isLessThanOrEqualTo(Duration.ofMinutes(15).getSeconds());
+
+        // when - 곧바로 두 번째 실패 (TTL이 다시 밀리면 안 됨)
+        loginAttemptService.recordFailure(email);
+        Long ttlAfterSecondFailure = redisTemplate.getExpire(key);
+
+        // then - 두 번째 실패 이후에도 TTL이 처음 값과 비슷하게 계속 줄어들고 있어야 한다
+        // (다시 15분으로 리셋되지 않음 - 리셋됐다면 ttlAfterSecondFailure가 첫 값보다 커야 함)
+        assertThat(ttlAfterSecondFailure).isNotNull();
+        assertThat(ttlAfterSecondFailure).isLessThanOrEqualTo(ttlAfterFirstFailure);
     }
 
     // 리뷰 반영 - Redis 연결 자체가 안 되는 상황(장애)에서 fail-open이 실제로 동작하는지
