@@ -18,7 +18,6 @@ public class OrderRecoveryCommandService {
     private static final long STALE_MINUTES = 5L;
 
     private final OrderQueryRepository orderQueryRepository;
-    private final KisOrderCommandService kisOrderCommandService;
     private final OrderStatusCommandService orderStatusCommandService;
     private final OrderRecoveryExecutor orderRecoveryExecutor;
 

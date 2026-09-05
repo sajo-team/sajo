@@ -371,19 +371,65 @@ class OrderTest {
     }
 
     @Test
-    @DisplayName("PROCESSING 주문은 REQUESTED 상태로 재시도할 수 있다")
+    @DisplayName("PROCESSING 주문은 최대 재시도 횟수 전까지 REQUESTED 상태로 재시도할 수 있다")
     void retryFromProcessing() {
         // given
         Order order = createOrder();
-
         order.startProcessing();
 
         // when
-        order.retry();
+        order.retry(
+                3,
+                "ACCOUNT_RETRY_EXHAUSTED",
+                "계좌 정보 조회 재시도 횟수를 초과했습니다."
+        );
 
         // then
         assertThat(order.getStatus())
                 .isEqualTo(OrderStatus.REQUESTED);
+
+        assertThat(order.getAccountRetryCount())
+                .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("Account 재시도 횟수를 모두 소진하면 FAILED 상태가 된다")
+    void retryExhausted() {
+        // given
+        Order order = createOrder();
+
+        order.startProcessing();
+        order.retry(
+                3,
+                "ACCOUNT_RETRY_EXHAUSTED",
+                "계좌 정보 조회 재시도 횟수를 초과했습니다."
+        );
+
+        order.startProcessing();
+        order.retry(
+                3,
+                "ACCOUNT_RETRY_EXHAUSTED",
+                "계좌 정보 조회 재시도 횟수를 초과했습니다."
+        );
+
+        order.startProcessing();
+
+        // when
+        order.retry(
+                3,
+                "ACCOUNT_RETRY_EXHAUSTED",
+                "계좌 정보 조회 재시도 횟수를 초과했습니다."
+        );
+
+        // then
+        assertThat(order.getStatus())
+                .isEqualTo(OrderStatus.FAILED);
+
+        assertThat(order.getAccountRetryCount())
+                .isEqualTo(3);
+
+        assertThat(order.getFailureCode())
+                .isEqualTo("ACCOUNT_RETRY_EXHAUSTED");
     }
 
     private Order createOrder() {

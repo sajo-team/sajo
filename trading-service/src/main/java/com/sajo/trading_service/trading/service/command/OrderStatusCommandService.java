@@ -14,6 +14,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class OrderStatusCommandService {
     private final OrderCommandRepository orderCommandRepository;
+    private static final int MAX_ACCOUNT_RETRY_COUNT = 3;
 
     @Transactional
     public void accept(UUID orderId, String brokerOrderNo){
@@ -77,6 +78,10 @@ public class OrderStatusCommandService {
                                 )
                         );
 
-        order.retry();
+        order.retry(
+                MAX_ACCOUNT_RETRY_COUNT,
+                "ACCOUNT_RETRY_EXHAUSTED",
+                "계좌 정보 조회 재시도 횟수를 초과했습니다."
+        );
     }
 }

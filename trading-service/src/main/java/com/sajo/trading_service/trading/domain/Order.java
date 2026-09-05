@@ -62,6 +62,9 @@ public class Order extends BaseUpdatableEntity {
     @Column(name = "failure_message")
     private String failureMessage;
 
+    @Column(name = "account_retry_count", nullable = false)
+    private Integer accountRetryCount;
+
     private Order(
             UUID userId,
             UUID autoTradingId,
@@ -83,6 +86,7 @@ public class Order extends BaseUpdatableEntity {
         this.estimatedOrderAmount =
                 signalPrice * orderQuantity.longValue();
         this.status = OrderStatus.REQUESTED;
+        this.accountRetryCount = 0;
     }
 
     public static Order create(
@@ -180,11 +184,24 @@ public class Order extends BaseUpdatableEntity {
         this.status = OrderStatus.PROCESSING;
     }
 
-    public void retry() {
+    public void retry(
+            int maxRetryCount,
+            String failureCode,
+            String failureMessage
+    ) {
         if (this.status != OrderStatus.PROCESSING) {
             throw new BusinessException(
                     TradingErrorCode.ORDER_STATUS_CHANGE_NOT_ALLOWED
             );
+        }
+
+        this.accountRetryCount++;
+
+        if (this.accountRetryCount >= maxRetryCount) {
+            this.status = OrderStatus.FAILED;
+            this.failureCode = failureCode;
+            this.failureMessage = failureMessage;
+            return;
         }
 
         this.status = OrderStatus.REQUESTED;

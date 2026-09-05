@@ -104,5 +104,8 @@ class OrderStatusCommandServiceTest {
 
         assertThat(order.getStatus())
                 .isEqualTo(OrderStatus.REQUESTED);
+
+        assertThat(order.getAccountRetryCount())
+                .isEqualTo(1);
     }
 }
