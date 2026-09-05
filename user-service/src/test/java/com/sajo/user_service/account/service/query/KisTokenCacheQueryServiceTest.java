@@ -1,7 +1,7 @@
 package com.sajo.user_service.account.service.query;
 
 import com.sajo.common.exception.BusinessException;
-import com.sajo.user_service.account.client.KisClient;
+import com.sajo.user_service.account.client.KisOAuthClient;
 import com.sajo.user_service.account.client.dto.response.KisAccessTokenResponse;
 import com.sajo.user_service.account.client.dto.response.KisApprovalKeyResponse;
 import com.sajo.user_service.account.domain.AccountType;
@@ -26,7 +26,7 @@ import static org.mockito.BDDMockito.given;
 class KisTokenCacheQueryServiceTest {
 
     @Mock
-    private KisClient kisClient;
+    private KisOAuthClient kisOAuthClient;
 
     @Mock
     private CacheManager cacheManager;
@@ -38,7 +38,7 @@ class KisTokenCacheQueryServiceTest {
 
     @BeforeEach
     void setUp() {
-        kisTokenCacheQueryService = new KisTokenCacheQueryService(kisClient, cacheManager);
+        kisTokenCacheQueryService = new KisTokenCacheQueryService(kisOAuthClient, cacheManager);
     }
 
     @Test
@@ -46,7 +46,7 @@ class KisTokenCacheQueryServiceTest {
     void getAccessToken() {
         // given
         UUID userId = UUID.randomUUID();
-        given(kisClient.getAccessToken("app-key", "secret-key", AccountType.REAL))
+        given(kisOAuthClient.getAccessToken("app-key", "secret-key", AccountType.REAL))
                 .willReturn(new KisAccessTokenResponse("issued-token", "Bearer", 86400f, "2026-01-01 00:00:00"));
 
         // when
@@ -61,7 +61,7 @@ class KisTokenCacheQueryServiceTest {
     void getAccessTokenFailsWhenKisTokenIssueFails() {
         // given
         UUID userId = UUID.randomUUID();
-        given(kisClient.getAccessToken("app-key", "secret-key", AccountType.REAL))
+        given(kisOAuthClient.getAccessToken("app-key", "secret-key", AccountType.REAL))
                 .willThrow(new BusinessException(AccountErrorCode.KIS_TOKEN_ISSUE_FAILED));
 
         // when & then
@@ -80,7 +80,7 @@ class KisTokenCacheQueryServiceTest {
     void getApprovalKey() {
         // given
         UUID userId = UUID.randomUUID();
-        given(kisClient.getApprovalKey("app-key", "secret-key", AccountType.REAL))
+        given(kisOAuthClient.getApprovalKey("app-key", "secret-key", AccountType.REAL))
                 .willReturn(new KisApprovalKeyResponse("issued-approval-key"));
 
         // when
@@ -95,7 +95,7 @@ class KisTokenCacheQueryServiceTest {
     void getApprovalKeyFailsWhenKisIssueFails() {
         // given
         UUID userId = UUID.randomUUID();
-        given(kisClient.getApprovalKey("app-key", "secret-key", AccountType.REAL))
+        given(kisOAuthClient.getApprovalKey("app-key", "secret-key", AccountType.REAL))
                 .willThrow(new BusinessException(AccountErrorCode.KIS_TOKEN_ISSUE_FAILED));
 
         // when & then

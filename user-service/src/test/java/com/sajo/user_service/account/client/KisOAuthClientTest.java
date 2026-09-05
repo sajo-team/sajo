@@ -23,16 +23,16 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
-class KisClientTest {
+class KisOAuthClientTest {
 
     private RestClient.Builder builder;
     private MockRestServiceServer server;
-    private KisClient client;
+    private KisOAuthClient client;
 
     private void setUp() {
         builder = RestClient.builder();
         server = MockRestServiceServer.bindTo(builder).build();
-        client = new KisClient(builder, new KisApiProperties("https://kis.example", "https://kis-real.example"));
+        client = new KisOAuthClient(builder, new KisApiProperties("https://kis.example", "https://kis-real.example"));
     }
 
     @Test
