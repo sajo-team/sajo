@@ -26,16 +26,26 @@ public class AuthQueryService {
     private final UserQueryRepository userQueryRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
+    private final LoginAttemptService loginAttemptService;
  
     @Transactional(readOnly = true)
     public LoginResponse login(LoginRequest request) {
+        // 이메일 존재 여부와 무관하게 이메일 자체를 키로 잠금 여부를 먼저 확인한다
+        // (자격 확인보다 앞서 체크해야 무차별 대입 자체가 자격 확인 로직까지 안 감)
+        if (loginAttemptService.isLocked(request.email())) {
+            throw new BusinessException(UserErrorCode.TOO_MANY_LOGIN_ATTEMPTS);
+        }
+ 
         User user = userQueryRepository.findByEmail(request.email()).orElse(null);
         String hashToCheck = (user != null) ? user.getPassword() : DUMMY_BCRYPT_HASH;
         boolean matches = passwordEncoder.matches(request.password(), hashToCheck);
  
         if (user == null || !matches) {
+            loginAttemptService.recordFailure(request.email());
             throw new BusinessException(UserErrorCode.INVALID_CREDENTIALS);
         }
+ 
+        loginAttemptService.recordSuccess(request.email());
  
         String accessToken = jwtTokenProvider.createAccessToken(user.getId(), user.getRole().name());
         return LoginResponse.of(accessToken, jwtTokenProvider.getAccessTokenValiditySeconds());
