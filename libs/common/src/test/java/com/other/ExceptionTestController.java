@@ -29,6 +29,11 @@ public class ExceptionTestController {
         return "ok";
     }
 
+    @GetMapping("/require-header")
+    public String requireHeader(@RequestHeader("X-User-Id") String userId) {
+        return userId;
+    }
+
     @GetMapping("/required-header")
     public String requiredHeader(@RequestHeader("X-Test-Id") String testId) {
         return testId;
