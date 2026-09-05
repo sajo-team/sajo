@@ -29,11 +29,11 @@ class JwtAuthenticationFilterTest {
     }
  
     @Test
-    @DisplayName("유효한 토큰이면 통과시키고, downstream에는 검증된 userId로 X-User-Id를 세팅한다")
-    void validTokenSetsUserIdHeader() throws Exception {
+    @DisplayName("유효한 토큰이면 통과시키고, downstream에는 검증된 userId/role로 X-User-Id/X-User-Role을 세팅한다")
+    void validTokenSetsUserIdAndRoleHeaders() throws Exception {
         // given
         UUID userId = UUID.randomUUID();
-        String token = jwtTokenProvider.createAccessToken(userId);
+        String token = jwtTokenProvider.createAccessToken(userId, "ADMIN");
  
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/accounts");
         request.addHeader("Authorization", "Bearer " + token);
@@ -47,19 +47,21 @@ class JwtAuthenticationFilterTest {
         HttpServletRequest downstreamRequest = (HttpServletRequest) chain.getRequest();
         assertThat(downstreamRequest).isNotNull();
         assertThat(downstreamRequest.getHeader("X-User-Id")).isEqualTo(userId.toString());
+        assertThat(downstreamRequest.getHeader("X-User-Role")).isEqualTo("ADMIN");
     }
  
     @Test
-    @DisplayName("클라이언트가 X-User-Id를 직접 실어 보내도 검증된 값으로 덮어쓴다 (스푸핑 방지)")
-    void clientSuppliedUserIdHeaderIsOverridden() throws Exception {
+    @DisplayName("클라이언트가 X-User-Id/X-User-Role을 직접 실어 보내도 검증된 값으로 덮어쓴다 (스푸핑 방지)")
+    void clientSuppliedHeadersAreOverridden() throws Exception {
         // given
         UUID realUserId = UUID.randomUUID();
         UUID spoofedUserId = UUID.randomUUID();
-        String token = jwtTokenProvider.createAccessToken(realUserId);
+        String token = jwtTokenProvider.createAccessToken(realUserId, "USER");
  
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/accounts");
         request.addHeader("Authorization", "Bearer " + token);
         request.addHeader("X-User-Id", spoofedUserId.toString());
+        request.addHeader("X-User-Role", "ADMIN"); // 일반 유저 토큰인데 헤더로 관리자 사칭 시도
         MockHttpServletResponse response = new MockHttpServletResponse();
         MockFilterChain chain = new MockFilterChain();
  
@@ -69,6 +71,7 @@ class JwtAuthenticationFilterTest {
         // then
         HttpServletRequest downstreamRequest = (HttpServletRequest) chain.getRequest();
         assertThat(downstreamRequest.getHeader("X-User-Id")).isEqualTo(realUserId.toString());
+        assertThat(downstreamRequest.getHeader("X-User-Role")).isEqualTo("USER");
     }
  
     @Test
@@ -106,11 +109,12 @@ class JwtAuthenticationFilterTest {
     }
  
     @Test
-    @DisplayName("로그인 API는 토큰 없이 통과하고, 클라이언트가 보낸 X-User-Id는 제거된다")
-    void loginEndpointIsPermitAllAndStripsClientUserId() throws Exception {
+    @DisplayName("로그인 API는 토큰 없이 통과하고, 클라이언트가 보낸 X-User-Id/X-User-Role은 제거된다")
+    void loginEndpointIsPermitAllAndStripsClientHeaders() throws Exception {
         // given
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/auth/login");
         request.addHeader("X-User-Id", UUID.randomUUID().toString());
+        request.addHeader("X-User-Role", "ADMIN");
         MockHttpServletResponse response = new MockHttpServletResponse();
         MockFilterChain chain = new MockFilterChain();
  
@@ -121,6 +125,7 @@ class JwtAuthenticationFilterTest {
         HttpServletRequest downstreamRequest = (HttpServletRequest) chain.getRequest();
         assertThat(downstreamRequest).isNotNull();
         assertThat(downstreamRequest.getHeader("X-User-Id")).isNull();
+        assertThat(downstreamRequest.getHeader("X-User-Role")).isNull();
     }
  
     @Test
@@ -183,5 +188,26 @@ class JwtAuthenticationFilterTest {
         // then
         assertThat(response.getStatus()).isEqualTo(401);
         assertThat(chain.getRequest()).isNull();
+    }
+ 
+    @Test
+    @DisplayName("role 클레임이 없는(도입 이전 발급) 토큰이면 X-User-Role 헤더가 세팅되지 않는다")
+    void tokenWithoutRoleClaimOmitsRoleHeader() throws Exception {
+        // given - role 없이 발급된 토큰 (과거 발급분 상황 재현)
+        UUID userId = UUID.randomUUID();
+        String token = jwtTokenProvider.createAccessToken(userId, null);
+ 
+        MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/accounts");
+        request.addHeader("Authorization", "Bearer " + token);
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        MockFilterChain chain = new MockFilterChain();
+ 
+        // when
+        filter.doFilter(request, response, chain);
+ 
+        // then
+        HttpServletRequest downstreamRequest = (HttpServletRequest) chain.getRequest();
+        assertThat(downstreamRequest.getHeader("X-User-Id")).isEqualTo(userId.toString());
+        assertThat(downstreamRequest.getHeader("X-User-Role")).isNull();
     }
 }

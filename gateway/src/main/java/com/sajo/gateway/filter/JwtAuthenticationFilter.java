@@ -2,6 +2,7 @@ package com.sajo.gateway.filter;
  
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sajo.common.code.ErrorResponseCode;
+import com.sajo.common.jwt.JwtClaims;
 import com.sajo.common.jwt.JwtTokenProvider;
 import com.sajo.common.jwt.JwtValidationException;
 import com.sajo.common.response.ErrorResponse;
@@ -18,10 +19,9 @@ import org.springframework.web.filter.OncePerRequestFilter;
  
 import java.io.IOException;
 import java.util.List;
-import java.util.UUID;
  
-// 요청마다 JWT 검증 후 X-User-Id 헤더 주입. 서블릿 기반 Gateway라 일반 Filter로 처리.
-// downstream은 이 필터가 세팅한 X-User-Id만 신뢰해야 한다.
+// 요청마다 JWT 검증 후 X-User-Id/X-User-Role 헤더 주입. 서블릿 기반 Gateway라 일반 Filter로 처리.
+// downstream은 이 필터가 세팅한 X-User-Id/X-User-Role만 신뢰해야 한다.
 // 401 응답은 GlobalExceptionHandler를 안 타므로(필터가 더 앞단) 여기서 직접 JSON 작성
 @Component
 @RequiredArgsConstructor
@@ -31,6 +31,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private static final String AUTHORIZATION_HEADER = "Authorization";
     private static final String BEARER_PREFIX = "Bearer ";
  
+    // 로그인 없이 접근 가능한 (method, path) 목록. 새 public API는 여기 명시적으로 추가할 것
     private static final List<PublicEndpoint> PERMIT_ALL_ENDPOINTS = List.of(
             new PublicEndpoint("POST", "/api/v1/auth/login"),
             new PublicEndpoint("POST", "/api/v1/users"),
@@ -52,8 +53,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     ) throws ServletException, IOException {
  
         if (isPermitAll(request)) {
-            // permitAll 경로도 X-User-Id는 항상 제거 (스푸핑 방지)
-            filterChain.doFilter(new UserIdHeaderRequestWrapper(request, null), response);
+            // permitAll 경로도 X-User-Id/X-User-Role은 항상 제거 (스푸핑 방지)
+            filterChain.doFilter(new UserIdHeaderRequestWrapper(request, null, null), response);
             return;
         }
  
@@ -65,16 +66,19 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
  
         String token = authorizationHeader.substring(BEARER_PREFIX.length());
-        UUID userId;
+        JwtClaims claims;
         try {
-            userId = jwtTokenProvider.validateAndGetUserId(token);
+            claims = jwtTokenProvider.validateAndGetClaims(token);
         } catch (JwtValidationException e) {
             log.warn("JWT 검증 실패: uri={}, reason={}", request.getRequestURI(), e.getMessage());
             writeUnauthorized(response);
             return;
         }
  
-        filterChain.doFilter(new UserIdHeaderRequestWrapper(request, userId.toString()), response);
+        filterChain.doFilter(
+                new UserIdHeaderRequestWrapper(request, claims.userId().toString(), claims.role()),
+                response
+        );
     }
  
     private boolean isPermitAll(HttpServletRequest request) {
