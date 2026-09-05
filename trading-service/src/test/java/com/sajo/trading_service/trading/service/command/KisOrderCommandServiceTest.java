@@ -717,4 +717,76 @@ class KisOrderCommandServiceTest {
                         )
                 );
     }
+    @Test
+    @DisplayName("Account Service 처리 중 예상하지 못한 예외가 발생하면 FAILED 처리한다")
+    void executeOrderAccountUnexpectedError() {
+        // given
+        Order order = createOrder(OrderType.BUY);
+
+        when(orderStatusCommandService.startProcessing(orderId))
+                .thenReturn(order);
+
+        when(accountClient.getAccessToken(userId))
+                .thenThrow(new RuntimeException("unexpected"));
+
+        // when
+        kisOrderCommandService.executeOrder(orderId);
+
+        // then
+        verify(orderStatusCommandService)
+                .fail(
+                        orderId,
+                        "ACCOUNT_SERVICE_UNKNOWN_ERROR",
+                        "Account Service 처리 중 예상하지 못한 오류가 발생했습니다."
+                );
+
+        verifyNoInteractions(kisOrderClient);
+    }
+
+    @Test
+    @DisplayName("KIS 주문 처리 중 예상하지 못한 예외가 발생하면 TIMEOUT 처리한다")
+    void executeOrderKisUnexpectedError() {
+        // given
+        Order order = createOrder(OrderType.BUY);
+
+        when(orderStatusCommandService.startProcessing(orderId))
+                .thenReturn(order);
+
+        givenCommonAccountResponses();
+
+        when(accountClient.getOrderableAmount(userId))
+                .thenReturn(
+                        new AccountOrderableAmountResponse(
+                                1_000_000L
+                        )
+                );
+
+        when(kisOrderClient.placeOrder(
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                any(KisOrderRequest.class)
+        )).thenThrow(
+                new RuntimeException("unexpected")
+        );
+
+        // when
+        kisOrderCommandService.executeOrder(orderId);
+
+        // then
+        verify(orderStatusCommandService)
+                .timeout(
+                        orderId,
+                        "KIS_UNKNOWN_ERROR",
+                        "KIS 주문 결과를 확인할 수 없습니다."
+                );
+
+        verify(orderStatusCommandService, never())
+                .accept(
+                        any(),
+                        any()
+                );
+    }
 }

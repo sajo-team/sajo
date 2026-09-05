@@ -83,6 +83,19 @@ public class KisOrderCommandService {
                     "Account Service 호출에 실패했습니다."
             );
             return;
+        } catch (RuntimeException e) {
+            log.error(
+                    "Account Service 처리 중 예상하지 못한 오류가 발생했습니다. orderId={}",
+                    orderId,
+                    e
+            );
+
+            orderStatusCommandService.fail(
+                    orderId,
+                    "ACCOUNT_SERVICE_UNKNOWN_ERROR",
+                    "Account Service 처리 중 예상하지 못한 오류가 발생했습니다."
+            );
+            return;
         }
 
         /*
@@ -183,11 +196,9 @@ public class KisOrderCommandService {
 
                 } catch (RuntimeException e) {
                     /*
-                     * KIS에는 주문이 성공했지만
-                     * DB 상태 반영이 실패한 경우.
-                     *
-                     * PROCESSING 상태를 유지하여
-                     * 동일 주문이 KIS에 다시 전송되는 것을 방지한다.
+                     * KIS 주문은 성공했지만 DB 상태 반영이 실패한 경우.
+                     * 예외를 상위 catch로 전달하여 TIMEOUT 전이를 시도하고,
+                     * 이후 주문 조회를 통해 실제 주문 상태를 보정한다.
                      */
                     log.error(
                             "KIS 주문 성공 후 Order 상태 저장 실패. orderId={}, brokerOrderNo={}",
@@ -234,6 +245,18 @@ public class KisOrderCommandService {
                         "KIS 주문 요청이 실패했습니다."
                 );
             }
+        } catch (RuntimeException e) {
+            log.error(
+                    "KIS 주문 처리 중 예상하지 못한 오류가 발생했습니다. orderId={}",
+                    orderId,
+                    e
+            );
+
+            orderStatusCommandService.timeout(
+                    orderId,
+                    "KIS_UNKNOWN_ERROR",
+                    "KIS 주문 결과를 확인할 수 없습니다."
+            );
         }
     }
 }

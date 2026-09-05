@@ -3,6 +3,7 @@ package com.sajo.trading_service.trading.event;
 import com.sajo.trading_service.trading.service.command.KisOrderCommandService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
@@ -14,6 +15,7 @@ public class OrderRequestedEventListener {
 
     private final KisOrderCommandService kisOrderCommandService;
 
+    @Async("kisOrderExecutor")
     @TransactionalEventListener(
             phase = TransactionPhase.AFTER_COMMIT // 현재 트랜잭션이 성공적으로 Commit된 뒤에 실행
     )
