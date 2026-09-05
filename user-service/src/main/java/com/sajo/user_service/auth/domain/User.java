@@ -45,7 +45,12 @@ public class User extends BaseUpdatableEntity {
     @ColumnDefault("'USER'")
     private Role role;
 
-    @Builder
+    // access = PRIVATE 필요 - Lombok의 builder()는 생성자가 private이어도 기본적으로
+    // public으로 노출되므로, User.of()를 거치지 않고 builder()를 직접 써서 role(...)을
+    // 빠뜨리면 role이 null인 채로 build될 수 있었다. builder() 자체를 private으로 막아
+    // 클래스 밖에서는 반드시 of()를 거치도록 강제한다 (@Builder.Default는 클래스 레벨
+    // @Builder에서만 동작해서 이 구조 - 생성자 레벨 @Builder - 에는 쓸 수 없다).
+    @Builder(access = AccessLevel.PRIVATE)
     private User(String email, String password, String name, Role role) {
         this.email = email;
         this.password = password;
