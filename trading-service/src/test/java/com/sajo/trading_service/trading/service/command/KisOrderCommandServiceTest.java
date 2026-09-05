@@ -316,7 +316,7 @@ class KisOrderCommandServiceTest {
                 .fail(
                         orderId,
                         "ACCOUNT_ERROR",
-                        "Account Service 오류"
+                        "계좌 정보를 확인하는 중 오류가 발생했습니다."
                 );
 
         verifyNoInteractions(kisOrderClient);
@@ -785,6 +785,63 @@ class KisOrderCommandServiceTest {
 
         verify(orderStatusCommandService, never())
                 .accept(
+                        any(),
+                        any()
+                );
+    }
+
+    @Test
+    @DisplayName("KIS 실패 응답 후 FAILED 저장이 실패해도 TIMEOUT으로 오분류하지 않는다")
+    void executeOrderFailResponseSaveFailure() {
+        // given
+        Order order = createOrder(OrderType.BUY);
+
+        when(orderStatusCommandService.startProcessing(orderId))
+                .thenReturn(order);
+
+        givenCommonAccountResponses();
+
+        when(accountClient.getOrderableAmount(userId))
+                .thenReturn(
+                        new AccountOrderableAmountResponse(
+                                1_000_000L
+                        )
+                );
+
+        KisOrderResponse response =
+                new KisOrderResponse(
+                        "1",
+                        "KIS_ERROR",
+                        "주문 실패",
+                        null
+                );
+
+        when(kisOrderClient.placeOrder(
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                any(KisOrderRequest.class)
+        )).thenReturn(response);
+
+        doThrow(new RuntimeException("db error"))
+                .when(orderStatusCommandService)
+                .fail(
+                        orderId,
+                        "KIS_ERROR",
+                        "주문 실패"
+                );
+
+        // when & then
+        org.assertj.core.api.Assertions.assertThatThrownBy(() ->
+                        kisOrderCommandService.executeOrder(orderId)
+                )
+                .isInstanceOf(RuntimeException.class);
+
+        verify(orderStatusCommandService, never())
+                .timeout(
+                        any(),
                         any(),
                         any()
                 );

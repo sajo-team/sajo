@@ -64,7 +64,7 @@ public class KisOrderCommandService {
             orderStatusCommandService.fail(
                     orderId,
                     e.getErrorCode(),
-                    e.getMessage()
+                    "계좌 정보를 확인하는 중 오류가 발생했습니다."
             );
             return;
 
@@ -72,7 +72,7 @@ public class KisOrderCommandService {
             orderStatusCommandService.fail(
                     orderId,
                     "ACCOUNT_SERVICE_ERROR",
-                    e.getMessage()
+                    "계좌 정보를 확인하는 중 오류가 발생했습니다."
             );
             return;
 
@@ -159,8 +159,10 @@ public class KisOrderCommandService {
         /*
          * KIS 주문 실행
          */
+        KisOrderResponse response;
+
         try {
-            KisOrderResponse response =
+            response =
                     kisOrderClient.placeOrder(
                             "Bearer " + tokenResponse.accessToken(),
                             tokenResponse.appKey(),
@@ -170,54 +172,6 @@ public class KisOrderCommandService {
                             request
                     );
 
-            if ("0".equals(response.rtCd())) {
-
-                /*
-                 * 성공 응답인데 주문번호가 없으면
-                 * 실제 주문 결과를 확신할 수 없으므로 TIMEOUT 취급
-                 */
-                if (response.output() == null
-                        || response.output().orderNo() == null
-                        || response.output().orderNo().isBlank()) {
-
-                    orderStatusCommandService.timeout(
-                            orderId,
-                            "KIS_INVALID_RESPONSE",
-                            "KIS 주문 성공 응답의 주문번호를 확인할 수 없습니다."
-                    );
-                    return;
-                }
-
-                try {
-                    orderStatusCommandService.accept(
-                            orderId,
-                            response.output().orderNo()
-                    );
-
-                } catch (RuntimeException e) {
-                    /*
-                     * KIS 주문은 성공했지만 DB 상태 반영이 실패한 경우.
-                     * 예외를 상위 catch로 전달하여 TIMEOUT 전이를 시도하고,
-                     * 이후 주문 조회를 통해 실제 주문 상태를 보정한다.
-                     */
-                    log.error(
-                            "KIS 주문 성공 후 Order 상태 저장 실패. orderId={}, brokerOrderNo={}",
-                            orderId,
-                            response.output().orderNo(),
-                            e
-                    );
-
-                    throw e;
-                }
-
-            } else {
-                orderStatusCommandService.fail(
-                        orderId,
-                        response.msgCd(),
-                        response.message()
-                );
-            }
-
         } catch (RetryableException e) {
 
             // 네트워크/Timeout 등으로 실제 주문 접수 여부를 확신할 수 없음
@@ -226,6 +180,7 @@ public class KisOrderCommandService {
                     "KIS_TIMEOUT",
                     "KIS 주문 응답을 확인할 수 없습니다."
             );
+            return;
 
         } catch (FeignException e) {
 
@@ -245,9 +200,12 @@ public class KisOrderCommandService {
                         "KIS 주문 요청이 실패했습니다."
                 );
             }
+
+            return;
+
         } catch (RuntimeException e) {
             log.error(
-                    "KIS 주문 처리 중 예상하지 못한 오류가 발생했습니다. orderId={}",
+                    "KIS 주문 호출 또는 응답 처리 중 예상하지 못한 오류가 발생했습니다. orderId={}",
                     orderId,
                     e
             );
@@ -257,6 +215,76 @@ public class KisOrderCommandService {
                     "KIS_UNKNOWN_ERROR",
                     "KIS 주문 결과를 확인할 수 없습니다."
             );
+            return;
+        }
+
+        /*
+         * 여기부터는 KIS 응답을 정상적으로 받은 이후의 상태 처리
+         */
+        if ("0".equals(response.rtCd())) {
+
+            if (response.output() == null
+                    || response.output().orderNo() == null
+                    || response.output().orderNo().isBlank()) {
+
+                orderStatusCommandService.timeout(
+                        orderId,
+                        "KIS_INVALID_RESPONSE",
+                        "KIS 주문 성공 응답의 주문번호를 확인할 수 없습니다."
+                );
+                return;
+            }
+
+            try {
+                orderStatusCommandService.accept(
+                        orderId,
+                        response.output().orderNo()
+                );
+
+            } catch (RuntimeException e) {
+                /*
+                 * KIS 주문은 성공했지만 ACCEPTED 상태 반영에 실패한 경우.
+                 * 실제 주문은 접수되었을 수 있으므로 TIMEOUT 전이를 시도하고
+                 * 이후 주문 조회를 통해 상태를 보정한다.
+                 */
+                log.error(
+                        "KIS 주문 성공 후 Order 상태 저장 실패. orderId={}, brokerOrderNo={}",
+                        orderId,
+                        response.output().orderNo(),
+                        e
+                );
+
+                orderStatusCommandService.timeout(
+                        orderId,
+                        "KIS_ACCEPT_SAVE_ERROR",
+                        "KIS 주문 결과 저장에 실패했습니다."
+                );
+            }
+
+        } else {
+
+            /*
+             * KIS로부터 명확한 실패 응답을 받은 상태.
+             * fail() 자체의 DB 저장 실패를 KIS_UNKNOWN_ERROR / TIMEOUT으로
+             * 오분류하지 않도록 KIS 호출 try-catch 밖에서 처리한다.
+             */
+            try {
+                orderStatusCommandService.fail(
+                        orderId,
+                        response.msgCd(),
+                        response.message()
+                );
+
+            } catch (RuntimeException e) {
+                log.error(
+                        "KIS 주문 실패 응답 후 FAILED 상태 저장 실패. orderId={}, msgCd={}",
+                        orderId,
+                        response.msgCd(),
+                        e
+                );
+
+                throw e;
+            }
         }
     }
 }
