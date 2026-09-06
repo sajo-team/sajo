@@ -7,13 +7,11 @@ import com.sajo.trading_service.ai_risk.exception.AiRiskErrorCode;
 import com.sajo.trading_service.ai_risk.repository.query.AiAnalysisHistoryQueryRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
-@Transactional(readOnly = true)
 public class AiAnalysisHistoryQueryService {
 
     private final AiAnalysisHistoryQueryRepository aiAnalysisHistoryQueryRepository;
