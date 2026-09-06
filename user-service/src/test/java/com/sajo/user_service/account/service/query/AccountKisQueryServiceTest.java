@@ -6,10 +6,13 @@ import com.sajo.user_service.account.client.KisContinuationResult;
 import com.sajo.user_service.account.client.dto.response.KisBalanceHoldingResponse;
 import com.sajo.user_service.account.client.dto.response.KisBalanceResponse;
 import com.sajo.user_service.account.client.dto.response.KisBalanceSummaryResponse;
+import com.sajo.user_service.account.client.dto.response.KisOrderableAmountDetailResponse;
+import com.sajo.user_service.account.client.dto.response.KisOrderableAmountResponse;
 import com.sajo.user_service.account.controller.dto.response.AccessTokenResponse;
 import com.sajo.user_service.account.controller.dto.response.AccountDepositResponse;
 import com.sajo.user_service.account.controller.dto.response.AccountHoldingsResponse;
 import com.sajo.user_service.account.controller.dto.response.ApprovalKeyResponse;
+import com.sajo.user_service.account.controller.dto.response.OrderableAmountResponse;
 import com.sajo.user_service.account.domain.Account;
 import com.sajo.user_service.account.domain.AccountType;
 import com.sajo.user_service.account.exception.AccountErrorCode;
@@ -420,5 +423,110 @@ class AccountKisQueryServiceTest {
                 });
 
         verifyNoInteractions(kisTokenCacheQueryService);
+    }
+
+    @Test
+    @DisplayName("주문 가능 금액 조회에 성공하면 nrcvb_buy_amt를 Long으로 변환해 반환하고, "
+            + "PDNO/ORD_UNPR은 공란, ORD_DVSN은 00으로 KIS에 요청한다")
+    void getOrderableAmount() {
+        // given
+        UUID userId = UUID.randomUUID();
+        Account account = Account.createAccount(
+                userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
+        KisOrderableAmountResponse kisResponse = new KisOrderableAmountResponse(
+                "0", "MSG_CD", "정상처리 되었습니다", new KisOrderableAmountDetailResponse("9998580"));
+
+        given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
+        given(kisTokenCacheQueryService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL))
+                .willReturn("issued-token");
+        given(kisTrClient.inquireOrderableAmount(
+                "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.REAL, "", "", "00"))
+                .willReturn(kisResponse);
+
+        // when
+        OrderableAmountResponse result = accountKisQueryService.getOrderableAmount(userId);
+
+        // then
+        assertThat(result.orderableAmount()).isEqualTo(9_998_580L);
+
+        InOrder inOrder = inOrder(accountQueryService, kisTokenCacheQueryService, kisTrClient);
+        inOrder.verify(accountQueryService).getAccountByUserId(userId);
+        inOrder.verify(kisTokenCacheQueryService).getAccessToken(userId, "app-key", "secret-key", AccountType.REAL);
+        inOrder.verify(kisTrClient).inquireOrderableAmount(
+                "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.REAL, "", "", "00");
+    }
+
+    @Test
+    @DisplayName("주문 가능 금액 조회 시 계좌가 없으면 ACCOUNT_NOT_FOUND 예외를 그대로 전파하고 KIS는 호출하지 않는다")
+    void getOrderableAmountFailsWhenAccountNotFound() {
+        // given
+        UUID userId = UUID.randomUUID();
+        given(accountQueryService.getAccountByUserId(userId))
+                .willThrow(new BusinessException(AccountErrorCode.ACCOUNT_NOT_FOUND));
+
+        // when & then
+        assertThatThrownBy(() -> accountKisQueryService.getOrderableAmount(userId))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(AccountErrorCode.ACCOUNT_NOT_FOUND);
+                });
+
+        verifyNoInteractions(kisTokenCacheQueryService, kisTrClient);
+    }
+
+    @Test
+    @DisplayName("KIS 응답의 output이 비어 있으면 KIS_ORDERABLE_AMOUNT_INQUIRY_FAILED 예외를 던진다")
+    void getOrderableAmountFailsWhenOutputIsNull() {
+        // given
+        UUID userId = UUID.randomUUID();
+        Account account = Account.createAccount(
+                userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
+        KisOrderableAmountResponse kisResponse =
+                new KisOrderableAmountResponse("0", "MSG_CD", "정상처리 되었습니다", null);
+
+        given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
+        given(kisTokenCacheQueryService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL))
+                .willReturn("issued-token");
+        given(kisTrClient.inquireOrderableAmount(
+                "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.REAL, "", "", "00"))
+                .willReturn(kisResponse);
+
+        // when & then
+        assertThatThrownBy(() -> accountKisQueryService.getOrderableAmount(userId))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(AccountErrorCode.KIS_ORDERABLE_AMOUNT_INQUIRY_FAILED);
+                });
+    }
+
+    @Test
+    @DisplayName("KIS 응답의 nrcvb_buy_amt가 숫자로 파싱 불가능하면 KIS_ORDERABLE_AMOUNT_INQUIRY_FAILED 예외를 던진다")
+    void getOrderableAmountFailsWhenNrcvbBuyAmtIsNotParsable() {
+        // given
+        UUID userId = UUID.randomUUID();
+        Account account = Account.createAccount(
+                userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
+        KisOrderableAmountResponse kisResponse = new KisOrderableAmountResponse(
+                "0", "MSG_CD", "정상처리 되었습니다", new KisOrderableAmountDetailResponse("not-a-number"));
+
+        given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
+        given(kisTokenCacheQueryService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL))
+                .willReturn("issued-token");
+        given(kisTrClient.inquireOrderableAmount(
+                "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.REAL, "", "", "00"))
+                .willReturn(kisResponse);
+
+        // when & then
+        assertThatThrownBy(() -> accountKisQueryService.getOrderableAmount(userId))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(AccountErrorCode.KIS_ORDERABLE_AMOUNT_INQUIRY_FAILED);
+                });
     }
 }

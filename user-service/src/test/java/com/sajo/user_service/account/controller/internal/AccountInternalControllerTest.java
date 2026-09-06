@@ -5,6 +5,7 @@ import com.sajo.common.exception.GlobalExceptionHandler;
 import com.sajo.user_service.account.controller.dto.response.AccessTokenResponse;
 import com.sajo.user_service.account.controller.dto.response.AccountOrderInfoResponse;
 import com.sajo.user_service.account.controller.dto.response.ApprovalKeyResponse;
+import com.sajo.user_service.account.controller.dto.response.OrderableAmountResponse;
 import com.sajo.user_service.account.domain.AccountType;
 import com.sajo.user_service.account.exception.AccountErrorCode;
 import com.sajo.user_service.account.service.query.AccountKisQueryService;
@@ -138,5 +139,47 @@ class AccountInternalControllerTest {
         mockMvc.perform(get("/internal/v1/accounts/{userId}/order-info", userId))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.errorCode").value("ACCOUNT_0008"));
+    }
+
+    @Test
+    @DisplayName("주문 가능 금액 조회에 성공하면 200과 orderableAmount를 반환한다")
+    void getOrderableAmount() throws Exception {
+        // given
+        UUID userId = UUID.randomUUID();
+        given(accountKisQueryService.getOrderableAmount(userId))
+                .willReturn(new OrderableAmountResponse(9_998_580L));
+
+        // when & then
+        mockMvc.perform(get("/internal/v1/accounts/{userId}/orderable-amount", userId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.orderableAmount").value(9_998_580L));
+    }
+
+    @Test
+    @DisplayName("계좌가 없으면 주문 가능 금액 조회도 404를 반환한다")
+    void getOrderableAmountAccountNotFound() throws Exception {
+        // given
+        UUID userId = UUID.randomUUID();
+        given(accountKisQueryService.getOrderableAmount(userId))
+                .willThrow(new BusinessException(AccountErrorCode.ACCOUNT_NOT_FOUND));
+
+        // when & then
+        mockMvc.perform(get("/internal/v1/accounts/{userId}/orderable-amount", userId))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.errorCode").value("ACCOUNT_0006"));
+    }
+
+    @Test
+    @DisplayName("KIS 매수가능조회에 실패하면 주문 가능 금액 조회는 502를 반환한다")
+    void getOrderableAmountKisInquiryFailed() throws Exception {
+        // given
+        UUID userId = UUID.randomUUID();
+        given(accountKisQueryService.getOrderableAmount(userId))
+                .willThrow(new BusinessException(AccountErrorCode.KIS_ORDERABLE_AMOUNT_INQUIRY_FAILED));
+
+        // when & then
+        mockMvc.perform(get("/internal/v1/accounts/{userId}/orderable-amount", userId))
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.errorCode").value("ACCOUNT_0011"));
     }
 }
