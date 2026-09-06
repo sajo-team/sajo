@@ -1,5 +1,5 @@
 package com.sajo.user_service.auth.service.query;
- 
+
 import com.sajo.common.exception.BusinessException;
 import com.sajo.common.jwt.JwtTokenProvider;
 import com.sajo.user_service.auth.controller.dto.request.LoginRequest;
@@ -10,33 +10,47 @@ import com.sajo.user_service.auth.repository.query.UserQueryRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
- 
+
 // 로그인은 상태 변경이 없는 조회 작업(자격 확인 + 토큰 발급)이라 Query 계층에 둔다
 @Service
 @RequiredArgsConstructor
 public class AuthQueryService {
- 
+
     // 이메일이 존재하지 않을 때도 이 해시로 BCrypt 비교를 수행해서, 이메일 존재 여부에 따라
     // 응답 시간이 달라지는 타이밍 사이드채널을 없앤다. 실제 사용자 비밀번호와는 무관한 값이라
     // 어떤 입력으로도 일치하지 않는다 - 오직 "BCrypt 연산을 한 번 더 하기 위한 더미".
     private static final String DUMMY_BCRYPT_HASH =
             "$2a$10$hjbnx74waXs6VBwUehsKKuIsz4TiDQFFGL98e8KhbjM52W4tlTIP2";
- 
+
     private final UserQueryRepository userQueryRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
- 
-    @Transactional(readOnly = true)
+    private final LoginAttemptService loginAttemptService;
+
+    // 메서드 레벨 @Transactional을 의도적으로 두지 않는다 - 리뷰 반영: 이 메서드가 하는
+    // DB 접근은 userQueryRepository.findByEmail() 한 줄뿐이고, UserQueryRepository가
+    // 상속하는 JpaRepository가 그 호출 자체를 이미 자기 트랜잭션으로 처리한다. 여기에
+    // 메서드 전체를 감싸는 트랜잭션을 씌우면 loginAttemptService의 Redis I/O(외부 호출)까지
+    // 그 트랜잭션 범위 안에 들어가 버려서, Redis가 느려질 때 DB 커넥션을 불필요하게 붙잡고
+    // 있게 된다(CLAUDE.md 7절 - 외부 호출은 트랜잭션 경계 밖에 둔다).
     public LoginResponse login(LoginRequest request) {
+        // 이메일 존재 여부와 무관하게 이메일 자체를 키로 잠금 여부를 먼저 확인한다
+        // (자격 확인보다 앞서 체크해야 무차별 대입 자체가 자격 확인 로직까지 안 감)
+        if (loginAttemptService.isLocked(request.email())) {
+            throw new BusinessException(UserErrorCode.TOO_MANY_LOGIN_ATTEMPTS);
+        }
+
         User user = userQueryRepository.findByEmail(request.email()).orElse(null);
         String hashToCheck = (user != null) ? user.getPassword() : DUMMY_BCRYPT_HASH;
         boolean matches = passwordEncoder.matches(request.password(), hashToCheck);
- 
+
         if (user == null || !matches) {
+            loginAttemptService.recordFailure(request.email());
             throw new BusinessException(UserErrorCode.INVALID_CREDENTIALS);
         }
- 
+
+        loginAttemptService.recordSuccess(request.email());
+
         String accessToken = jwtTokenProvider.createAccessToken(user.getId(), user.getRole().name());
         return LoginResponse.of(accessToken, jwtTokenProvider.getAccessTokenValiditySeconds());
     }
