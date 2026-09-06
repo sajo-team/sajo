@@ -1,4 +1,4 @@
-package com.sajo.user_service.auth.service.query;
+package com.sajo.user_service.auth.service.command;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
