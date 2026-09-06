@@ -37,10 +37,23 @@ where o.status = com.sajo.trading_service.trading.domain.enums.OrderStatus.REQUE
     select o.id
     from Order o
     where o.status = com.sajo.trading_service.trading.domain.enums.OrderStatus.PROCESSING
-      and o.updatedAt < :cutoff
+      and o.updatedAt <  :cutoff
       and o.deletedAt is null
     """)
     List<UUID> findStaleProcessingOrderIds(
             @Param("cutoff") Instant cutoff
     );
+
+    @Query("""
+    select o.id
+    from Order o
+    where o.status = com.sajo.trading_service.trading.domain.enums.OrderStatus.TIMEOUT
+      and o.updatedAt < :cutoff
+      and o.deletedAt is null
+    """)
+    List<UUID> findStaleTimeoutOrderIds(
+            @Param("cutoff") Instant cutoff
+    );
+
+    Optional<Order> findByIdAndDeletedAtIsNull(UUID orderId);
 }

@@ -18,10 +18,12 @@ public class OrderRecoveryCommandService {
     private static final long REQUESTED_STALE_MINUTES = 5L;
     private static final long ACCOUNT_RETRY_STALE_SECONDS = 30L;
     private static final long PROCESSING_STALE_MINUTES = 5L;
+    private static final long TIMEOUT_RECONCILIATION_MINUTES = 1L;
 
     private final OrderQueryRepository orderQueryRepository;
     private final OrderStatusCommandService orderStatusCommandService;
     private final OrderRecoveryExecutor orderRecoveryExecutor;
+    private final KisOrderReconciliationService kisOrderReconciliationService;
 
     public void recoverRequestedOrders() {
 
@@ -61,15 +63,35 @@ public class OrderRecoveryCommandService {
 
         for (UUID orderId : orderIds) {
             try {
-                orderStatusCommandService.timeout(
-                        orderId,
-                        "ORDER_PROCESSING_TIMEOUT",
-                        "주문 처리 결과를 확인할 수 없습니다."
-                );
+                kisOrderReconciliationService.reconcile(orderId);
 
             } catch (RuntimeException e) {
                 log.error(
                         "PROCESSING 주문 TIMEOUT 전환 실패. orderId={}",
+                        orderId,
+                        e
+                );
+            }
+        }
+    }
+
+    public void recoverTimeoutOrders() {
+
+        Instant cutoff =
+                Instant.now().minus(
+                        TIMEOUT_RECONCILIATION_MINUTES,
+                        ChronoUnit.MINUTES
+                );
+
+        List<UUID> orderIds =
+                orderQueryRepository.findStaleTimeoutOrderIds(cutoff);
+
+        for (UUID orderId : orderIds) {
+            try {
+                kisOrderReconciliationService.reconcile(orderId);
+            } catch (RuntimeException e) {
+                log.error(
+                        "TIMEOUT 주문 보정 실패. orderId={}",
                         orderId,
                         e
                 );
