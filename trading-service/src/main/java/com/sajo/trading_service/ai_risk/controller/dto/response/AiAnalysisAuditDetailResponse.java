@@ -40,6 +40,10 @@ public record AiAnalysisAuditDetailResponse(
             String content
     ) {
         private static PromptResponse from(AiAnalysisHistory.PromptSnapshot prompt){
+
+            if(prompt == null){
+                return null;
+            }
             return new PromptResponse(
                     prompt.version(),
                     prompt.content()
@@ -51,6 +55,11 @@ public record AiAnalysisAuditDetailResponse(
             String rawResponse
     ) {
         private static LlmResponse from(AiAnalysisHistory.ResponseSnapshot response) {
+
+            if(response == null){
+                return null;
+            }
+
             return new LlmResponse(response.rawResponse());
         }
     }
@@ -63,6 +72,11 @@ public record AiAnalysisAuditDetailResponse(
         private static ValidationResponse from(
                 AiAnalysisHistory.ValidationSnapshot validation
         ) {
+
+            if(validation == null){
+                return null;
+            }
+
             return new ValidationResponse(
                     validation.structureValid(),
                     validation.contentValid(),
@@ -78,6 +92,11 @@ public record AiAnalysisAuditDetailResponse(
         private static MetadataResponse from(
                 AiAnalysisHistory.MetadataSnapshot metadata
         ) {
+
+            if(metadata == null){
+                return null;
+            }
+
             return new MetadataResponse(
                     metadata.model(),
                     metadata.latencyMs()

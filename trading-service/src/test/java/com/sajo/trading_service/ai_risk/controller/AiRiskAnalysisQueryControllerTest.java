@@ -10,6 +10,7 @@ import com.sajo.trading_service.ai_risk.domain.RiskLevel;
 import com.sajo.trading_service.ai_risk.exception.AiRiskErrorCode;
 import com.sajo.trading_service.ai_risk.service.query.AiRiskAnalysisQueryService;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -30,7 +31,9 @@ import static org.mockito.BDDMockito.willThrow;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
- 
+
+@Tag("unit")
+@Tag("ai-risk")
 @WebMvcTest(AiRiskAnalysisQueryController.class)
 @Import({
         GlobalExceptionHandler.class,

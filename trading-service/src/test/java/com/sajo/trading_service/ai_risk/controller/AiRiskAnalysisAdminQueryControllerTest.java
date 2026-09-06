@@ -4,8 +4,10 @@ import com.sajo.common.config.CommonPageableAutoConfiguration;
 import com.sajo.common.exception.GlobalExceptionHandler;
 import com.sajo.trading_service.ai_risk.controller.dto.response.AiRiskAnalysisFailureHistoryItemResponse;
 import com.sajo.trading_service.ai_risk.domain.AiAnalysisFailureType;
+import com.sajo.trading_service.ai_risk.service.query.AiAnalysisHistoryQueryService;
 import com.sajo.trading_service.ai_risk.service.query.AiRiskAnalysisQueryService;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -25,7 +27,9 @@ import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
- 
+
+@Tag("unit")
+@Tag("ai-risk")
 @WebMvcTest(AiRiskAnalysisAdminQueryController.class)
 @Import({
         GlobalExceptionHandler.class,
@@ -38,6 +42,9 @@ class AiRiskAnalysisAdminQueryControllerTest {
  
     @MockitoBean
     private AiRiskAnalysisQueryService aiRiskAnalysisQueryService;
+
+    @MockitoBean
+    private AiAnalysisHistoryQueryService aiAnalysisHistoryQueryService;
  
     @Test
     @DisplayName("ADMIN 권한이면 실패 이력 조회에 성공한다")

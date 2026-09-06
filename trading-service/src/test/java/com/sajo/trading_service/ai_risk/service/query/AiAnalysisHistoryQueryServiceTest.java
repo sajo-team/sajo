@@ -111,4 +111,37 @@ class AiAnalysisHistoryQueryServiceTest {
         verify(aiAnalysisHistoryQueryRepository).findByAnalysisId(analysisId);
     }
 
+    @Test
+    void 일부_Snapshot이_null인_실패_Audit도_조회할_수_있다() {
+
+        UUID analysisId = UUID.randomUUID();
+
+        AiAnalysisHistory history = AiAnalysisHistory.builder()
+                .analysisId(analysisId)
+                .userId(UUID.randomUUID())
+                .strategyId(UUID.randomUUID())
+                .backtestId(UUID.randomUUID())
+                .requestSnapshot(Map.of())
+                .validation(new AiAnalysisHistory.ValidationSnapshot(
+                        false,
+                        false,
+                        List.of("프롬프트를 찾을 수 없습니다.")
+                ))
+                .build();
+
+        when(aiAnalysisHistoryQueryRepository.findByAnalysisId(analysisId))
+                .thenReturn(Optional.of(history));
+
+        var response =
+                aiAnalysisHistoryQueryService.getAuditDetail(analysisId);
+
+        assertThat(response.prompt()).isNull();
+        assertThat(response.response()).isNull();
+        assertThat(response.metadata()).isNull();
+
+        assertThat(response.validation()).isNotNull();
+        assertThat(response.validation().structureValid()).isFalse();
+        assertThat(response.validation().contentValid()).isFalse();
+    }
+
 }
