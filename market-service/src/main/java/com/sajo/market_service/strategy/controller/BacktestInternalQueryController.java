@@ -14,6 +14,7 @@ import java.util.UUID;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/internal/v1/backtests")
+// TODO: 인증은 Gateway에서 처리하고, 내부 API 인가는 market-service SecurityConfig에서 제한하도록 구현 필요
 public class BacktestInternalQueryController {
 
     private final BacktestQueryService backtestQueryService;
