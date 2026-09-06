@@ -1,5 +1,6 @@
 package com.sajo.trading_service.ai_risk.document;
 
+import com.sajo.trading_service.ai_risk.domain.AiPromptKey;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
