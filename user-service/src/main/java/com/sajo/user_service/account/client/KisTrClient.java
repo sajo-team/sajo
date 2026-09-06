@@ -2,6 +2,7 @@ package com.sajo.user_service.account.client;
 
 import com.sajo.common.exception.BusinessException;
 import com.sajo.user_service.account.client.dto.response.KisBalanceResponse;
+import com.sajo.user_service.account.client.dto.response.KisOrderableAmountResponse;
 import com.sajo.user_service.account.client.dto.response.KisTrErrorResponse;
 import com.sajo.user_service.account.domain.AccountType;
 import com.sajo.user_service.account.exception.AccountErrorCode;
@@ -19,6 +20,9 @@ public class KisTrClient extends AbstractKisClient {
     private static final String INQUIRE_BALANCE = "/uapi/domestic-stock/v1/trading/inquire-balance";
     private static final String BALANCE_TR_ID_REAL = "TTTC8434R";
     private static final String BALANCE_TR_ID_VIRTUAL = "VTTC8434R";
+    private static final String POSSIBLE_ORDER = "/uapi/domestic-stock/v1/trading/inquire-psbl-order";
+    private static final String ORDERABLE_AMOUNT_TR_ID_REAL = "TTTC8908R";
+    private static final String ORDERABLE_AMOUNT_TR_ID_VIRTUAL = "VTTC8908R";
 
     public KisTrClient(RestClient.Builder restClientBuilder, KisApiProperties properties) {
         super(restClientBuilder, properties);
@@ -41,6 +45,7 @@ public class KisTrClient extends AbstractKisClient {
     ) {
         RestClient restClient = selectRestClient(accountType);
         String trId = accountType == AccountType.REAL ? BALANCE_TR_ID_REAL : BALANCE_TR_ID_VIRTUAL;
+
         boolean isFirstCall = (ctxAreaFk100 == null || ctxAreaFk100.isBlank())
                 && (ctxAreaNk100 == null || ctxAreaNk100.isBlank());
         String trCont = isFirstCall ? "" : "N"; // 공백: 초기 조회, N: 다음 데이터 조회
@@ -74,6 +79,47 @@ public class KisTrClient extends AbstractKisClient {
             throw new BusinessException(AccountErrorCode.KIS_BALANCE_INQUIRY_FAILED);
         }
         return result;
+    }
+
+    // kis 매수가능조회 요청 - pdno/ordUnpr을 공란으로 넘기면(ordDvsn은 임의값) 매수수량 없이 매수금액만 조회됨
+    public KisOrderableAmountResponse inquireOrderableAmount(
+            String accessToken, String appKey, String secretKey, String cano, String accountProductCode,
+            AccountType accountType, String pdno, String ordUnpr, String ordDvsn
+    ) {
+        RestClient restClient = selectRestClient(accountType);
+        String trId = accountType == AccountType.REAL ? ORDERABLE_AMOUNT_TR_ID_REAL : ORDERABLE_AMOUNT_TR_ID_VIRTUAL;
+
+        String uri = UriComponentsBuilder.fromPath(POSSIBLE_ORDER)
+                .queryParam("CANO", cano) // 종합계좌번호 - 계좌번호 체계(8-2)의 앞 8자리
+                .queryParam("ACNT_PRDT_CD", accountProductCode) // 계좌상품코드 - 계좌번호 체계(8-2)의 뒤 2자리
+                .queryParam("PDNO", pdno) // 상품번호 - ORD_UNPR과 함께 공란 입력 시 매수수량 없이 매수금액만 조회됨
+                .queryParam("ORD_UNPR", ordUnpr) // 주문단가 - PDNO와 함께 공란 입력 시 매수금액만 조회됨
+                .queryParam("ORD_DVSN", ordDvsn) // 주문구분 - 매수금액만 조회할 경우 임의값(00) 입력
+                .queryParam("CMA_EVLU_AMT_ICLD_YN", "N") // CMA평가금액포함여부
+                .queryParam("OVRS_ICLD_YN", "N") // 해외포함여부
+                .build()
+                .toUriString();
+
+        ResponseEntity<KisOrderableAmountResponse> responseEntity = execute(() -> restClient.get()
+                .uri(uri)
+                .header("authorization", "Bearer " + accessToken)
+                .header("appkey", appKey)
+                .header("appsecret", secretKey)
+                .header("tr_id", trId)
+                .retrieve()
+                .toEntity(KisOrderableAmountResponse.class),
+                KisTrErrorResponse.class, AccountErrorCode.KIS_ORDERABLE_AMOUNT_INQUIRY_FAILED);
+
+        // KIS 조회 API는 HTTP 200이어도 rt_cd가 "0"이 아니면 업무상 실패
+        KisOrderableAmountResponse response = responseEntity.getBody();
+        if (!"0".equals(response.rt_cd())) {
+            log.warn("KIS 매수가능조회 실패. msg_cd={}, msg1={}", response.msg_cd(), response.msg1());
+            if (isRateLimitCode(response.msg_cd())) {
+                throw new BusinessException(AccountErrorCode.KIS_RATE_LIMITED);
+            }
+            throw new BusinessException(AccountErrorCode.KIS_ORDERABLE_AMOUNT_INQUIRY_FAILED);
+        }
+        return response;
     }
 
     private <T> KisContinuationResult<T> inquire(
