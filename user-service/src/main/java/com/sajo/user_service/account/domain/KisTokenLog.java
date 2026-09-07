@@ -34,26 +34,36 @@ public class KisTokenLog extends BaseEntity {
     @Column(nullable = false)
     private EventType eventType;
 
+    @Enumerated(value = EnumType.STRING)
+    @Column(nullable = false)
+    private KisTokenType tokenType;
+
     private String errorCode; // KIS가 발급한 에러 코드
 
     private String errorMessage; // KIS가 발급한 에러 메시지
 
-    private KisTokenLog(UUID accountId, UUID userId, EventType eventType, String errorCode, String errorMessage) {
+    private KisTokenLog(
+            UUID accountId, UUID userId, EventType eventType, KisTokenType tokenType,
+            String errorCode, String errorMessage
+    ) {
         this.accountId = accountId;
         this.userId = userId;
         this.eventType = eventType;
+        this.tokenType = tokenType;
         this.errorCode = errorCode;
         this.errorMessage = errorMessage;
     }
 
     public static KisTokenLog createTokenLog(
-            UUID accountId, UUID userId, EventType eventType, String errorCode, String errorMessage
+            UUID accountId, UUID userId, EventType eventType, KisTokenType tokenType,
+            String errorCode, String errorMessage
     ) {
 
         return new KisTokenLog(
                 accountId,
                 userId,
                 eventType,
+                tokenType,
                 errorCode,
                 errorMessage
         );

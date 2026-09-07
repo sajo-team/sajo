@@ -2,6 +2,7 @@ package com.sajo.user_service.account.service.query;
 
 import com.sajo.user_service.account.client.KisOAuthClient;
 import com.sajo.user_service.account.domain.AccountType;
+import com.sajo.user_service.account.domain.KisTokenType;
 import com.sajo.user_service.account.exception.KisBusinessException;
 import com.sajo.user_service.account.service.command.KisTokenLogCommandService;
 import lombok.RequiredArgsConstructor;
@@ -31,10 +32,11 @@ public class KisTokenCacheQueryService {
     public String getAccessToken(UUID userId, UUID accountId, String appKey, String secretKey, AccountType accountType) {
         try {
             String accessToken = kisOAuthClient.getAccessToken(appKey, secretKey, accountType).access_token();
-            kisTokenLogCommandService.recordSuccess(accountId, userId);
+            kisTokenLogCommandService.recordSuccess(accountId, userId, KisTokenType.ACCESS_TOKEN);
             return accessToken;
         } catch (KisBusinessException e) {
-            kisTokenLogCommandService.recordFail(accountId, userId, e.getKisErrorCode(), e.getKisMessage());
+            kisTokenLogCommandService.recordFail(
+                    accountId, userId, KisTokenType.ACCESS_TOKEN, e.getKisErrorCode(), e.getKisMessage());
             throw e;
         }
     }
@@ -51,7 +53,15 @@ public class KisTokenCacheQueryService {
 
     // ToDo : 캐시 만료 시 kis 중복 요청 방지 위해 분산락 적용 (접근토큰과 동일한 이슈)
     @Cacheable(cacheNames = "kis-approval-key", key = "#userId", sync = true)
-    public String getApprovalKey(UUID userId, String appKey, String secretKey, AccountType accountType) {
-        return kisOAuthClient.getApprovalKey(appKey, secretKey, accountType).approval_key();
+    public String getApprovalKey(UUID userId, UUID accountId, String appKey, String secretKey, AccountType accountType) {
+        try {
+            String approvalKey = kisOAuthClient.getApprovalKey(appKey, secretKey, accountType).approval_key();
+            kisTokenLogCommandService.recordSuccess(accountId, userId, KisTokenType.APPROVAL_KEY);
+            return approvalKey;
+        } catch (KisBusinessException e) {
+            kisTokenLogCommandService.recordFail(
+                    accountId, userId, KisTokenType.APPROVAL_KEY, e.getKisErrorCode(), e.getKisMessage());
+            throw e;
+        }
     }
 }

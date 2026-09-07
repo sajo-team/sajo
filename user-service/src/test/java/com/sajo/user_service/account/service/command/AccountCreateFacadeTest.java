@@ -5,6 +5,7 @@ import com.sajo.user_service.account.client.KisOAuthClient;
 import com.sajo.user_service.account.client.dto.response.KisAccessTokenResponse;
 import com.sajo.user_service.account.domain.Account;
 import com.sajo.user_service.account.domain.AccountType;
+import com.sajo.user_service.account.domain.KisTokenType;
 import com.sajo.user_service.account.exception.AccountErrorCode;
 import com.sajo.user_service.account.service.query.AccountQueryService;
 import org.junit.jupiter.api.BeforeEach;
@@ -82,7 +83,7 @@ class AccountCreateFacadeTest {
                 .createAccount(userId, "app-key", "secret-key", "12345678-01", AccountType.REAL);
         inOrder.verify(kisTokenCacheCommandService)
                 .primeKisAccessTokenCache(userId, "issued-token");
-        verify(kisTokenLogCommandService).recordSuccess(account.getId(), userId);
+        verify(kisTokenLogCommandService).recordSuccess(account.getId(), userId, KisTokenType.ACCESS_TOKEN);
     }
 
     @Test

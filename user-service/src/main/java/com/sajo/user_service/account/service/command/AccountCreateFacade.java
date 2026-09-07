@@ -4,6 +4,7 @@ import com.sajo.user_service.account.client.KisOAuthClient;
 import com.sajo.user_service.account.client.dto.response.KisAccessTokenResponse;
 import com.sajo.user_service.account.domain.Account;
 import com.sajo.user_service.account.domain.AccountType;
+import com.sajo.user_service.account.domain.KisTokenType;
 import com.sajo.user_service.account.service.query.AccountQueryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -39,7 +40,7 @@ public class AccountCreateFacade {
         //    캐시 저장 실패해도 예외를 던지지 않고 성공 처리한다.
         try {
             kisTokenCacheCommandService.primeKisAccessTokenCache(userId, kisResponse.access_token());
-            kisTokenLogCommandService.recordSuccess(account.getId(), userId);
+            kisTokenLogCommandService.recordSuccess(account.getId(), userId, KisTokenType.ACCESS_TOKEN);
         } catch (Exception e) {
             log.warn("계좌 생성 시 KIS 토큰 캐시 프라이밍 실패. userId={}", userId, e);
         }

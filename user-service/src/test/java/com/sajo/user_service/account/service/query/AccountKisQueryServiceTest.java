@@ -396,7 +396,7 @@ class AccountKisQueryServiceTest {
                 userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
 
         given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
-        given(kisTokenCacheQueryService.getApprovalKey(userId, "app-key", "secret-key", AccountType.REAL))
+        given(kisTokenCacheQueryService.getApprovalKey(userId, null, "app-key", "secret-key", AccountType.REAL))
                 .willReturn("issued-approval-key");
 
         // when
@@ -407,7 +407,7 @@ class AccountKisQueryServiceTest {
 
         InOrder inOrder = inOrder(accountQueryService, kisTokenCacheQueryService);
         inOrder.verify(accountQueryService).getAccountByUserId(userId);
-        inOrder.verify(kisTokenCacheQueryService).getApprovalKey(userId, "app-key", "secret-key", AccountType.REAL);
+        inOrder.verify(kisTokenCacheQueryService).getApprovalKey(userId, null, "app-key", "secret-key", AccountType.REAL);
     }
 
     @Test

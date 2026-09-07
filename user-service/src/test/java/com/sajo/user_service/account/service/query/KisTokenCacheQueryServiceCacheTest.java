@@ -62,8 +62,8 @@ class KisTokenCacheQueryServiceCacheTest {
                 .willReturn(new KisApprovalKeyResponse("issued-approval-key"));
 
         // when
-        String first = kisTokenCacheQueryService.getApprovalKey(userId, "app-key", "secret-key", AccountType.REAL);
-        String second = kisTokenCacheQueryService.getApprovalKey(userId, "app-key", "secret-key", AccountType.REAL);
+        String first = kisTokenCacheQueryService.getApprovalKey(userId, null, "app-key", "secret-key", AccountType.REAL);
+        String second = kisTokenCacheQueryService.getApprovalKey(userId, null, "app-key", "secret-key", AccountType.REAL);
 
         // then
         assertThat(second).isEqualTo(first);
@@ -82,7 +82,7 @@ class KisTokenCacheQueryServiceCacheTest {
 
         // when
         String accessToken = kisTokenCacheQueryService.getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL);
-        String approvalKey = kisTokenCacheQueryService.getApprovalKey(userId, "app-key", "secret-key", AccountType.REAL);
+        String approvalKey = kisTokenCacheQueryService.getApprovalKey(userId, null, "app-key", "secret-key", AccountType.REAL);
 
         // then
         assertThat(accessToken).isEqualTo("issued-token");

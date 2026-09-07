@@ -89,7 +89,7 @@ class KisTokenCacheQueryServiceTest {
                 .willReturn(new KisApprovalKeyResponse("issued-approval-key"));
 
         // when
-        String result = kisTokenCacheQueryService.getApprovalKey(userId, "app-key", "secret-key", AccountType.REAL);
+        String result = kisTokenCacheQueryService.getApprovalKey(userId, null, "app-key", "secret-key", AccountType.REAL);
 
         // then
         assertThat(result).isEqualTo("issued-approval-key");
@@ -105,7 +105,7 @@ class KisTokenCacheQueryServiceTest {
 
         // when & then
         assertThatThrownBy(() ->
-                kisTokenCacheQueryService.getApprovalKey(userId, "app-key", "secret-key", AccountType.REAL))
+                kisTokenCacheQueryService.getApprovalKey(userId, null, "app-key", "secret-key", AccountType.REAL))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(exception -> {
                     BusinessException businessException = (BusinessException) exception;

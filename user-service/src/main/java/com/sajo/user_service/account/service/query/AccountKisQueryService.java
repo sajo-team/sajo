@@ -126,7 +126,7 @@ public class AccountKisQueryService {
     public ApprovalKeyResponse getKisApprovalKey(UUID userId) {
         Account account = accountQueryService.getAccountByUserId(userId);
         String approvalKey = kisTokenCacheQueryService.getApprovalKey(
-                userId, account.getAppKey(), account.getSecretKey(), account.getAccountType());
+                userId, account.getId(), account.getAppKey(), account.getSecretKey(), account.getAccountType());
 
         return new ApprovalKeyResponse(approvalKey);
     }
