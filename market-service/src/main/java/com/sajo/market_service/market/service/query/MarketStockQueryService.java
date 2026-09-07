@@ -14,6 +14,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -43,9 +44,13 @@ public class MarketStockQueryService {
     }
 
     public MarketStockResponse getStock(String stockCode) {
+        return getStockTarget(stockCode).response();
+    }
+
+    public MarketStockQueryTarget getStockTarget(String stockCode) {
         MarketStock stock = marketStockQueryRepository.findByStockCode(MarketStock.normalizeStockCode(stockCode))
                 .orElseThrow(() -> new BusinessException(MarketErrorCode.MARKET_STOCK_NOT_FOUND)); //6자리 숫자라 형식은 정상, 하지만 DB에는 없음 > 404
-        return MarketStockResponse.from(stock);
+        return new MarketStockQueryTarget(stock.getId(), MarketStockResponse.from(stock));
     }
 
     private Pageable createPageable(int page, int size, String sort) {
