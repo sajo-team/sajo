@@ -2,6 +2,8 @@ package com.sajo.trading_service.ai_risk.service.query;
 
 import com.sajo.common.exception.BusinessException;
 import com.sajo.trading_service.ai_risk.document.AiAnalysisHistory;
+import com.sajo.trading_service.ai_risk.domain.AiAnalysisFailureType;
+import com.sajo.trading_service.ai_risk.domain.AiAnalysisStatus;
 import com.sajo.trading_service.ai_risk.exception.AiRiskErrorCode;
 import com.sajo.trading_service.ai_risk.repository.query.AiAnalysisHistoryQueryRepository;
 import org.junit.jupiter.api.Tag;
@@ -64,12 +66,17 @@ class AiAnalysisHistoryQueryServiceTest {
                         "test-model",
                         1000L
                 ))
+                .result(new AiAnalysisHistory.ResultSnapshot(
+                        AiAnalysisStatus.COMPLETED,
+                        null
+                ))
                 .build();
 
         when(aiAnalysisHistoryQueryRepository.findByAnalysisId(analysisId))
                 .thenReturn(Optional.of(history));
 
-        var response = aiAnalysisHistoryQueryService.getAuditDetail(analysisId);
+        var response =
+                aiAnalysisHistoryQueryService.getAuditDetail(analysisId);
 
         assertThat(response.analysisId()).isEqualTo(analysisId);
         assertThat(response.userId()).isEqualTo(userId);
@@ -90,7 +97,13 @@ class AiAnalysisHistoryQueryServiceTest {
         assertThat(response.metadata().model()).isEqualTo("test-model");
         assertThat(response.metadata().latencyMs()).isEqualTo(1000L);
 
-        verify(aiAnalysisHistoryQueryRepository).findByAnalysisId(analysisId);
+        assertThat(response.result()).isNotNull();
+        assertThat(response.result().status())
+                .isEqualTo(AiAnalysisStatus.COMPLETED);
+        assertThat(response.result().failureType()).isNull();
+
+        verify(aiAnalysisHistoryQueryRepository)
+                .findByAnalysisId(analysisId);
     }
 
     @Test
@@ -98,17 +111,22 @@ class AiAnalysisHistoryQueryServiceTest {
 
         UUID analysisId = UUID.randomUUID();
 
-        when(aiAnalysisHistoryQueryRepository.findByAnalysisId(analysisId)).thenReturn(Optional.empty());
+        when(aiAnalysisHistoryQueryRepository.findByAnalysisId(analysisId))
+                .thenReturn(Optional.empty());
 
         assertThatThrownBy(
                 () -> aiAnalysisHistoryQueryService.getAuditDetail(analysisId)
         )
                 .isInstanceOfSatisfying(
                         BusinessException.class,
-                        exception -> assertThat(exception.getErrorCode()).isEqualTo(AiRiskErrorCode.AUDIT_HISTORY_NOT_FOUND)
+                        exception -> assertThat(exception.getErrorCode())
+                                .isEqualTo(
+                                        AiRiskErrorCode.AUDIT_HISTORY_NOT_FOUND
+                                )
                 );
 
-        verify(aiAnalysisHistoryQueryRepository).findByAnalysisId(analysisId);
+        verify(aiAnalysisHistoryQueryRepository)
+                .findByAnalysisId(analysisId);
     }
 
     @Test
@@ -127,6 +145,10 @@ class AiAnalysisHistoryQueryServiceTest {
                         false,
                         List.of("프롬프트를 찾을 수 없습니다.")
                 ))
+                .result(new AiAnalysisHistory.ResultSnapshot(
+                        AiAnalysisStatus.FAILED,
+                        AiAnalysisFailureType.PROMPT_NOT_FOUND
+                ))
                 .build();
 
         when(aiAnalysisHistoryQueryRepository.findByAnalysisId(analysisId))
@@ -142,6 +164,14 @@ class AiAnalysisHistoryQueryServiceTest {
         assertThat(response.validation()).isNotNull();
         assertThat(response.validation().structureValid()).isFalse();
         assertThat(response.validation().contentValid()).isFalse();
-    }
 
+        assertThat(response.result()).isNotNull();
+        assertThat(response.result().status())
+                .isEqualTo(AiAnalysisStatus.FAILED);
+        assertThat(response.result().failureType())
+                .isEqualTo(AiAnalysisFailureType.PROMPT_NOT_FOUND);
+
+        verify(aiAnalysisHistoryQueryRepository)
+                .findByAnalysisId(analysisId);
+    }
 }
