@@ -19,7 +19,9 @@ public enum UserErrorCode implements ErrorCode {
     // 존재하지 않는 토큰과 재사용(탈취) 감지된 토큰을 구분하지 않는다 - 어느 경우든
     // 클라이언트가 할 일은 동일하게 재로그인뿐이고, 구분해서 알려주면 공격자에게
     // "탐지됐다"는 정보를 줄 수 있다
-    INVALID_REFRESH_TOKEN(HttpStatus.UNAUTHORIZED, "USER_0004", "리프레시 토큰이 유효하지 않습니다. 다시 로그인해주세요");
+    INVALID_REFRESH_TOKEN(HttpStatus.UNAUTHORIZED, "USER_0004", "리프레시 토큰이 유효하지 않습니다. 다시 로그인해주세요"),
+
+    USER_NOT_FOUND(HttpStatus.NOT_FOUND, "USER_0005", "존재하지 않는 사용자입니다");
 
     private final HttpStatus status;
     private final String errorCode;
