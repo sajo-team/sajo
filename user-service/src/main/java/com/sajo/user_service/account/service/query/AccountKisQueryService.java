@@ -40,6 +40,7 @@ public class AccountKisQueryService {
 
         String token = kisTokenCacheQueryService.getAccessToken(
                 userId,
+                account.getId(),
                 account.getAppKey(),
                 account.getSecretKey(),
                 account.getAccountType()
@@ -80,6 +81,7 @@ public class AccountKisQueryService {
         // 토큰 조회
         String token = kisTokenCacheQueryService.getAccessToken(
                 userId,
+                account.getId(),
                 account.getAppKey(),
                 account.getSecretKey(),
                 account.getAccountType()
@@ -115,7 +117,7 @@ public class AccountKisQueryService {
     public AccessTokenResponse getKisAccessToken(UUID userId) {
         Account account = accountQueryService.getAccountByUserId(userId);
         String accessToken = kisTokenCacheQueryService.getAccessToken(
-                userId, account.getAppKey(), account.getSecretKey(), account.getAccountType());
+                userId, account.getId(), account.getAppKey(), account.getSecretKey(), account.getAccountType());
 
         return new AccessTokenResponse(accessToken, account.getAppKey(), account.getSecretKey());
     }
@@ -135,6 +137,7 @@ public class AccountKisQueryService {
 
         String token = kisTokenCacheQueryService.getAccessToken(
                 userId,
+                account.getId(),
                 account.getAppKey(),
                 account.getSecretKey(),
                 account.getAccountType()
@@ -172,6 +175,7 @@ public class AccountKisQueryService {
         Account account = accountQueryService.getAccountByUserId(userId);
         String token = kisTokenCacheQueryService.getAccessToken(
                 userId,
+                account.getId(),
                 account.getAppKey(),
                 account.getSecretKey(),
                 account.getAccountType()

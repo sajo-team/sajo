@@ -8,6 +8,7 @@ import com.sajo.user_service.account.controller.dto.response.AccessTokenResponse
 import com.sajo.user_service.account.controller.dto.response.ApprovalKeyResponse;
 import com.sajo.user_service.account.domain.Account;
 import com.sajo.user_service.account.domain.AccountType;
+import com.sajo.user_service.account.service.command.KisTokenLogCommandService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,6 +42,9 @@ class AccountKisQueryServiceCacheTest {
 
     @MockitoBean
     private KisTrClient kisTrClient;
+
+    @MockitoBean
+    private KisTokenLogCommandService kisTokenLogCommandService;
 
     @Test
     @DisplayName("같은 userId로 두 번 호출하면 KIS 호출은 캐시로 한 번만 일어나지만, "

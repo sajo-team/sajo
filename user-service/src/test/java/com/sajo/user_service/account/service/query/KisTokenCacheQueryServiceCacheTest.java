@@ -4,6 +4,7 @@ import com.sajo.user_service.account.client.KisOAuthClient;
 import com.sajo.user_service.account.client.dto.response.KisAccessTokenResponse;
 import com.sajo.user_service.account.client.dto.response.KisApprovalKeyResponse;
 import com.sajo.user_service.account.domain.AccountType;
+import com.sajo.user_service.account.service.command.KisTokenLogCommandService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,6 +33,9 @@ class KisTokenCacheQueryServiceCacheTest {
     @MockitoBean
     private KisOAuthClient kisOAuthClient;
 
+    @MockitoBean
+    private KisTokenLogCommandService kisTokenLogCommandService;
+
     @Test
     @DisplayName("같은 userId로 접근토큰을 두 번 조회하면 KIS는 한 번만 호출되고 캐시된 값을 그대로 반환한다")
     void getAccessTokenIsCachedPerUserId() {
@@ -41,8 +45,8 @@ class KisTokenCacheQueryServiceCacheTest {
                 .willReturn(new KisAccessTokenResponse("issued-token", "Bearer", 86400f, "2026-01-01 00:00:00"));
 
         // when
-        String first = kisTokenCacheQueryService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL);
-        String second = kisTokenCacheQueryService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL);
+        String first = kisTokenCacheQueryService.getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL);
+        String second = kisTokenCacheQueryService.getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL);
 
         // then
         assertThat(second).isEqualTo(first);
@@ -77,7 +81,7 @@ class KisTokenCacheQueryServiceCacheTest {
                 .willReturn(new KisApprovalKeyResponse("issued-approval-key"));
 
         // when
-        String accessToken = kisTokenCacheQueryService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL);
+        String accessToken = kisTokenCacheQueryService.getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL);
         String approvalKey = kisTokenCacheQueryService.getApprovalKey(userId, "app-key", "secret-key", AccountType.REAL);
 
         // then
