@@ -326,7 +326,14 @@ class KisOrderReconciliationServiceTest {
         kisOrderReconciliationService.reconcile(orderId);
 
         // then
-        verifyNoInteractions(orderStatusCommandService);
+        verify(orderStatusCommandService)
+                .recordReconciliationFailure(orderId);
+
+        verify(orderStatusCommandService, never())
+                .accept(any(), any());
+
+        verify(orderStatusCommandService, never())
+                .fail(any(), any(), any());
     }
 
     @Test
@@ -395,7 +402,14 @@ class KisOrderReconciliationServiceTest {
         kisOrderReconciliationService.reconcile(orderId);
 
         // then
-        verifyNoInteractions(orderStatusCommandService);
+        verify(orderStatusCommandService)
+                .recordReconciliationFailure(orderId);
+
+        verify(orderStatusCommandService, never())
+                .accept(any(), any());
+
+        verify(orderStatusCommandService, never())
+                .fail(any(), any(), any());
     }
 
     @Test
@@ -437,8 +451,16 @@ class KisOrderReconciliationServiceTest {
         kisOrderReconciliationService.reconcile(orderId);
 
         // then
-        verifyNoInteractions(orderStatusCommandService);
+        verify(orderStatusCommandService)
+                .recordReconciliationFailure(orderId);
+
         verifyNoInteractions(kisOrderMatcher);
+
+        verify(orderStatusCommandService, never())
+                .accept(any(), any());
+
+        verify(orderStatusCommandService, never())
+                .fail(any(), any(), any());
     }
 
     @Test
@@ -564,7 +586,51 @@ class KisOrderReconciliationServiceTest {
 
         // then
         verifyNoInteractions(kisOrderMatcher);
-        verifyNoInteractions(orderStatusCommandService);
+
+        verify(orderStatusCommandService)
+                .recordReconciliationFailure(orderId);
+
+        verify(orderStatusCommandService, never())
+                .accept(any(), any());
+
+        verify(orderStatusCommandService, never())
+                .fail(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("KIS 조회 결과가 취소 주문이면 ACCEPTED로 보정하지 않는다")
+    void reconcileMatchedOrder_canceled_keepStatus() {
+        // given
+        UUID orderId = UUID.randomUUID();
+
+        KisOrderInquiryItem item =
+                new KisOrderInquiryItem(
+                        "20260906",
+                        "00000",
+                        "0001234567",
+                        "02",
+                        "005930",
+                        "10",
+                        "69900",
+                        "100000",
+                        "0",
+                        "0",
+                        "0",
+                        "Y"
+                );
+
+        // when
+        kisOrderReconciliationService.reconcileMatchedOrder(
+                orderId,
+                item
+        );
+
+        // then
+        verify(orderStatusCommandService, never())
+                .accept(any(), any());
+
+        verify(orderStatusCommandService, never())
+                .fail(any(), any(), any());
     }
 
     private Order createOrder() {

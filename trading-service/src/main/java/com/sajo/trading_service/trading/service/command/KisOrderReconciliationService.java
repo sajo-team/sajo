@@ -128,20 +128,24 @@ public class KisOrderReconciliationService {
                     );
         } catch (RuntimeException e) {
             log.warn(
-                    "KIS 주문 조회 중 오류가 발생하여 기존 상태를 유지합니다. orderId={}",
+                    "KIS 주문 조회 중 오류가 발생했습니다. orderId={}",
                     orderId,
                     e
             );
+
+            orderStatusCommandService.recordReconciliationFailure(orderId);
             return;
         }
 
-        if(!"0".equals(response.rtCd())){
+        if (!"0".equals(response.rtCd())) {
             log.warn(
-                    "KIS 주문 조회 실패로 상태를 유지합니다. orderId={}, msgCd={}, message={}",
+                    "KIS 주문 조회 실패 응답입니다. orderId={}, msgCd={}, message={}",
                     orderId,
                     response.msgCd(),
                     response.message()
             );
+
+            orderStatusCommandService.recordReconciliationFailure(orderId);
             return;
         }
 
@@ -158,17 +162,23 @@ public class KisOrderReconciliationService {
                         matchResult.item()
                 );
 
-            case NOT_FOUND ->
-                    log.warn(
-                            "KIS 주문 조회 결과에서 일치하는 주문을 찾지 못했습니다. orderId={}",
-                            orderId
-                    );
+            case NOT_FOUND -> {
+                log.warn(
+                        "KIS 주문 조회 결과에서 일치하는 주문을 찾지 못했습니다. orderId={}",
+                        orderId
+                );
 
-            case AMBIGUOUS ->
-                    log.warn(
-                            "KIS 주문 조회 결과가 여러 건 매칭되어 상태를 유지합니다. orderId={}",
-                            orderId
-                    );
+                orderStatusCommandService.recordReconciliationFailure(orderId);
+            }
+
+            case AMBIGUOUS -> {
+                log.warn(
+                        "KIS 주문 조회 결과가 여러 건 매칭되어 상태를 확정하지 못했습니다. orderId={}",
+                        orderId
+                );
+
+                orderStatusCommandService.recordReconciliationFailure(orderId);
+            }
         }
 
     }
@@ -208,6 +218,23 @@ public class KisOrderReconciliationService {
                     "KIS_ORDER_REJECTED",
                     "KIS에서 주문이 거절되었습니다."
             );
+            return;
+        }
+
+        /*
+         * KIS에서 취소된 주문으로 확인된 경우
+         * 주문번호가 존재한다는 이유만으로 ACCEPTED 처리하지 않는다.
+         *
+         * 체결이 일부 발생한 뒤 잔여 주문이 취소되는 경우도 있을 수 있으므로
+         * 이번 이슈에서는 임의로 FAILED 처리하지 않고 상태 보정을 보류한다.
+         */
+        if ("Y".equalsIgnoreCase(item.canceled())) {
+            log.warn(
+                    "KIS에서 취소된 주문으로 확인되어 상태 보정을 보류합니다. orderId={}, orderNo={}",
+                    orderId,
+                    item.orderNo()
+            );
+
             return;
         }
 

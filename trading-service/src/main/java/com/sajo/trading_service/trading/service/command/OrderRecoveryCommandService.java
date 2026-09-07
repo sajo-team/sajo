@@ -67,7 +67,7 @@ public class OrderRecoveryCommandService {
 
             } catch (RuntimeException e) {
                 log.error(
-                        "PROCESSING 주문 TIMEOUT 전환 실패. orderId={}",
+                        "PROCESSING 주문 상태 보정 실패. orderId={}",
                         orderId,
                         e
                 );
