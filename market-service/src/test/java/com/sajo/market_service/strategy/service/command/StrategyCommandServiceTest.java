@@ -406,7 +406,8 @@ class StrategyCommandServiceTest {
         given(strategyActivationCommandService.changeActivation(
                 userId,
                 strategyId,
-                true
+                true,
+                StrategyActivationSnapshot.from(strategy)
         )).willReturn(expectedResponse);
 
         given(marketInternalQueryService.getQuote(userId, "005930"))
@@ -427,7 +428,7 @@ class StrategyCommandServiceTest {
         assertThat(response).isEqualTo(expectedResponse);
 
         verify(strategyActivationCommandService)
-                .changeActivation(userId, strategyId, true);
+                .changeActivation(userId, strategyId, true, StrategyActivationSnapshot.from(strategy));
     }
 
     @Test
@@ -459,7 +460,12 @@ class StrategyCommandServiceTest {
 
         StrategyActivationResponse expectedResponse =
                 new StrategyActivationResponse(strategyId, StrategyStatus.INACTIVE, null);
-        given(strategyActivationCommandService.changeActivation(userId, strategyId, false))
+        given(strategyActivationCommandService.changeActivation(
+                userId,
+                strategyId,
+                false,
+                StrategyActivationSnapshot.from(strategy)
+        ))
                 .willReturn(expectedResponse);
 
         // when
@@ -468,7 +474,7 @@ class StrategyCommandServiceTest {
         // then
         assertThat(response).isEqualTo(expectedResponse);
         verify(strategyActivationCommandService)
-                .changeActivation(userId, strategyId, false);
+                .changeActivation(userId, strategyId, false, StrategyActivationSnapshot.from(strategy));
     }
 
     @Test

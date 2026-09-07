@@ -41,7 +41,12 @@ class StrategyActivationCommandServiceTest {
 
         // when
         StrategyActivationResponse response =
-                service.changeActivation(userId, strategyId, true);
+                service.changeActivation(
+                        userId,
+                        strategyId,
+                        true,
+                        StrategyActivationSnapshot.from(strategy)
+                );
 
         // then
         assertThat(response.status()).isEqualTo(StrategyStatus.ACTIVE);
@@ -66,7 +71,12 @@ class StrategyActivationCommandServiceTest {
 
         // when
         StrategyActivationResponse response =
-                service.changeActivation(userId, strategyId, false);
+                service.changeActivation(
+                        userId,
+                        strategyId,
+                        false,
+                        StrategyActivationSnapshot.from(strategy)
+                );
 
         // then
         assertThat(response.status()).isEqualTo(StrategyStatus.INACTIVE);
@@ -88,12 +98,70 @@ class StrategyActivationCommandServiceTest {
                 .willReturn(Optional.empty());
 
         // when & then
-        assertThatThrownBy(() -> service.changeActivation(userId, strategyId, true))
+        assertThatThrownBy(() -> service.changeActivation(
+                userId,
+                strategyId,
+                true,
+                new StrategyActivationSnapshot(null, null)
+        ))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(exception -> {
                     BusinessException businessException = (BusinessException) exception;
                     assertThat(businessException.getErrorCode())
                             .isEqualTo(StrategyErrorCode.STRATEGY_NOT_FOUND);
+                });
+    }
+
+    @Test
+    @DisplayName("검증 이후 PER/PBR 조건이 변경되면 전략을 활성화할 수 없다")
+    void changeActivationFailsWhenConditionsChangedAfterValidation() {
+        // given
+        UUID userId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+        Strategy strategy = Strategy.create(
+                userId,
+                UUID.randomUUID(),
+                "005930",
+                "테스트 전략",
+                70_000L,
+                80_000L,
+                new BigDecimal("5.0000"),
+                null,
+                3_000_000L,
+                new BigDecimal("10.0000"),
+                new BigDecimal("1.5000"),
+                null
+        );
+        StrategyActivationSnapshot snapshot = StrategyActivationSnapshot.from(strategy);
+        strategy.update(
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                new BigDecimal("20.0000"),
+                null,
+                null
+        );
+        StrategyActivationCommandService service =
+                new StrategyActivationCommandService(strategyCommandRepository);
+
+        given(strategyCommandRepository.findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId))
+                .willReturn(Optional.of(strategy));
+
+        // when & then
+        assertThatThrownBy(() -> service.changeActivation(
+                userId,
+                strategyId,
+                true,
+                snapshot
+        ))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(StrategyErrorCode.INVALID_STRATEGY);
                 });
     }
 
