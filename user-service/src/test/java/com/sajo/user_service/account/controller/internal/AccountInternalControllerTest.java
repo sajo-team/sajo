@@ -6,6 +6,7 @@ import com.sajo.user_service.account.controller.dto.response.AccessTokenResponse
 import com.sajo.user_service.account.controller.dto.response.AccountOrderInfoResponse;
 import com.sajo.user_service.account.controller.dto.response.ApprovalKeyResponse;
 import com.sajo.user_service.account.controller.dto.response.OrderableAmountResponse;
+import com.sajo.user_service.account.controller.dto.response.SellableQuantityResponse;
 import com.sajo.user_service.account.domain.AccountType;
 import com.sajo.user_service.account.exception.AccountErrorCode;
 import com.sajo.user_service.account.service.query.AccountKisQueryService;
@@ -181,5 +182,33 @@ class AccountInternalControllerTest {
         mockMvc.perform(get("/internal/v1/accounts/{userId}/orderable-amount", userId))
                 .andExpect(status().isBadGateway())
                 .andExpect(jsonPath("$.errorCode").value("ACCOUNT_0011"));
+    }
+
+    @Test
+    @DisplayName("매도 가능 수량 조회에 성공하면 200과 sellableQuantity를 반환한다")
+    void getSellableQuantity() throws Exception {
+        // given
+        UUID userId = UUID.randomUUID();
+        given(accountKisQueryService.getSellableQuantity(userId, "005930"))
+                .willReturn(new SellableQuantityResponse(10));
+
+        // when & then
+        mockMvc.perform(get("/internal/v1/accounts/{userId}/holdings/{stockCode}", userId, "005930"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.sellableQuantity").value(10));
+    }
+
+    @Test
+    @DisplayName("계좌가 없으면 매도 가능 수량 조회도 404를 반환한다")
+    void getSellableQuantityAccountNotFound() throws Exception {
+        // given
+        UUID userId = UUID.randomUUID();
+        given(accountKisQueryService.getSellableQuantity(userId, "005930"))
+                .willThrow(new BusinessException(AccountErrorCode.ACCOUNT_NOT_FOUND));
+
+        // when & then
+        mockMvc.perform(get("/internal/v1/accounts/{userId}/holdings/{stockCode}", userId, "005930"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.errorCode").value("ACCOUNT_0006"));
     }
 }

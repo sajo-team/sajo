@@ -1,6 +1,8 @@
 package com.sajo.trading_service.ai_risk.controller.dto.response;
 
 import com.sajo.trading_service.ai_risk.document.AiAnalysisHistory;
+import com.sajo.trading_service.ai_risk.domain.AiAnalysisFailureType;
+import com.sajo.trading_service.ai_risk.domain.AiAnalysisStatus;
 
 import java.time.Instant;
 import java.util.List;
@@ -17,6 +19,7 @@ public record AiAnalysisAuditDetailResponse(
         LlmResponse response,
         ValidationResponse validation,
         MetadataResponse metadata,
+        Result result,
         Instant createdAt
 ) {
 
@@ -31,6 +34,7 @@ public record AiAnalysisAuditDetailResponse(
                 LlmResponse.from(history.getResponse()),
                 ValidationResponse.from(history.getValidation()),
                 MetadataResponse.from(history.getMetadata()),
+                Result.from(history.getResult()),
                 history.getCreatedAt()
         );
     }
@@ -100,6 +104,24 @@ public record AiAnalysisAuditDetailResponse(
             return new MetadataResponse(
                     metadata.model(),
                     metadata.latencyMs()
+            );
+        }
+    }
+
+    public record Result(
+            AiAnalysisStatus status,
+            AiAnalysisFailureType failureType
+    ){
+        private static Result from(
+                AiAnalysisHistory.ResultSnapshot result
+        ){
+            if(result == null){
+                return null;
+            }
+
+            return new Result(
+                    result.status(),
+                    result.failureType()
             );
         }
     }

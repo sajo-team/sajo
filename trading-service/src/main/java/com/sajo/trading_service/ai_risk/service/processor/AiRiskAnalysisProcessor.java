@@ -2,6 +2,7 @@ package com.sajo.trading_service.ai_risk.service.processor;
 
 import com.sajo.trading_service.ai_risk.document.AiAnalysisHistory;
 import com.sajo.trading_service.ai_risk.domain.AiAnalysisFailureType;
+import com.sajo.trading_service.ai_risk.domain.AiAnalysisStatus;
 import com.sajo.trading_service.ai_risk.domain.AiValidationType;
 import com.sajo.trading_service.ai_risk.event.AiRiskAnalysisRequestedEvent;
 import com.sajo.trading_service.ai_risk.exception.AiAnalysisException;
@@ -59,6 +60,10 @@ public class AiRiskAnalysisProcessor {
                         output.model(),
                         output.latencyMs()
                 ))
+                .result(new AiAnalysisHistory.ResultSnapshot(
+                        AiAnalysisStatus.COMPLETED,
+                        null
+                ))
                 .build();
 
         saveHistorySafely(history);
@@ -95,11 +100,15 @@ public class AiRiskAnalysisProcessor {
                 .validation(new AiAnalysisHistory.ValidationSnapshot(
                         structureValid,
                         contentValid,
-                        List.of(exception.getMessage())
+                        errorMessages(exception)
                 ))
                 .metadata(new AiAnalysisHistory.MetadataSnapshot(
                         output.model(),
                         output.latencyMs()
+                ))
+                .result(new AiAnalysisHistory.ResultSnapshot(
+                        AiAnalysisStatus.FAILED,
+                        AiAnalysisFailureType.VALIDATION_ERROR
                 ))
                 .build();
 
@@ -132,7 +141,12 @@ public class AiRiskAnalysisProcessor {
                 ))
                 .validation(new AiAnalysisHistory.ValidationSnapshot(
                         false,
-                        false,List.of(exception.getMessage())
+                        false,
+                        errorMessages(exception)
+                ))
+                .result(new AiAnalysisHistory.ResultSnapshot(
+                        AiAnalysisStatus.FAILED,
+                        AiAnalysisFailureType.RESPONSE_PARSE_ERROR
                 ))
                 .build();
 
@@ -172,15 +186,27 @@ public class AiRiskAnalysisProcessor {
                 .validation(new AiAnalysisHistory.ValidationSnapshot(
                         false,
                         false,
-                        List.of(exception.getMessage())
+                        errorMessages(exception)
                 ))
                 .metadata(new AiAnalysisHistory.MetadataSnapshot(
                         exception.getModel(),
                         exception.getLatencyMs()
                 ))
+                .result(new AiAnalysisHistory.ResultSnapshot(
+                        AiAnalysisStatus.FAILED,
+                        exception.getFailureType()
+                ))
                 .build();
 
         saveHistorySafely(history);
+    }
+
+    private List<String> errorMessages(Exception exception) {
+        String message = exception.getMessage() != null
+                ? exception.getMessage()
+                : exception.getClass().getSimpleName();
+
+        return List.of(message);
     }
 
     private void savedPromptFailureHistory(
@@ -199,11 +225,59 @@ public class AiRiskAnalysisProcessor {
                 .validation(new AiAnalysisHistory.ValidationSnapshot(
                         false,
                         false,
-                        List.of(exception.getMessage())
+                        errorMessages(exception)
+                ))
+                .result(new AiAnalysisHistory.ResultSnapshot(
+                        AiAnalysisStatus.FAILED,
+                        AiAnalysisFailureType.PROMPT_NOT_FOUND
                 ))
                 .build();
 
         saveHistorySafely(history);
+    }
+
+    private void saveInternalFailureHistory(
+            AiRiskAnalysisRequestedEvent event,
+            AiRiskAnalysisOutput output,
+            Exception exception
+    ) {
+        String errorMessage = exception.getMessage() != null ? exception.getMessage() : exception.getClass().getSimpleName();
+
+        AiAnalysisHistory.AiAnalysisHistoryBuilder builder = AiAnalysisHistory.builder()
+                .analysisId(event.analysisId())
+                .userId(event.strategy().userId())
+                .strategyId(event.strategy().strategyId())
+                .backtestId(event.backtest().backtestId())
+                .requestSnapshot(Map.of(
+                        "strategy", event.strategy(),
+                        "backtest", event.backtest()
+                ))
+                .validation(new AiAnalysisHistory.ValidationSnapshot(
+                        false,
+                        false,
+                        errorMessages(exception)
+                ))
+                .result(new AiAnalysisHistory.ResultSnapshot(
+                        AiAnalysisStatus.FAILED,
+                        AiAnalysisFailureType.INTERNAL_ERROR
+                ));
+
+        if(output != null){
+            builder
+                    .prompt(new AiAnalysisHistory.PromptSnapshot(
+                            output.promptVersion(),
+                            output.promptContent()
+                    ))
+                    .response(new AiAnalysisHistory.ResponseSnapshot(
+                            output.rawResponse()
+                    ))
+                    .metadata(new AiAnalysisHistory.MetadataSnapshot(
+                            output.model(),
+                            output.latencyMs()
+                    ));
+        }
+
+        saveHistorySafely(builder.build());
     }
 
     public void process(AiRiskAnalysisRequestedEvent event){
@@ -275,6 +349,8 @@ public class AiRiskAnalysisProcessor {
                     AiAnalysisFailureType.INTERNAL_ERROR,
                     e.getMessage()
             );
+
+            saveInternalFailureHistory(event, output, e);
         }
     }
 }
