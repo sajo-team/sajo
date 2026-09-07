@@ -44,12 +44,18 @@ public class AccountCreateFacade {
         // 3. 최종 재확인+ 저장
         Account account = accountCommandService.createAccount(userId, appKey, secretKey, accountNo, accountType);
 
-        // 4. 저장까지 성공한 경우에만, 검증 시 이미 발급받은 토큰을 캐시에 채워 넣는다
+        // 4. 이 시점에 KIS 발급 자체는 이미 성공했으므로, 이력 부터 남김
+        try {
+            kisTokenLogCommandService.recordSuccess(account.getId(), userId, KisTokenType.ACCESS_TOKEN);
+        } catch (Exception e) {
+            log.warn("계좌 생성 시 KIS 토큰 발급 이력 기록 실패. userId={}", userId, e);
+        }
+
+        // 5. 검증 시 이미 발급받은 토큰을 캐시에 채워 넣는다
         //    (직후 내부 토큰 조회 API가 KIS를 재호출해 1분당 1회 제한에 걸리는 것을 방지)
         //    캐시 저장 실패해도 예외를 던지지 않고 성공 처리한다.
         try {
             kisTokenCacheCommandService.primeKisAccessTokenCache(userId, kisResponse.access_token());
-            kisTokenLogCommandService.recordSuccess(account.getId(), userId, KisTokenType.ACCESS_TOKEN);
         } catch (Exception e) {
             log.warn("계좌 생성 시 KIS 토큰 캐시 프라이밍 실패. userId={}", userId, e);
         }

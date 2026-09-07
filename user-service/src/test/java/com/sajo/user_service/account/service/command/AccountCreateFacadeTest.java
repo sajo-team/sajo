@@ -166,7 +166,7 @@ class AccountCreateFacadeTest {
     }
 
     @Test
-    @DisplayName("계좌 저장까지 성공한 뒤 캐시 프라이밍이 실패해도 계좌 생성 자체는 성공 처리한다")
+    @DisplayName("계좌 저장까지 성공한 뒤 캐시 프라이밍이 실패해도 계좌 생성은 성공 처리하고, 발급 성공 이력은 그대로 남긴다")
     void createAccountSucceedsEvenWhenCachePrimingFails() {
         // given
         UUID userId = UUID.randomUUID();
@@ -187,6 +187,31 @@ class AccountCreateFacadeTest {
 
         // then
         assertThat(result).isEqualTo(account);
-        verifyNoInteractions(kisTokenLogCommandService);
+        verify(kisTokenLogCommandService).recordSuccess(account.getId(), userId, KisTokenType.ACCESS_TOKEN);
+    }
+
+    @Test
+    @DisplayName("발급 성공 이력 기록 자체가 실패해도 계좌 생성과 캐시 프라이밍은 정상 진행한다")
+    void createAccountSucceedsEvenWhenRecordingSuccessFails() {
+        // given
+        UUID userId = UUID.randomUUID();
+        Account account = Account.createAccount(
+                userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
+        KisAccessTokenResponse kisResponse =
+                new KisAccessTokenResponse("issued-token", "Bearer", 86400f, "2026-01-01 00:00:00");
+
+        given(kisOAuthClient.getAccessToken("app-key", "secret-key", AccountType.REAL)).willReturn(kisResponse);
+        given(accountCommandService.createAccount(userId, "app-key", "secret-key", "12345678-01", AccountType.REAL))
+                .willReturn(account);
+        willThrow(new RuntimeException("DB 저장 실패"))
+                .given(kisTokenLogCommandService).recordSuccess(account.getId(), userId, KisTokenType.ACCESS_TOKEN);
+
+        // when
+        Account result = accountCreateFacade.createAccount(
+                userId, "app-key", "secret-key", "12345678-01", AccountType.REAL);
+
+        // then
+        assertThat(result).isEqualTo(account);
+        verify(kisTokenCacheCommandService).primeKisAccessTokenCache(userId, "issued-token");
     }
 }
