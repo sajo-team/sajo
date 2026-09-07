@@ -15,7 +15,7 @@ public record BacktestInternalResponse(
         LocalDate startDate,
         LocalDate endDate,
         Long initialCash,
-        BacktestStatus status,
+        BacktestStatus backtestStatus,
         BigDecimal totalReturnRate,
         BigDecimal mdd,
         BigDecimal winRate,

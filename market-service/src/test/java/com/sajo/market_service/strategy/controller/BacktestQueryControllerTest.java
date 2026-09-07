@@ -208,6 +208,6 @@ class BacktestQueryControllerTest {
                 .andExpect(jsonPath("$.strategyId").value(strategyId.toString()))
                 .andExpect(jsonPath("$.userId").value(userId.toString()))
                 .andExpect(jsonPath("$.stockCode").value("005930"))
-                .andExpect(jsonPath("$.status").value("COMPLETED"));
+                .andExpect(jsonPath("$.backtestStatus").value("COMPLETED"));
     }
 }
