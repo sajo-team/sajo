@@ -137,6 +137,24 @@ class AccountDeleteFacadeTest {
     }
 
     @Test
+    @DisplayName("캐시된 토큰 조회(Redis) 자체가 실패하면 KIS 폐기를 시도하지 않고, 폐기 실패로 잘못 기록하지도 않는다")
+    void deleteAccountDoesNotRecordRevokeFailWhenPeekAccessTokenFails() {
+        // given
+        UUID userId = UUID.randomUUID();
+        Account account = account(userId);
+        given(accountCommandService.deleteAccount(userId)).willReturn(account);
+        willThrow(new RuntimeException("Redis 타임아웃"))
+                .given(cacheQueryService).peekAccessToken(userId);
+
+        // when & then
+        assertThatCode(() -> accountDeleteFacade.deleteAccount(userId)).doesNotThrowAnyException();
+
+        verifyNoInteractions(kisOAuthClient);
+        verify(cacheCommandService).evictKisTokenCaches(userId);
+        verifyNoInteractions(kisTokenLogCommandService);
+    }
+
+    @Test
     @DisplayName("캐시 제거가 실패해도 예외 없이 정상 종료한다")
     void deleteAccountSucceedsEvenWhenCacheEvictFails() {
         // given
