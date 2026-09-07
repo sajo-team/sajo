@@ -23,8 +23,4 @@ public record MarketSchedulerProperties(
                 ? minimumIndicatorInterval
                 : kisRequestInterval;
     }
-
-    public MarketSchedulerProperties(boolean enabled, String systemUserId, String dailyPriceCron, int pageSize) {
-        this(enabled, systemUserId, dailyPriceCron, pageSize, false, "0 20 16 * * MON-FRI", Duration.ofMillis(500));
-    }
 }

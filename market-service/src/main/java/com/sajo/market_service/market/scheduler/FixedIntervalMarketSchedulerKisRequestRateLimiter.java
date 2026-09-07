@@ -1,6 +1,7 @@
 package com.sajo.market_service.market.scheduler;
 
 import com.sajo.market_service.market.config.MarketSchedulerProperties;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.concurrent.locks.LockSupport;
@@ -21,6 +22,7 @@ public class FixedIntervalMarketSchedulerKisRequestRateLimiter implements Market
     private final LongConsumer parker;
     private long nextAllowedRequestNanos;
 
+    @Autowired
     public FixedIntervalMarketSchedulerKisRequestRateLimiter(MarketSchedulerProperties properties) {
         this(properties, System::nanoTime, LockSupport::parkNanos);
     }

@@ -203,7 +203,9 @@ class MarketDailyPriceSchedulerTest {
     private MarketDailyPriceScheduler scheduler(boolean enabled, String systemUserId, int pageSize, Clock clock) {
         lenient().when(requestRateLimiter.tryAcquire()).thenReturn(true);
         return new MarketDailyPriceScheduler(
-                new MarketSchedulerProperties(enabled, systemUserId, "0 10 16 * * MON-FRI", pageSize),
+                new MarketSchedulerProperties(
+                        enabled, systemUserId, "0 10 16 * * MON-FRI", pageSize,
+                        false, "0 20 16 * * MON-FRI", java.time.Duration.ofMillis(500)),
                 marketStockQueryRepository,
                 marketStockPriceCommandService,
                 requestRateLimiter,
