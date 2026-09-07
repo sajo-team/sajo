@@ -16,6 +16,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -66,14 +67,14 @@ class MarketDataStatusQueryRepositoryIntegrationTest {
         insertStock(secondStock, "000660");
 
         // Included: two dates for one stock and one valid row for another stock.
-        insertPrice(firstStock, "2026-09-05", null, 70_000L, "REST");
-        insertPrice(firstStock, "2026-09-07", null, 71_000L, "REST");
-        insertPrice(secondStock, "2026-09-06", null, 150_000L, "REST");
+        insertPrice(firstStock, LocalDate.of(2026, 9, 5), null, 70_000L, "REST");
+        insertPrice(firstStock, LocalDate.of(2026, 9, 7), null, 71_000L, "REST");
+        insertPrice(secondStock, LocalDate.of(2026, 9, 6), null, 150_000L, "REST");
 
         // Excluded: websocket, intraday REST, and REST daily row without close price.
-        insertPrice(firstStock, "2026-09-08", "09:00:00", 71_500L, "WEBSOCKET");
-        insertPrice(firstStock, "2026-09-09", "09:01:00", 71_600L, "REST");
-        insertPrice(secondStock, "2026-09-10", null, null, "REST");
+        insertPrice(firstStock, LocalDate.of(2026, 9, 8), LocalTime.of(9, 0), 71_500L, "WEBSOCKET");
+        insertPrice(firstStock, LocalDate.of(2026, 9, 9), LocalTime.of(9, 1), 71_600L, "REST");
+        insertPrice(secondStock, LocalDate.of(2026, 9, 10), null, null, "REST");
 
         insertIndicator(firstStock, "2026-09-01");
         insertIndicator(firstStock, "2026-09-07");
@@ -110,12 +111,12 @@ class MarketDataStatusQueryRepositoryIntegrationTest {
                 """, id, stockCode, "test-" + stockCode);
     }
 
-    private void insertPrice(UUID stockId, String date, String time, Long closePrice, String source) {
+    private void insertPrice(UUID stockId, LocalDate date, LocalTime time, Long closePrice, String source) {
         jdbcTemplate.update("""
                 INSERT INTO market_strategy.m_market_stocks_price
                     (id, stock_id, date, time, close_price, source, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                """, UUID.randomUUID(), stockId, LocalDate.parse(date), time, closePrice, source);
+                """, UUID.randomUUID(), stockId, date, time, closePrice, source);
     }
 
     private void insertIndicator(UUID stockId, String referenceDate) {
