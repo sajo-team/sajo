@@ -1,6 +1,5 @@
 package com.sajo.user_service.account.client;
 
-import com.sajo.common.exception.BusinessException;
 import com.sajo.user_service.account.client.dto.response.KisErrorInfo;
 import com.sajo.user_service.account.domain.AccountType;
 import com.sajo.user_service.account.exception.AccountErrorCode;
@@ -76,7 +75,7 @@ abstract class AbstractKisClient {
         }
 
         if (response == null || response.getBody() == null) {
-            throw new BusinessException(defaultFailureCode, "KIS 응답이 비어 있습니다.");
+            throw new KisBusinessException(defaultFailureCode, null, "KIS 응답이 비어 있습니다.");
         }
         return response;
     }
