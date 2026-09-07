@@ -2,6 +2,7 @@ package com.sajo.user_service.account.client;
 
 import com.sajo.common.exception.BusinessException;
 import com.sajo.user_service.account.client.dto.response.KisBalanceResponse;
+import com.sajo.user_service.account.client.dto.response.KisOrderableAmountResponse;
 import com.sajo.user_service.account.domain.AccountType;
 import com.sajo.user_service.account.exception.AccountErrorCode;
 import org.junit.jupiter.api.DisplayName;
@@ -293,6 +294,130 @@ class KisTrClientTest {
 
         // then
         assertThat(result.hasNext()).isFalse();
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("매수가능조회 - 정상 응답이면 KisOrderableAmountResponse를 반환하고, "
+            + "VIRTUAL은 virtual 서버/모의 tr_id로 PDNO/ORD_UNPR 공란·ORD_DVSN=00으로 요청한다")
+    void inquiresOrderableAmountSuccessfully() {
+        // given
+        setUp();
+        server.expect(requestTo("https://kis.example/uapi/domestic-stock/v1/trading/inquire-psbl-order"
+                        + "?CANO=12345678&ACNT_PRDT_CD=01&PDNO=&ORD_UNPR=&ORD_DVSN=00"
+                        + "&CMA_EVLU_AMT_ICLD_YN=N&OVRS_ICLD_YN=N"))
+                .andExpect(method(HttpMethod.GET))
+                .andExpect(header("authorization", "Bearer issued-token"))
+                .andExpect(header("appkey", "app-key"))
+                .andExpect(header("appsecret", "secret-key"))
+                .andExpect(header("tr_id", "VTTC8908R"))
+                .andRespond(withSuccess("""
+                        {"rt_cd":"0","msg_cd":"MSG_CD","msg1":"정상처리 되었습니다",
+                         "output":{"nrcvb_buy_amt":"9998580"}}
+                        """, MediaType.APPLICATION_JSON));
+
+        // when
+        KisOrderableAmountResponse response = client.inquireOrderableAmount(
+                "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.VIRTUAL, "", "", "00");
+
+        // then
+        assertThat(response.rt_cd()).isEqualTo("0");
+        assertThat(response.output().nrcvb_buy_amt()).isEqualTo("9998580");
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("매수가능조회 - REAL 계좌는 real 서버와 실전 tr_id로 요청한다")
+    void inquiresOrderableAmountRoutesRealAccountTypeToRealServer() {
+        // given
+        setUp();
+        server.expect(requestTo("https://kis-real.example/uapi/domestic-stock/v1/trading/inquire-psbl-order"
+                        + "?CANO=12345678&ACNT_PRDT_CD=01&PDNO=&ORD_UNPR=&ORD_DVSN=00"
+                        + "&CMA_EVLU_AMT_ICLD_YN=N&OVRS_ICLD_YN=N"))
+                .andExpect(header("tr_id", "TTTC8908R"))
+                .andRespond(withSuccess("""
+                        {"rt_cd":"0","msg_cd":"MSG_CD","msg1":"정상처리 되었습니다","output":{"nrcvb_buy_amt":"0"}}
+                        """, MediaType.APPLICATION_JSON));
+
+        // when
+        client.inquireOrderableAmount(
+                "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.REAL, "", "", "00");
+
+        // then
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("매수가능조회 - rt_cd가 0이 아니면 HTTP 200이어도 KIS_ORDERABLE_AMOUNT_INQUIRY_FAILED 예외를 던진다")
+    void inquireOrderableAmountFailsWhenRtCdIsNotZero() {
+        // given
+        setUp();
+        server.expect(requestTo("https://kis.example/uapi/domestic-stock/v1/trading/inquire-psbl-order"
+                        + "?CANO=12345678&ACNT_PRDT_CD=01&PDNO=&ORD_UNPR=&ORD_DVSN=00"
+                        + "&CMA_EVLU_AMT_ICLD_YN=N&OVRS_ICLD_YN=N"))
+                .andRespond(withSuccess("""
+                        {"rt_cd":"1","msg_cd":"MSG_CD","msg1":"조회 실패"}
+                        """, MediaType.APPLICATION_JSON));
+
+        // when & then
+        assertThatThrownBy(() -> client.inquireOrderableAmount(
+                "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.VIRTUAL, "", "", "00"))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(AccountErrorCode.KIS_ORDERABLE_AMOUNT_INQUIRY_FAILED);
+                });
+
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("매수가능조회 - HTTP 200이어도 msg_cd가 EGW00201(초당 거래건수 초과)이면 "
+            + "KIS_ORDERABLE_AMOUNT_INQUIRY_FAILED가 아닌 KIS_RATE_LIMITED 예외를 던진다")
+    void inquireOrderableAmountFailsWithRateLimitWhenRtCdIsNotZero() {
+        // given
+        setUp();
+        server.expect(requestTo("https://kis.example/uapi/domestic-stock/v1/trading/inquire-psbl-order"
+                        + "?CANO=12345678&ACNT_PRDT_CD=01&PDNO=&ORD_UNPR=&ORD_DVSN=00"
+                        + "&CMA_EVLU_AMT_ICLD_YN=N&OVRS_ICLD_YN=N"))
+                .andRespond(withSuccess("""
+                        {"rt_cd":"1","msg_cd":"EGW00201","msg1":"초당 거래건수를 초과하였습니다."}
+                        """, MediaType.APPLICATION_JSON));
+
+        // when & then
+        assertThatThrownBy(() -> client.inquireOrderableAmount(
+                "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.VIRTUAL, "", "", "00"))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(AccountErrorCode.KIS_RATE_LIMITED);
+                });
+
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("매수가능조회 - 5xx 응답이면 KIS_ORDERABLE_AMOUNT_INQUIRY_FAILED 예외를 던진다")
+    void inquireOrderableAmountFailsWithHttp5xx() {
+        // given
+        setUp();
+        server.expect(requestTo("https://kis.example/uapi/domestic-stock/v1/trading/inquire-psbl-order"
+                        + "?CANO=12345678&ACNT_PRDT_CD=01&PDNO=&ORD_UNPR=&ORD_DVSN=00"
+                        + "&CMA_EVLU_AMT_ICLD_YN=N&OVRS_ICLD_YN=N"))
+                .andRespond(withStatus(HttpStatus.INTERNAL_SERVER_ERROR));
+
+        // when & then
+        assertThatThrownBy(() -> client.inquireOrderableAmount(
+                "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.VIRTUAL, "", "", "00"))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(AccountErrorCode.KIS_ORDERABLE_AMOUNT_INQUIRY_FAILED);
+                });
+
         server.verify();
     }
 }

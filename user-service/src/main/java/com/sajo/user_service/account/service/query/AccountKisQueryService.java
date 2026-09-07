@@ -4,10 +4,12 @@ import com.sajo.common.exception.BusinessException;
 import com.sajo.user_service.account.client.KisContinuationResult;
 import com.sajo.user_service.account.client.KisTrClient;
 import com.sajo.user_service.account.client.dto.response.KisBalanceResponse;
+import com.sajo.user_service.account.client.dto.response.KisOrderableAmountResponse;
 import com.sajo.user_service.account.controller.dto.response.AccessTokenResponse;
 import com.sajo.user_service.account.controller.dto.response.AccountDepositResponse;
 import com.sajo.user_service.account.controller.dto.response.AccountHoldingsResponse;
 import com.sajo.user_service.account.controller.dto.response.ApprovalKeyResponse;
+import com.sajo.user_service.account.controller.dto.response.OrderableAmountResponse;
 import com.sajo.user_service.account.domain.Account;
 import com.sajo.user_service.account.exception.AccountErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -24,7 +26,7 @@ public class AccountKisQueryService {
 
     private final AccountQueryService accountQueryService;
     private final KisTokenCacheQueryService kisTokenCacheQueryService;
-    private final KisTrClient client;
+    private final KisTrClient kisTrClient;
 
     // 예수금 조회
     public AccountDepositResponse getDeposit(UUID userId) {
@@ -37,7 +39,7 @@ public class AccountKisQueryService {
                 account.getAccountType()
         );
 
-        KisBalanceResponse kisBalanceResponse = client.inquireBalance(
+        KisBalanceResponse kisBalanceResponse = kisTrClient.inquireBalance(
                 token,
                 account.getAppKey(),
                 account.getSecretKey(),
@@ -78,7 +80,7 @@ public class AccountKisQueryService {
         );
 
         // 주식 잔고 조회 요청
-        KisContinuationResult<KisBalanceResponse> result = client.inquireBalance(
+        KisContinuationResult<KisBalanceResponse> result = kisTrClient.inquireBalance(
                 token,
                 account.getAppKey(),
                 account.getSecretKey(),
@@ -119,5 +121,40 @@ public class AccountKisQueryService {
                 userId, account.getAppKey(), account.getSecretKey(), account.getAccountType());
 
         return new ApprovalKeyResponse(approvalKey);
+    }
+
+    // 주문 가능 금액 조회
+    public OrderableAmountResponse getOrderableAmount(UUID userId) {
+        Account account = accountQueryService.getAccountByUserId(userId);
+
+        String token = kisTokenCacheQueryService.getAccessToken(
+                userId,
+                account.getAppKey(),
+                account.getSecretKey(),
+                account.getAccountType()
+        );
+
+        KisOrderableAmountResponse response = kisTrClient.inquireOrderableAmount(
+                token,
+                account.getAppKey(),
+                account.getSecretKey(),
+                account.getCano(),
+                account.getAccountProductCode(),
+                account.getAccountType(),
+                "", // PDNO - 종목 지정 없이 매수금액만 조회
+                "", // ORD_UNPR - PDNO와 함께 공란이면 매수금액만 조회됨
+                "00" // ORD_DVSN - 매수금액만 조회할 경우 임의값(00) 입력
+        );
+
+        if (response.output() == null) {
+            throw new BusinessException(
+                    AccountErrorCode.KIS_ORDERABLE_AMOUNT_INQUIRY_FAILED, "KIS 응답의 output이 비어 있습니다.");
+        }
+        try {
+            return OrderableAmountResponse.from(response.output());
+        } catch (NumberFormatException | NullPointerException e) {
+            log.warn("KIS 매수가능금액 응답 필드 파싱 실패. userId={}", userId, e);
+            throw new BusinessException(AccountErrorCode.KIS_ORDERABLE_AMOUNT_INQUIRY_FAILED, "KIS 응답 필드 파싱에 실패했습니다.");
+        }
     }
 }
