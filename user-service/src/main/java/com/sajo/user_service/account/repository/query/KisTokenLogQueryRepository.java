@@ -20,6 +20,7 @@ public interface KisTokenLogQueryRepository extends JpaRepository<KisTokenLog, U
                 AND (e2.createdAt > e.createdAt
                      OR (e2.createdAt = e.createdAt AND e2.id > e.id))
             )
+            ORDER BY e.createdAt DESC, e.id DESC
             """)
     Page<KisTokenLog> findLatestPerUser(Pageable pageable);
 
