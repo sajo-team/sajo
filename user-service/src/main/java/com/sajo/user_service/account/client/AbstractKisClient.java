@@ -17,8 +17,9 @@ import java.util.function.Supplier;
 @Slf4j
 abstract class AbstractKisClient {
 
-    // EGW00133: 접근토큰 발급 rate limit(1분당 1회), EGW00201: 초당 거래건수 초과
-    private static final Set<String> RATE_LIMIT_ERROR_CODES = Set.of("EGW00133", "EGW00201");
+    // EGW00133: 접근토큰 발급 rate limit(1분당 1회), EGW00201: 초당 거래건수 초과,
+    // EGW00215: inquire-balance 전용 원장 유량 초과(개인 유량과 무관하게 초당 120 TPS 제한, 재시도 권장)
+    private static final Set<String> RATE_LIMIT_ERROR_CODES = Set.of("EGW00133", "EGW00201", "EGW00215");
 
     private final RestClient virtualRestClient;
     private final RestClient realRestClient;
