@@ -57,20 +57,6 @@ class MarketStockSummaryQueryControllerTest {
     }
 
     @Test
-    void doesNotExposeEntityOrAuthenticationFields() throws Exception {
-        UUID userId = UUID.randomUUID();
-        org.mockito.BDDMockito.given(marketStockSummaryQueryService.getSummary(userId, "005930"))
-                .willReturn(new MarketStockSummaryResponse(null, null, null));
-
-        mockMvc.perform(get("/api/v1/market/stocks/005930/summary").header("X-User-Id", userId))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.id").doesNotExist())
-                .andExpect(jsonPath("$.data.createdAt").doesNotExist())
-                .andExpect(jsonPath("$.data.accessToken").doesNotExist())
-                .andExpect(jsonPath("$.data.secretKey").doesNotExist());
-    }
-
-    @Test
     void returnsComposedSummaryWithoutManagementFields() throws Exception {
         UUID userId = UUID.randomUUID();
         given(marketStockSummaryQueryService.getSummary(userId, "005930"))
@@ -93,9 +79,18 @@ class MarketStockSummaryQueryControllerTest {
                 .andExpect(jsonPath("$.data.indicator.per").value(15.2))
                 .andExpect(jsonPath("$.data.indicator.pbr").value(1.3))
                 .andExpect(jsonPath("$.data.stock.id").doesNotExist())
+                .andExpect(jsonPath("$.data.stock.stockId").doesNotExist())
                 .andExpect(jsonPath("$.data.stock.createdAt").doesNotExist())
                 .andExpect(jsonPath("$.data.stock.updatedAt").doesNotExist())
-                .andExpect(jsonPath("$.data.accessToken").doesNotExist());
+                .andExpect(jsonPath("$.data.stock.accessToken").doesNotExist())
+                .andExpect(jsonPath("$.data.stock.secretKey").doesNotExist())
+                .andExpect(jsonPath("$.data.quote.accessToken").doesNotExist())
+                .andExpect(jsonPath("$.data.quote.secretKey").doesNotExist())
+                .andExpect(jsonPath("$.data.indicator.id").doesNotExist())
+                .andExpect(jsonPath("$.data.indicator.createdAt").doesNotExist())
+                .andExpect(jsonPath("$.data.indicator.updatedAt").doesNotExist())
+                .andExpect(jsonPath("$.data.accessToken").doesNotExist())
+                .andExpect(jsonPath("$.data.secretKey").doesNotExist());
     }
 
     @Test
