@@ -100,7 +100,7 @@ public class AiRiskAnalysisProcessor {
                 .validation(new AiAnalysisHistory.ValidationSnapshot(
                         structureValid,
                         contentValid,
-                        List.of(exception.getMessage())
+                        errorMessages(exception)
                 ))
                 .metadata(new AiAnalysisHistory.MetadataSnapshot(
                         output.model(),
@@ -141,7 +141,8 @@ public class AiRiskAnalysisProcessor {
                 ))
                 .validation(new AiAnalysisHistory.ValidationSnapshot(
                         false,
-                        false,List.of(exception.getMessage())
+                        false,
+                        errorMessages(exception)
                 ))
                 .result(new AiAnalysisHistory.ResultSnapshot(
                         AiAnalysisStatus.FAILED,
@@ -185,7 +186,7 @@ public class AiRiskAnalysisProcessor {
                 .validation(new AiAnalysisHistory.ValidationSnapshot(
                         false,
                         false,
-                        List.of(exception.getMessage())
+                        errorMessages(exception)
                 ))
                 .metadata(new AiAnalysisHistory.MetadataSnapshot(
                         exception.getModel(),
@@ -198,6 +199,14 @@ public class AiRiskAnalysisProcessor {
                 .build();
 
         saveHistorySafely(history);
+    }
+
+    private List<String> errorMessages(Exception exception) {
+        String message = exception.getMessage() != null
+                ? exception.getMessage()
+                : exception.getClass().getSimpleName();
+
+        return List.of(message);
     }
 
     private void savedPromptFailureHistory(
@@ -216,7 +225,7 @@ public class AiRiskAnalysisProcessor {
                 .validation(new AiAnalysisHistory.ValidationSnapshot(
                         false,
                         false,
-                        List.of(exception.getMessage())
+                        errorMessages(exception)
                 ))
                 .result(new AiAnalysisHistory.ResultSnapshot(
                         AiAnalysisStatus.FAILED,
@@ -232,6 +241,8 @@ public class AiRiskAnalysisProcessor {
             AiRiskAnalysisOutput output,
             Exception exception
     ) {
+        String errorMessage = exception.getMessage() != null ? exception.getMessage() : exception.getClass().getSimpleName();
+
         AiAnalysisHistory.AiAnalysisHistoryBuilder builder = AiAnalysisHistory.builder()
                 .analysisId(event.analysisId())
                 .userId(event.strategy().userId())
@@ -244,7 +255,7 @@ public class AiRiskAnalysisProcessor {
                 .validation(new AiAnalysisHistory.ValidationSnapshot(
                         false,
                         false,
-                        List.of(exception.getMessage()) //TODO NPE
+                        errorMessages(exception)
                 ))
                 .result(new AiAnalysisHistory.ResultSnapshot(
                         AiAnalysisStatus.FAILED,

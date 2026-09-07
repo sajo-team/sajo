@@ -610,4 +610,43 @@ class AiRiskAnalysisProcessorTest {
                 3
         );
     }
+
+    @Test
+    @DisplayName("메시지가_없는_예상치_못한_예외도_INTERNAL_ERROR_Audit으로_저장한다")
+    void shouldSaveInternalErrorAuditWhenExceptionMessageIsNull() {
+        // given
+        when(aiRiskAnalyzer.analyze(any(), any()))
+                .thenThrow(new RuntimeException());
+
+        // when
+        processor.process(event);
+
+        // then
+        verify(resultService).fail(
+                event.analysisId(),
+                AiAnalysisFailureType.INTERNAL_ERROR,
+                null
+        );
+
+        ArgumentCaptor<AiAnalysisHistory> captor =
+                ArgumentCaptor.forClass(AiAnalysisHistory.class);
+
+        verify(historyRepository).save(captor.capture());
+
+        AiAnalysisHistory savedHistory = captor.getValue();
+
+        assertThat(savedHistory.getResult()).isNotNull();
+        assertThat(savedHistory.getResult().status())
+                .isEqualTo(AiAnalysisStatus.FAILED);
+        assertThat(savedHistory.getResult().failureType())
+                .isEqualTo(AiAnalysisFailureType.INTERNAL_ERROR);
+
+        assertThat(savedHistory.getValidation()).isNotNull();
+        assertThat(savedHistory.getValidation().structureValid()).isFalse();
+        assertThat(savedHistory.getValidation().contentValid()).isFalse();
+
+        // 이번 리뷰의 핵심 검증
+        assertThat(savedHistory.getValidation().errors())
+                .containsExactly("RuntimeException");
+    }
 }
