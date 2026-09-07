@@ -13,6 +13,7 @@ import com.sajo.user_service.account.controller.dto.response.AccountDepositRespo
 import com.sajo.user_service.account.controller.dto.response.AccountHoldingsResponse;
 import com.sajo.user_service.account.controller.dto.response.ApprovalKeyResponse;
 import com.sajo.user_service.account.controller.dto.response.OrderableAmountResponse;
+import com.sajo.user_service.account.controller.dto.response.SellableQuantityResponse;
 import com.sajo.user_service.account.domain.Account;
 import com.sajo.user_service.account.domain.AccountType;
 import com.sajo.user_service.account.exception.AccountErrorCode;
@@ -29,8 +30,12 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 @ExtendWith(MockitoExtension.class)
@@ -528,5 +533,196 @@ class AccountKisQueryServiceTest {
                     assertThat(businessException.getErrorCode())
                             .isEqualTo(AccountErrorCode.KIS_ORDERABLE_AMOUNT_INQUIRY_FAILED);
                 });
+    }
+
+    @Test
+    @DisplayName("매도 가능 수량 조회 - 첫 페이지에서 종목을 찾으면 다음 페이지는 조회하지 않고 그 수량을 반환한다")
+    void getSellableQuantityFoundOnFirstPage() {
+        // given
+        UUID userId = UUID.randomUUID();
+        Account account = Account.createAccount(
+                userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
+        KisBalanceResponse kisBalanceResponse = new KisBalanceResponse(
+                "0", "MSG_CD", "정상처리 되었습니다", "next-fk", "next-nk",
+                List.of(holding("005930", "10")), List.of());
+
+        given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
+        given(kisTokenCacheQueryService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL))
+                .willReturn("issued-token");
+        given(kisTrClient.inquireBalance(
+                "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.REAL, null, null))
+                .willReturn(new KisContinuationResult<>(kisBalanceResponse, true));
+
+        // when
+        SellableQuantityResponse result = accountKisQueryService.getSellableQuantity(userId, "005930");
+
+        // then
+        assertThat(result.sellableQuantity()).isEqualTo(10);
+        verify(kisTrClient, times(1)).inquireBalance(
+                "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.REAL, null, null);
+    }
+
+    @Test
+    @DisplayName("매도 가능 수량 조회 - 첫 페이지에 없으면 다음 페이지 커서로 이어서 조회해 종목을 찾는다")
+    void getSellableQuantityFoundOnSecondPage() {
+        // given
+        UUID userId = UUID.randomUUID();
+        Account account = Account.createAccount(
+                userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
+        KisBalanceResponse firstPage = new KisBalanceResponse(
+                "0", "MSG_CD", "정상처리 되었습니다", "next-fk", "next-nk",
+                List.of(holding("000660", "5")), List.of());
+        KisBalanceResponse secondPage = new KisBalanceResponse(
+                "0", "MSG_CD", "정상처리 되었습니다", "last-fk", "last-nk",
+                List.of(holding("005930", "10")), List.of());
+
+        given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
+        given(kisTokenCacheQueryService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL))
+                .willReturn("issued-token");
+        given(kisTrClient.inquireBalance(
+                "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.REAL, null, null))
+                .willReturn(new KisContinuationResult<>(firstPage, true));
+        given(kisTrClient.inquireBalance(
+                "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.REAL, "next-fk", "next-nk"))
+                .willReturn(new KisContinuationResult<>(secondPage, false));
+
+        // when
+        SellableQuantityResponse result = accountKisQueryService.getSellableQuantity(userId, "005930");
+
+        // then
+        assertThat(result.sellableQuantity()).isEqualTo(10);
+    }
+
+    @Test
+    @DisplayName("매도 가능 수량 조회 - 마지막 페이지까지 종목을 못 찾으면 0을 반환한다")
+    void getSellableQuantityReturnsZeroWhenNotFoundAndNoMorePages() {
+        // given
+        UUID userId = UUID.randomUUID();
+        Account account = Account.createAccount(
+                userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
+        KisBalanceResponse kisBalanceResponse = new KisBalanceResponse(
+                "0", "MSG_CD", "정상처리 되었습니다", null, null,
+                List.of(holding("000660", "5")), List.of());
+
+        given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
+        given(kisTokenCacheQueryService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL))
+                .willReturn("issued-token");
+        given(kisTrClient.inquireBalance(
+                "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.REAL, null, null))
+                .willReturn(new KisContinuationResult<>(kisBalanceResponse, false));
+
+        // when
+        SellableQuantityResponse result = accountKisQueryService.getSellableQuantity(userId, "005930");
+
+        // then
+        assertThat(result.sellableQuantity()).isZero();
+    }
+
+    @Test
+    @DisplayName("매도 가능 수량 조회 - hasNext가 계속 true여도 페이지 상한(150)에서 멈추고 0을 반환한다 (무한 루프 방지)")
+    void getSellableQuantityStopsAtPageCapAndReturnsZero() {
+        // given
+        UUID userId = UUID.randomUUID();
+        Account account = Account.createAccount(
+                userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
+        KisBalanceResponse kisBalanceResponse = new KisBalanceResponse(
+                "0", "MSG_CD", "정상처리 되었습니다", "next-fk", "next-nk",
+                List.of(holding("000660", "5")), List.of());
+
+        given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
+        given(kisTokenCacheQueryService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL))
+                .willReturn("issued-token");
+        given(kisTrClient.inquireBalance(
+                eq("issued-token"), eq("app-key"), eq("secret-key"), eq("12345678"), eq("01"), eq(AccountType.REAL),
+                any(), any()))
+                .willReturn(new KisContinuationResult<>(kisBalanceResponse, true));
+
+        // when
+        SellableQuantityResponse result = accountKisQueryService.getSellableQuantity(userId, "005930");
+
+        // then
+        assertThat(result.sellableQuantity()).isZero();
+        verify(kisTrClient, times(150)).inquireBalance(
+                eq("issued-token"), eq("app-key"), eq("secret-key"), eq("12345678"), eq("01"), eq(AccountType.REAL),
+                any(), any());
+    }
+
+    @Test
+    @DisplayName("매도 가능 수량 조회 - ord_psbl_qty가 숫자로 파싱 불가능하면 KIS_BALANCE_INQUIRY_FAILED 예외를 던진다")
+    void getSellableQuantityFailsWhenOrdPsblQtyIsNotParsable() {
+        // given
+        UUID userId = UUID.randomUUID();
+        Account account = Account.createAccount(
+                userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
+        KisBalanceResponse kisBalanceResponse = new KisBalanceResponse(
+                "0", "MSG_CD", "정상처리 되었습니다", null, null,
+                List.of(holding("005930", "not-a-number")), List.of());
+
+        given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
+        given(kisTokenCacheQueryService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL))
+                .willReturn("issued-token");
+        given(kisTrClient.inquireBalance(
+                "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.REAL, null, null))
+                .willReturn(new KisContinuationResult<>(kisBalanceResponse, false));
+
+        // when & then
+        assertThatThrownBy(() -> accountKisQueryService.getSellableQuantity(userId, "005930"))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(AccountErrorCode.KIS_BALANCE_INQUIRY_FAILED);
+                });
+    }
+
+    @Test
+    @DisplayName("매도 가능 수량 조회 시 계좌가 없으면 ACCOUNT_NOT_FOUND 예외를 그대로 전파하고 KIS는 호출하지 않는다")
+    void getSellableQuantityFailsWhenAccountNotFound() {
+        // given
+        UUID userId = UUID.randomUUID();
+        given(accountQueryService.getAccountByUserId(userId))
+                .willThrow(new BusinessException(AccountErrorCode.ACCOUNT_NOT_FOUND));
+
+        // when & then
+        assertThatThrownBy(() -> accountKisQueryService.getSellableQuantity(userId, "005930"))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(AccountErrorCode.ACCOUNT_NOT_FOUND);
+                });
+
+        verifyNoInteractions(kisTokenCacheQueryService, kisTrClient);
+    }
+
+    private static KisBalanceHoldingResponse holding(String pdno, String ordPsblQty) {
+        return new KisBalanceHoldingResponse(
+                pdno,
+                "종목명",
+                null, // trad_dvsn_name
+                null, // bfdy_buy_qty
+                null, // bfdy_sll_qty
+                null, // thdt_buyqty
+                null, // thdt_sll_qty
+                ordPsblQty, // hldg_qty
+                ordPsblQty, // ord_psbl_qty
+                "70000.5", // pchs_avg_pric
+                null, // pchs_amt
+                "75000", // prpr
+                "750000", // evlu_amt
+                "49995", // evlu_pfls_amt
+                "7.14", // evlu_pfls_rt
+                null, // evlu_erng_rt
+                null, // loan_dt
+                null, // loan_amt
+                null, // stln_slng_chgs
+                null, // expd_dt
+                null, // fltt_rt
+                null, // bfdy_cprs_icdc
+                null, // item_mgna_rt_name
+                null, // grta_rt_name
+                null, // sbst_pric
+                null // stck_loan_unpr
+        );
     }
 }
