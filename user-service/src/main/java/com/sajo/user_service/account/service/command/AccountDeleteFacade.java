@@ -2,6 +2,7 @@ package com.sajo.user_service.account.service.command;
 
 import com.sajo.user_service.account.client.KisOAuthClient;
 import com.sajo.user_service.account.domain.Account;
+import com.sajo.user_service.account.exception.KisBusinessException;
 import com.sajo.user_service.account.service.query.KisTokenCacheQueryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,20 +20,33 @@ public class AccountDeleteFacade {
     private final KisTokenCacheQueryService cacheQueryService;
     private final KisTokenCacheCommandService cacheCommandService;
     private final AccountCommandService accountCommandService;
+    private final KisTokenLogCommandService kisTokenLogCommandService;
 
     public void deleteAccount(UUID userId) {
         // 계좌 삭제 (필수) - 실패하면 아무 부작용 없이 여기서 끝
         Account account = accountCommandService.deleteAccount(userId);
 
         // 이후는 best-effort: 실패해도 계좌 삭제 자체는 이미 끝난 상태
+        // 폐기 시도 자체가 없었던 경우(token 미보유)는 기록하지 않는다
         try {
             Optional<String> token = cacheQueryService.peekAccessToken(userId);
             if (token.isPresent()) {
-                kisOAuthClient.revokeAccessToken(
-                        account.getAppKey(), account.getSecretKey(), token.get(), account.getAccountType());
+                kisOAuthClient.revokeAccessToken (
+                        account.getAppKey(),
+                        account.getSecretKey(),
+                        token.get(),
+                        account.getAccountType()
+                );
+                kisTokenLogCommandService.recordRevokeSuccess(account.getId(), userId);
             }
+
+        } catch (KisBusinessException e) {
+            log.warn("계좌 삭제 시 KIS 토큰 폐기 실패. userId={}", userId, e);
+            kisTokenLogCommandService.recordRevokeFail(
+                    account.getId(), userId, e.getKisErrorCode(), e.getKisMessage());
         } catch (Exception e) {
             log.warn("계좌 삭제 시 KIS 토큰 폐기 실패. userId={}", userId, e);
+            kisTokenLogCommandService.recordRevokeFail(account.getId(), userId, null, e.getMessage());
         }
 
         // redis 캐시만 제거 - KIS는 접속키 폐기 API가 없어 실제 무효화는 안 됨.

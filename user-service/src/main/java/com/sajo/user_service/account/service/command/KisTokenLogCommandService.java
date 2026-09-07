@@ -32,4 +32,23 @@ public class KisTokenLogCommandService {
 
         kisTokenLogCommandRepository.save(tokenLog);
     }
+
+    @Transactional
+    public void recordRevokeSuccess(UUID accountId, UUID userId) {
+
+        KisTokenLog tokenLog = KisTokenLog.createTokenLog(
+                accountId, userId, EventType.TOKEN_REVOKE_SUCCESS, null, null
+        );
+
+        kisTokenLogCommandRepository.save(tokenLog);
+    }
+
+    @Transactional
+    public void recordRevokeFail(UUID accountId, UUID userId, String errorCode, String errorMessage) {
+        KisTokenLog tokenLog = KisTokenLog.createTokenLog(
+                accountId, userId, EventType.TOKEN_REVOKE_FAILED, errorCode, errorMessage
+        );
+
+        kisTokenLogCommandRepository.save(tokenLog);
+    }
 }
