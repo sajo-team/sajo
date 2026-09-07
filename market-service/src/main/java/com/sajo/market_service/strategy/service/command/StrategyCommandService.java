@@ -119,6 +119,8 @@ public class StrategyCommandService {
                     return new BusinessException(StrategyErrorCode.STRATEGY_NOT_FOUND);
                 });
 
+        StrategyActivationSnapshot snapshot = StrategyActivationSnapshot.from(strategy);
+
         if (Boolean.TRUE.equals(request.active())) {
             log.info("전략 활성화 전 Market 데이터 검증 시작. strategyId={}, stockCode={}",
                     strategyId, strategy.getStockCode());
@@ -129,7 +131,8 @@ public class StrategyCommandService {
         return strategyActivationCommandService.changeActivation(
                 userId,
                 strategyId,
-                request.active()
+                request.active(),
+                snapshot
         );
     }
 
