@@ -27,7 +27,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AccountKisQueryService {
 
-    // 전체 상장종목 수(코스피+코스닥+코넥스 약 2,863개) 기준, 모의투자 페이지당 20건으로 넉넉히 잡은 상한 - 무한 루프 방지용 안전장치
+    // 전체 상장종목 수(코스피+코스닥+코넥스 약 2,863개) 기준, 모의투자 페이지당 20건으로 넉넉히 잡은 상한
     private static final int MAX_HOLDINGS_PAGE = 150;
 
     private final AccountQueryService accountQueryService;
@@ -166,6 +166,8 @@ public class AccountKisQueryService {
 
     // 매도 가능 수량 조회 (특정 종목) - inquire-balance를 페이지가 끝날 때까지(hasNext=false) 순회하며 stockCode를 찾음
     // 한투 api 중 매도가능수량조회 모의투자는 지원 하지 않아서 주식 잔고 조회를 통해 매도 가능 수량 조회
+    // 주식 잔고 조회는 한번 요청에 최대 20개의 종목을 가져올 수 있음(모의투자 기준)
+    // 추후 실전 투자 계좌는 KIS 매도가능수량조회 API 사용하도록 변경
     public SellableQuantityResponse getSellableQuantity(UUID userId, String stockCode) {
         Account account = accountQueryService.getAccountByUserId(userId);
         String token = kisTokenCacheQueryService.getAccessToken(
@@ -215,8 +217,10 @@ public class AccountKisQueryService {
         }
 
         // 정상적인 계좌라면 절대 도달하지 않음 (전체 상장종목 수 기준 넉넉히 잡은 안전장치) - KIS 응답 이상 시 무한 루프 방지
+        // 미보유(0)로 처리하면 실제로는 조회 실패인데 매도 가능한 것으로 오인될 수 있어 명시적으로 실패 처리한다
         log.warn("보유종목 조회 페이지 상한({})에 도달해 조회를 중단합니다. userId={}, stockCode={}",
                 MAX_HOLDINGS_PAGE, userId, stockCode);
-        return SellableQuantityResponse.notHeld();
+        throw new BusinessException(
+                AccountErrorCode.KIS_BALANCE_INQUIRY_FAILED, "보유종목 조회 페이지 상한에 도달했습니다.");
     }
 }

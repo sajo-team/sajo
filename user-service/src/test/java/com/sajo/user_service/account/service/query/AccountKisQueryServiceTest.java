@@ -619,8 +619,8 @@ class AccountKisQueryServiceTest {
     }
 
     @Test
-    @DisplayName("매도 가능 수량 조회 - hasNext가 계속 true여도 페이지 상한(150)에서 멈추고 0을 반환한다 (무한 루프 방지)")
-    void getSellableQuantityStopsAtPageCapAndReturnsZero() {
+    @DisplayName("매도 가능 수량 조회 - hasNext가 계속 true이면 페이지 상한(150)에서 멈추고 KIS_BALANCE_INQUIRY_FAILED 예외를 던진다 (무한 루프 방지)")
+    void getSellableQuantityStopsAtPageCapAndThrows() {
         // given
         UUID userId = UUID.randomUUID();
         Account account = Account.createAccount(
@@ -637,11 +637,14 @@ class AccountKisQueryServiceTest {
                 any(), any()))
                 .willReturn(new KisContinuationResult<>(kisBalanceResponse, true));
 
-        // when
-        SellableQuantityResponse result = accountKisQueryService.getSellableQuantity(userId, "005930");
-
-        // then
-        assertThat(result.sellableQuantity()).isZero();
+        // when & then
+        assertThatThrownBy(() -> accountKisQueryService.getSellableQuantity(userId, "005930"))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(AccountErrorCode.KIS_BALANCE_INQUIRY_FAILED);
+                });
         verify(kisTrClient, times(150)).inquireBalance(
                 eq("issued-token"), eq("app-key"), eq("secret-key"), eq("12345678"), eq("01"), eq(AccountType.REAL),
                 any(), any());
