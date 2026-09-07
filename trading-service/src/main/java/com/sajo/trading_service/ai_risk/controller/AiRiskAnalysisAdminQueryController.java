@@ -3,26 +3,27 @@ package com.sajo.trading_service.ai_risk.controller;
 import com.sajo.common.code.GeneralResponseCode;
 import com.sajo.common.response.GeneralResponse;
 import com.sajo.common.response.PageResponse;
+import com.sajo.trading_service.ai_risk.controller.dto.response.AiAnalysisAuditDetailResponse;
 import com.sajo.trading_service.ai_risk.controller.dto.response.AiRiskAnalysisFailureHistoryItemResponse;
 import com.sajo.trading_service.ai_risk.domain.AiAnalysisFailureType;
+import com.sajo.trading_service.ai_risk.service.query.AiAnalysisHistoryQueryService;
 import com.sajo.trading_service.ai_risk.service.query.AiRiskAnalysisQueryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
- 
+import org.springframework.web.bind.annotation.*;
+
+import java.util.UUID;
+
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/admin/ai/analyses")
 public class AiRiskAnalysisAdminQueryController {
  
     private final AiRiskAnalysisQueryService aiRiskAnalysisQueryService;
+    private final AiAnalysisHistoryQueryService aiAnalysisHistoryQueryService;
  
     @GetMapping("/failures")
     public ResponseEntity<GeneralResponse<PageResponse<AiRiskAnalysisFailureHistoryItemResponse>>> getFailureHistory(
@@ -40,6 +41,23 @@ public class AiRiskAnalysisAdminQueryController {
  
         PageResponse<AiRiskAnalysisFailureHistoryItemResponse> response = PageResponse.from(page);
  
+        return GeneralResponse.toResponseEntity(
+                GeneralResponseCode.OK,
+                response
+        );
+    }
+
+    @GetMapping("/{analysisId}/audit")
+    public ResponseEntity<GeneralResponse<AiAnalysisAuditDetailResponse>> getAuditDetail(
+            @RequestHeader("X-User-Role") String role,
+            @PathVariable UUID analysisId
+            ){
+        if (!"ADMIN".equals(role)) {
+            throw new AccessDeniedException("관리자 권한이 필요합니다");
+        }
+
+        AiAnalysisAuditDetailResponse response = aiAnalysisHistoryQueryService.getAuditDetail(analysisId);
+
         return GeneralResponse.toResponseEntity(
                 GeneralResponseCode.OK,
                 response

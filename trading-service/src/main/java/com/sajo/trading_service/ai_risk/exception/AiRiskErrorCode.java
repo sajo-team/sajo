@@ -17,7 +17,8 @@ public enum AiRiskErrorCode implements ErrorCode {
     BACKTEST_NOT_COMPLETED(HttpStatus.CONFLICT, "AI_RISK_0007", "완료되지 않은 백테스트는 AI 위험 분석을 요청할 수 없습니다."),
     ANALYSIS_NOT_FOUND(HttpStatus.NOT_FOUND, "AI_RISK_0008","AI 위험 분석을 찾을 수 없습니다."),
     AI_PROMPT_VERSION_CONFLICT(HttpStatus.CONFLICT, "AI_RISK_0009", "프롬프트 등록 중 충돌이 발생했습니다."),
-    AI_ACTIVE_PROMPT_NOT_FOUND(HttpStatus.NOT_FOUND, "AI_RISK_0010", "활성화된 AI 프롬프트를 찾을 수 없습니다.");
+    AI_ACTIVE_PROMPT_NOT_FOUND(HttpStatus.NOT_FOUND, "AI_RISK_0010", "활성화된 AI 프롬프트를 찾을 수 없습니다."),
+    AUDIT_HISTORY_NOT_FOUND(HttpStatus.NOT_FOUND, "AI_RISK_0011", "AI 분석 감사 이력을 찾을 수 없습니다.");
 
     private final HttpStatus status;
     private final String errorCode;

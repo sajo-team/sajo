@@ -8,6 +8,7 @@ import com.sajo.trading_service.ai_risk.domain.AiPromptKey;
 import com.sajo.trading_service.ai_risk.domain.AiPromptStatus;
 import com.sajo.trading_service.ai_risk.service.command.AiPromptVersionCommandService;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -24,7 +25,9 @@ import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
- 
+
+@Tag("unit")
+@Tag("ai-risk")
 @WebMvcTest(AiPromptVersionCommandController.class)
 @Import(GlobalExceptionHandler.class)
 class AiPromptVersionCommandControllerTest {
