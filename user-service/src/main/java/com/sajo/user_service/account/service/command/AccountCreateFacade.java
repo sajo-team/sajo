@@ -5,6 +5,7 @@ import com.sajo.user_service.account.client.dto.response.KisAccessTokenResponse;
 import com.sajo.user_service.account.domain.Account;
 import com.sajo.user_service.account.domain.AccountType;
 import com.sajo.user_service.account.domain.KisTokenType;
+import com.sajo.user_service.account.exception.KisBusinessException;
 import com.sajo.user_service.account.service.query.AccountQueryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,9 +31,17 @@ public class AccountCreateFacade {
         accountQueryService.validateCreatable(userId, accountNo);
 
         // 2. appKey/secretKey 유효성 검증 - 트랜잭션 밖에서 실행
-        KisAccessTokenResponse kisResponse = kisOAuthClient.getAccessToken(appKey, secretKey, accountType);
+        //    이 시점엔 아직 Account가 없어 실패 시 accountId 없이(null) 기록한다
+        KisAccessTokenResponse kisResponse;
+        try {
+            kisResponse = kisOAuthClient.getAccessToken(appKey, secretKey, accountType);
+        } catch (KisBusinessException e) {
+            kisTokenLogCommandService.recordFail(
+                    null, userId, KisTokenType.ACCESS_TOKEN, e.getKisErrorCode(), e.getKisMessage());
+            throw e;
+        }
 
-        // 3. 최종 재확인 + 저장
+        // 3. 최종 재확인+ 저장
         Account account = accountCommandService.createAccount(userId, appKey, secretKey, accountNo, accountType);
 
         // 4. 저장까지 성공한 경우에만, 검증 시 이미 발급받은 토큰을 캐시에 채워 넣는다

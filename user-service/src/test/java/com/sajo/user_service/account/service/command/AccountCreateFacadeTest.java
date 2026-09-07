@@ -7,6 +7,7 @@ import com.sajo.user_service.account.domain.Account;
 import com.sajo.user_service.account.domain.AccountType;
 import com.sajo.user_service.account.domain.KisTokenType;
 import com.sajo.user_service.account.exception.AccountErrorCode;
+import com.sajo.user_service.account.exception.KisBusinessException;
 import com.sajo.user_service.account.service.query.AccountQueryService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -112,12 +113,14 @@ class AccountCreateFacadeTest {
     }
 
     @Test
-    @DisplayName("KIS 자격증명 검증에 실패하면 계좌 생성도, 캐시 채우기도 하지 않는다")
+    @DisplayName("KIS 자격증명 검증에 실패하면 계좌 생성/캐시 채우기는 안 하고, accountId 없이 실패 이력만 남긴다")
     void createAccountFailsWhenKisCredentialsInvalid() {
         // given
         UUID userId = UUID.randomUUID();
+        KisBusinessException kisException =
+                new KisBusinessException(AccountErrorCode.INVALID_KIS_CREDENTIALS, "EGW00123", "유효하지 않은 앱키입니다.");
         given(kisOAuthClient.getAccessToken("app-key", "secret-key", AccountType.REAL))
-                .willThrow(new BusinessException(AccountErrorCode.INVALID_KIS_CREDENTIALS));
+                .willThrow(kisException);
 
         // when & then
         assertThatThrownBy(() -> accountCreateFacade.createAccount(
@@ -132,7 +135,8 @@ class AccountCreateFacadeTest {
         verify(accountCommandService, never())
                 .createAccount(any(), any(), any(), any(), any());
         verifyNoInteractions(kisTokenCacheCommandService);
-        verifyNoInteractions(kisTokenLogCommandService);
+        verify(kisTokenLogCommandService)
+                .recordFail(null, userId, KisTokenType.ACCESS_TOKEN, "EGW00123", "유효하지 않은 앱키입니다.");
     }
 
     @Test

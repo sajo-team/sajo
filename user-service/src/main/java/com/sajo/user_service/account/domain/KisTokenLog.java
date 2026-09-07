@@ -24,7 +24,7 @@ public class KisTokenLog extends BaseEntity {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(nullable = false)
+    // 계좌 생성 검증(appKey/secretKey) 실패 시엔 아직 Account가 없어 null일 수 있다
     private UUID accountId;
 
     @Column(nullable = false)
