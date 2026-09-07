@@ -3,6 +3,7 @@ package com.sajo.user_service.account.controller.internal;
 import com.sajo.user_service.account.controller.dto.response.AccessTokenResponse;
 import com.sajo.user_service.account.controller.dto.response.AccountOrderInfoResponse;
 import com.sajo.user_service.account.controller.dto.response.ApprovalKeyResponse;
+import com.sajo.user_service.account.controller.dto.response.OrderableAmountResponse;
 import com.sajo.user_service.account.service.query.AccountKisQueryService;
 import com.sajo.user_service.account.service.query.AccountQueryService;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +36,13 @@ public class AccountInternalController {
     @GetMapping("/accounts/{userId}/order-info")
     public AccountOrderInfoResponse getAccountOrderInfo(@PathVariable UUID userId) {
         return accountQueryService.getAccountOrderInfo(userId);
+    }
+
+    @GetMapping("/accounts/{userId}/orderable-amount")
+    public OrderableAmountResponse getOrderableAmount(
+            @PathVariable UUID userId
+    ) {
+        return accountKisQueryService.getOrderableAmount(userId);
     }
 
 }

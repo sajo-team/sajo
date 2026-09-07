@@ -5,6 +5,7 @@ import com.sajo.trading_service.trading.domain.AutoTrading;
 import com.sajo.trading_service.trading.domain.Order;
 import com.sajo.trading_service.trading.domain.TradingLimit;
 import com.sajo.trading_service.trading.domain.enums.OrderStatus;
+import com.sajo.trading_service.trading.event.OrderRequestedEvent;
 import com.sajo.trading_service.trading.exception.TradingErrorCode;
 import com.sajo.trading_service.trading.kafka.dto.TradingSignalGeneratedEvent;
 import com.sajo.trading_service.trading.kafka.dto.TradingSignalPayload;
@@ -13,6 +14,7 @@ import com.sajo.trading_service.trading.repository.command.OrderCommandRepositor
 import com.sajo.trading_service.trading.repository.command.TradingLimitCommandRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -27,6 +29,7 @@ public class TradingSignalCommandService {
     private final OrderCommandRepository orderCommandRepository;
     private final AutoTradingCommandRepository autoTradingCommandRepository;
     private final TradingLimitCommandRepository tradingLimitCommandRepository;
+    private final ApplicationEventPublisher applicationEventPublisher;
 
 
     @Transactional
@@ -84,7 +87,14 @@ public class TradingSignalCommandService {
                 orderQuantity
         );
 
-        orderCommandRepository.save(order);
+        Order savedOrder =
+                orderCommandRepository.save(order);
+
+        applicationEventPublisher.publishEvent(
+                new OrderRequestedEvent(
+                        savedOrder.getId()
+                )
+        );
 
     }
 

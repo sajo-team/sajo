@@ -95,15 +95,32 @@ jobs:
             PREV_TAG=$(cat ~/sajo/.last_healthy_sha 2>/dev/null || echo "")
 
             check_health() {
-              local ports="8080 8081 8082 8083 8761 8888"
+              # gateway/discovery-service/config-server는 여전히 호스트 포트가 열려있어
+              # 호스트에서 직접 curl 가능하다.
+              local host_ports="8080 8761 8888"
+              # user/market/trading-service는 보안 강화를 위해 호스트 포트 노출을
+              # 제거했으므로(#100), 컨테이너 내부에서 자기 자신의 localhost로
+              # 체크한다 - discovery-service의 기존 docker-compose healthcheck와
+              # 동일한 방식(wget, eclipse-temurin:21-jre 이미지에 포함되어 있음).
+              local container_ports="user-service:8081 market-service:8082 trading-service:8083"
               for i in $(seq 1 30); do
                 all_up=true
-                for port in $ports; do
+                for port in $host_ports; do
                   if ! curl -sf --max-time 5 http://localhost:$port/actuator/health | grep -q '"status":"UP"'; then
                     all_up=false
                     break
                   fi
                 done
+                if [ "$all_up" = true ]; then
+                  for entry in $container_ports; do
+                    container="${entry%%:*}"
+                    port="${entry##*:}"
+                    if ! docker exec "$container" wget -qO- --timeout=5 "http://localhost:$port/actuator/health" 2>/dev/null | grep -q '"status":"UP"'; then
+                      all_up=false
+                      break
+                    fi
+                  done
+                fi
                 if [ "$all_up" = true ]; then
                   return 0
                 fi

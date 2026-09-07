@@ -1,6 +1,6 @@
 package com.sajo.user_service.account.service.query;
 
-import com.sajo.user_service.account.client.KisClient;
+import com.sajo.user_service.account.client.KisOAuthClient;
 import com.sajo.user_service.account.domain.AccountType;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.Cache;
@@ -17,7 +17,7 @@ public class KisTokenCacheQueryService {
 
     private static final String ACCESS_TOKEN_CACHE = "kis-access-token";
 
-    private final KisClient kisClient;
+    private final KisOAuthClient kisOAuthClient;
     private final CacheManager cacheManager;
 
     // Redis에는 accessToken 문자열만 캐싱한다
@@ -26,7 +26,7 @@ public class KisTokenCacheQueryService {
     //  KIS 응답의 expires_in 기준으로 TTL을 동적으로 계산하도록 같이 개선
     @Cacheable(cacheNames = ACCESS_TOKEN_CACHE, key = "#userId", sync = true)
     public String getAccessToken(UUID userId, String appKey, String secretKey, AccountType accountType) {
-        return kisClient.getAccessToken(appKey, secretKey, accountType).access_token();
+        return kisOAuthClient.getAccessToken(appKey, secretKey, accountType).access_token();
     }
 
     // 캐시에 이미 있는 값만 확인한다 - 캐시 미스여도 KIS를 호출해 새로 발급받지 않는다
@@ -42,6 +42,6 @@ public class KisTokenCacheQueryService {
     // ToDo : 캐시 만료 시 kis 중복 요청 방지 위해 분산락 적용 (접근토큰과 동일한 이슈)
     @Cacheable(cacheNames = "kis-approval-key", key = "#userId", sync = true)
     public String getApprovalKey(UUID userId, String appKey, String secretKey, AccountType accountType) {
-        return kisClient.getApprovalKey(appKey, secretKey, accountType).approval_key();
+        return kisOAuthClient.getApprovalKey(appKey, secretKey, accountType).approval_key();
     }
 }

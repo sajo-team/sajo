@@ -186,8 +186,9 @@ services:
       SPRING_PROFILES_ACTIVE: prod
       CONFIG_SERVER_URL: http://config-server:8888
       DB_PASSWORD: ${DB_PASSWORD}
-    ports:
-      - "127.0.0.1:8081:8081"
+    # ports 없음 - Gateway가 sajo-net 내부 DNS(user-service:8081)로 접근하므로
+    # 호스트 포트 노출이 필요 없다. 노출해두면 EC2 호스트 자체가 침해됐을 때
+    # Gateway를 거치지 않고 이 서비스를 직접 호출할 수 있는 경로가 하나 더 생긴다.
     networks:
       - sajo-net
     depends_on:
@@ -206,8 +207,7 @@ services:
       SPRING_PROFILES_ACTIVE: prod
       CONFIG_SERVER_URL: http://config-server:8888
       DB_PASSWORD: ${DB_PASSWORD}
-    ports:
-      - "127.0.0.1:8082:8082"
+    # ports 없음 - user-service와 동일한 이유 (Gateway만 내부 DNS로 접근하면 됨)
     networks:
       - sajo-net
     depends_on:
@@ -228,8 +228,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       MONGO_PASSWORD: ${MONGO_PASSWORD}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
-    ports:
-      - "127.0.0.1:8083:8083"
+    # ports 없음 - user-service와 동일한 이유 (Gateway만 내부 DNS로 접근하면 됨)
     networks:
       - sajo-net
     depends_on:

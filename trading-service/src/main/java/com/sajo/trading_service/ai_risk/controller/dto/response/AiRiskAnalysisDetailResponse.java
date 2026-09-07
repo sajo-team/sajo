@@ -60,6 +60,8 @@ public record AiRiskAnalysisDetailResponse(
                     "AI 분석 결과를 검증하는 중 오류가 발생했습니다.";
             case INTERNAL_ERROR ->
                     "AI 분석 처리 중 오류가 발생했습니다.";
+            case PROMPT_NOT_FOUND ->
+                    "AI 분석을 현재 이용할 수 없습니다. 잠시 후 다시 시도해 주세요.";
         };
     }
 }

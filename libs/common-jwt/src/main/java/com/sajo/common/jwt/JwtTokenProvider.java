@@ -35,12 +35,23 @@ public class JwtTokenProvider {
         this.accessTokenValiditySeconds = accessTokenValiditySeconds;
     }
 
-    public String createAccessToken(UUID userId) {
+    // sessionId 없이 발급하는 기존 호출부(테스트 등)와의 호환을 위해 유지 - sessionId는
+    // null로 발급된다(다중 세션/기기별 로그아웃을 지목할 수 없는 토큰이 된다)
+    public String createAccessToken(UUID userId, String role) {
+        return createAccessToken(userId, role, null);
+    }
+
+    // sessionId - 다중 기기 로그인 지원을 위해 로그인/재발급 시점마다 부여되는 세션 식별자.
+    // Gateway가 이 값을 X-Session-Id로 downstream에 전달하고, user-service는 로그아웃 시
+    // 이 값으로 "그 기기의 세션만" 정확히 지목해 무효화한다(다른 기기 세션에는 영향 없음).
+    public String createAccessToken(UUID userId, String role, String sessionId) {
         Instant now = Instant.now();
         Instant expiry = now.plusSeconds(accessTokenValiditySeconds);
 
         return Jwts.builder()
                 .subject(userId.toString())
+                .claim("role", role)
+                .claim("sessionId", sessionId)
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(expiry))
                 .signWith(secretKey)
@@ -52,14 +63,19 @@ public class JwtTokenProvider {
     }
 
     // 서명 불일치/만료/형식 오류 모두 JwtValidationException 하나로 통일
-    public UUID validateAndGetUserId(String token) {
+    public JwtClaims validateAndGetClaims(String token) {
         try {
             Claims claims = Jwts.parser()
                     .verifyWith(secretKey)
                     .build()
                     .parseSignedClaims(token)
                     .getPayload();
-            return UUID.fromString(claims.getSubject());
+            UUID userId = UUID.fromString(claims.getSubject());
+            // role/sessionId 클레임이 없으면 null - 이 클레임들 도입 이전에 발급된 토큰까지
+            // 검증 실패로 처리하지 않기 위함 (호출하는 쪽에서 null을 각각 알맞게 처리)
+            String role = claims.get("role", String.class);
+            String sessionId = claims.get("sessionId", String.class);
+            return new JwtClaims(userId, role, sessionId);
         } catch (ExpiredJwtException e) {
             throw new JwtValidationException("만료된 토큰입니다", e);
         } catch (JwtException | IllegalArgumentException e) {

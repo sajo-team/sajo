@@ -1,6 +1,6 @@
 package com.sajo.user_service.account.service.command;
 
-import com.sajo.user_service.account.client.KisClient;
+import com.sajo.user_service.account.client.KisOAuthClient;
 import com.sajo.user_service.account.domain.Account;
 import com.sajo.user_service.account.service.query.KisTokenCacheQueryService;
 import lombok.RequiredArgsConstructor;
@@ -15,7 +15,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AccountDeleteFacade {
 
-    private final KisClient kisClient;
+    private final KisOAuthClient kisOAuthClient;
     private final KisTokenCacheQueryService cacheQueryService;
     private final KisTokenCacheCommandService cacheCommandService;
     private final AccountCommandService accountCommandService;
@@ -28,7 +28,7 @@ public class AccountDeleteFacade {
         try {
             Optional<String> token = cacheQueryService.peekAccessToken(userId);
             if (token.isPresent()) {
-                kisClient.revokeAccessToken(
+                kisOAuthClient.revokeAccessToken(
                         account.getAppKey(), account.getSecretKey(), token.get(), account.getAccountType());
             }
         } catch (Exception e) {

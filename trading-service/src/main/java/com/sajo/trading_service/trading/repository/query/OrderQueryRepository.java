@@ -4,7 +4,11 @@ import com.sajo.trading_service.trading.domain.Order;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
+import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -12,4 +16,31 @@ public interface OrderQueryRepository extends JpaRepository<Order, UUID> {
     Page<Order> findByUserId(UUID userId, Pageable pageable);
 
     Optional<Order> findByIdAndUserId(UUID orderId, UUID userId);
+
+    @Query("""
+select o.id
+from Order o
+where o.status = com.sajo.trading_service.trading.domain.enums.OrderStatus.REQUESTED
+  and o.deletedAt is null
+  and (
+        (o.accountRetryCount = 0 and o.updatedAt < :normalCutoff)
+        or
+        (o.accountRetryCount > 0 and o.updatedAt < :retryCutoff)
+      )
+""")
+    List<UUID> findStaleRequestedOrderIds(
+            @Param("normalCutoff") Instant normalCutoff,
+            @Param("retryCutoff") Instant retryCutoff
+    );
+
+    @Query("""
+    select o.id
+    from Order o
+    where o.status = com.sajo.trading_service.trading.domain.enums.OrderStatus.PROCESSING
+      and o.updatedAt < :cutoff
+      and o.deletedAt is null
+    """)
+    List<UUID> findStaleProcessingOrderIds(
+            @Param("cutoff") Instant cutoff
+    );
 }
