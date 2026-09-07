@@ -42,12 +42,16 @@ class AccountCreateFacadeTest {
     @Mock
     private KisTokenCacheCommandService kisTokenCacheCommandService;
 
+    @Mock
+    private KisTokenLogCommandService kisTokenLogCommandService;
+
     private AccountCreateFacade accountCreateFacade;
 
     @BeforeEach
     void setUp() {
-        accountCreateFacade =
-                new AccountCreateFacade(kisOAuthClient, accountQueryService, accountCommandService, kisTokenCacheCommandService);
+        accountCreateFacade = new AccountCreateFacade(
+                kisOAuthClient, accountQueryService, accountCommandService, kisTokenCacheCommandService,
+                kisTokenLogCommandService);
     }
 
     @Test
@@ -78,6 +82,7 @@ class AccountCreateFacadeTest {
                 .createAccount(userId, "app-key", "secret-key", "12345678-01", AccountType.REAL);
         inOrder.verify(kisTokenCacheCommandService)
                 .primeKisAccessTokenCache(userId, "issued-token");
+        verify(kisTokenLogCommandService).recordSuccess(account.getId(), userId);
     }
 
     @Test
@@ -102,6 +107,7 @@ class AccountCreateFacadeTest {
         verify(accountCommandService, never())
                 .createAccount(any(), any(), any(), any(), any());
         verifyNoInteractions(kisTokenCacheCommandService);
+        verifyNoInteractions(kisTokenLogCommandService);
     }
 
     @Test
@@ -125,6 +131,7 @@ class AccountCreateFacadeTest {
         verify(accountCommandService, never())
                 .createAccount(any(), any(), any(), any(), any());
         verifyNoInteractions(kisTokenCacheCommandService);
+        verifyNoInteractions(kisTokenLogCommandService);
     }
 
     @Test
@@ -150,6 +157,7 @@ class AccountCreateFacadeTest {
                 });
 
         verifyNoInteractions(kisTokenCacheCommandService);
+        verifyNoInteractions(kisTokenLogCommandService);
     }
 
     @Test
@@ -174,5 +182,6 @@ class AccountCreateFacadeTest {
 
         // then
         assertThat(result).isEqualTo(account);
+        verifyNoInteractions(kisTokenLogCommandService);
     }
 }
