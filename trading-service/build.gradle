@@ -17,6 +17,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'io.micrometer:micrometer-registry-prometheus'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.security:spring-security-core'
     implementation 'org.springframework.ai:spring-ai-starter-model-openai'
     runtimeOnly 'org.postgresql:postgresql'
     compileOnly 'org.projectlombok:lombok'
@@ -55,4 +56,10 @@ tasks.register('aiRiskUnitTest', Test){
 
     group = 'verification'
     description = 'Runs AI risk unit tests only.'
+}
+
+tasks.register('aiRiskIntegrationTest', Test){
+    useJUnitPlatform{
+            includeTags 'integration & ai-risk'
+    }
 }

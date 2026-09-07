@@ -43,6 +43,12 @@ public enum MarketErrorCode implements ErrorCode {
             HttpStatus.NOT_FOUND,
             "MARKET_0006",
             "종목 정보를 찾을 수 없습니다"
+    ),
+
+    MARKET_STOCK_INDICATOR_NOT_FOUND(
+            HttpStatus.NOT_FOUND,
+            "MARKET_0007",
+            "종목 투자지표를 찾을 수 없습니다"
     );
 
     private final HttpStatus status;

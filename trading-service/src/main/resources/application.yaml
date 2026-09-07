@@ -74,6 +74,9 @@ sajo:
     type-mappings:
       trading.signal.generated: com.sajo.trading_service.trading.kafka.dto.TradingSignalGeneratedEvent
 
+kis:
+  base-url: ${KIS_BASE_URL:https://openapivts.koreainvestment.com:29443}
+
 eureka:
   client:
     service-url:

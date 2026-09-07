@@ -36,21 +36,27 @@ public class MarketStockIndicator extends BaseEntity {
     @Column(name = "stock_id", nullable = false)
     private UUID stockId;
 
+    //지표의 기준일
     @Column(name = "reference_date", nullable = false)
     private LocalDate referenceDate;
 
+    //주가가 주당순이익의 몇 배인지
     @Column(precision = 10, scale = 4)
     private BigDecimal per;
 
+    //주가가 주당순자산의 몇 배인지
     @Column(precision = 10, scale = 4)
     private BigDecimal pbr;
 
+    //주식 한 주당 기업이 얼마의 이익을 냈는지
     @Column(precision = 15, scale = 2)
     private BigDecimal eps;
 
+    //기업의 순자산을 주식 한 주당으로 나눈 값
     @Column(precision = 15, scale = 2)
     private BigDecimal bps;
 
+    //기업이 자기자본을 이용해 얼마의 이익을 냈는지
     @Column(precision = 10, scale = 4)
     private BigDecimal roe;
 

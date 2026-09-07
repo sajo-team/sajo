@@ -24,6 +24,13 @@ market:
     lock-ttl: 30s
     lock-wait-timeout: 5s
 
+sajo:
+  scheduler:
+    enabled: ${MARKET_SCHEDULER_ENABLED:false}
+    system-user-id: ${MARKET_SCHEDULER_SYSTEM_USER_ID:}
+    daily-price-cron: "${MARKET_SCHEDULER_DAILY_PRICE_CRON:0 10 16 * * MON-FRI}"
+    page-size: ${MARKET_SCHEDULER_PAGE_SIZE:100}
+
 ---
 spring:
   config:

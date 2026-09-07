@@ -28,7 +28,18 @@ public record KisQuoteResponse(
             String per,
             String pbr,
             String eps,
-            String bps
+            String bps,
+            @JsonProperty("stck_bsop_date") String businessDate,
+            @JsonProperty("stck_cntg_hour") String contractTime
     ) {
+
+        public KisQuoteOutput(
+                String currentPrice, String openPrice, String highPrice, String lowPrice, String previousClosePrice,
+                String changePrice, String changeRate, String accumulatedVolume, String tradeAmount,
+                String marketCapitalization, String per, String pbr, String eps, String bps
+        ) {
+            this(currentPrice, openPrice, highPrice, lowPrice, previousClosePrice, changePrice, changeRate,
+                    accumulatedVolume, tradeAmount, marketCapitalization, per, pbr, eps, bps, null, null);
+        }
     }
 }

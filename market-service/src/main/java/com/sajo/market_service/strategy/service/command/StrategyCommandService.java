@@ -76,5 +76,23 @@ public class StrategyCommandService {
         strategy.delete(userId);
     }
 
+    @Transactional
+    public StrategyActivationResponse updateActivation(
+            UUID userId,
+            UUID strategyId,
+            StrategyActivationRequest request
+    ) {
+        Strategy strategy = strategyCommandRepository.findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId)
+                .orElseThrow(() -> new BusinessException(StrategyErrorCode.STRATEGY_NOT_FOUND));
+
+        if (Boolean.TRUE.equals(request.active())) {
+            strategy.activate();
+        } else {
+            strategy.deactivate();
+        }
+
+        return StrategyActivationResponse.from(strategy);
+    }
+
     // TODO: Market 투자지표/최신가 내부 API 구현 완료 후 전략 활성화 전 PER/PBR/ROE 및 현재가 조건 검증 연동
 }

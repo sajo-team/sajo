@@ -50,6 +50,10 @@ sajo:
       ttl:
         kis-access-token: 23h
         kis-approval-key: 23h
+  # gateway의 local 프로필과 반드시 동일해야 함 (발급/검증 쌍이 맞아야 함)
+  jwt:
+    secret: local-dev-jwt-secret-key-do-not-use-in-prod-32bytes-min
+    access-token-validity-seconds: 3600
 
 eureka:
   client:
@@ -86,6 +90,10 @@ sajo:
       ttl:
         kis-access-token: 23h
         kis-approval-key: 23h
+  # TODO: 운영값은 sajo-config-repo에 gateway와 동일한 sajo.jwt.secret으로 등록할 것
+  jwt:
+    secret: ${JWT_SECRET}
+    access-token-validity-seconds: 3600
 
 
 eureka:

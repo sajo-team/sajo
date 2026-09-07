@@ -1,5 +1,5 @@
 package com.sajo.trading_service.trading.controller;
-
+ 
 import com.sajo.common.code.GeneralResponseCode;
 import com.sajo.common.response.GeneralResponse;
 import com.sajo.common.response.PageResponse;
@@ -16,19 +16,19 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
-
+ 
 import java.util.UUID;
-
+ 
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/auto-tradings")
 public class AutoTradingController {
     private final AutoTradingCommandService autoTradingCommandService;
     private final AutoTradingQueryService autoTradingQueryService;
-
+ 
     @PostMapping
     public ResponseEntity<GeneralResponse<AutoTradingCreateResponse>> createAutoTrading(
-            @RequestParam("userId") UUID userId, // TODO: Gateway에서 JWT 검증 후 전달하는 X-User-Id 헤더를 사용하도록 변경
+            @RequestHeader("X-User-Id") UUID userId,
             @Valid @RequestBody AutoTradingCreateRequest request
     ){
         AutoTradingCreateResponse response =
@@ -41,10 +41,10 @@ public class AutoTradingController {
                 response
         );
     }
-
+ 
     @PatchMapping("/{autoTradingId}")
     public ResponseEntity<GeneralResponse<AutoTradingUpdateResponse>> updateAutoTrading(
-            @RequestParam("userId") UUID userId, // TODO: Gateway에서 JWT 검증 후 전달하는 X-User-Id 헤더를 사용하도록 변경
+            @RequestHeader("X-User-Id") UUID userId,
             @PathVariable("autoTradingId") UUID autoTradingId,
             @Valid @RequestBody AutoTradingUpdateRequest request
     ) {
@@ -54,16 +54,16 @@ public class AutoTradingController {
                         autoTradingId,
                         request
                 );
-
+ 
         return GeneralResponse.toResponseEntity(
                 GeneralResponseCode.OK,
                 response
         );
     }
-
+ 
     @GetMapping
     public ResponseEntity<GeneralResponse<PageResponse<AutoTradingQueryResponse>>> getAllAutoTradings(
-            @RequestParam("userId") UUID userId, // TODO: Gateway에서 JWT 검증 후 전달하는 X-User-Id 헤더를 사용하도록 변경
+            @RequestHeader("X-User-Id") UUID userId,
             Pageable pageable
     ){
         Page<AutoTradingQueryResponse> page =
@@ -71,27 +71,27 @@ public class AutoTradingController {
                         userId,
                         pageable
                 );
-
+ 
         PageResponse<AutoTradingQueryResponse> response =
                 PageResponse.from(page);
-
+ 
         return GeneralResponse.toResponseEntity(
                 GeneralResponseCode.OK,
                 response
         );
     }
-
+ 
     @GetMapping("/{autoTradingId}")
     public ResponseEntity<GeneralResponse<AutoTradingQueryResponse>> getAutoTrading(
             @PathVariable UUID autoTradingId,
-            @RequestParam("userId") UUID userId // TODO: Gateway에서 JWT 검증 후 전달하는 X-User-Id 헤더를 사용하도록 변경
+            @RequestHeader("X-User-Id") UUID userId
     ){
         AutoTradingQueryResponse response =
                 autoTradingQueryService.findById(
                         autoTradingId,
                         userId
                 );
-
+ 
         return GeneralResponse.toResponseEntity(
                 GeneralResponseCode.OK,
                 response

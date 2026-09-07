@@ -1,6 +1,7 @@
 package com.sajo.user_service.account.service.query;
 
 import com.sajo.common.exception.BusinessException;
+import com.sajo.user_service.account.controller.dto.response.AccountOrderInfoResponse;
 import com.sajo.user_service.account.crypto.HmacSha256Hasher;
 import com.sajo.user_service.account.domain.Account;
 import com.sajo.user_service.account.exception.AccountErrorCode;
@@ -35,5 +36,11 @@ public class AccountQueryService {
     public Account getAccountByUserId(UUID userId) {
         return accountQueryRepository.findByUserIdAndDeletedAtIsNull(userId)
                 .orElseThrow(() -> new BusinessException(AccountErrorCode.ACCOUNT_NOT_FOUND));
+    }
+
+    @Transactional(readOnly = true)
+    public AccountOrderInfoResponse getAccountOrderInfo(UUID userId) {
+        Account account = getAccountByUserId(userId);
+        return AccountOrderInfoResponse.from(account);
     }
 }

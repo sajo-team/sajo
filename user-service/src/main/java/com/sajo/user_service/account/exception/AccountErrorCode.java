@@ -15,13 +15,21 @@ public enum AccountErrorCode implements ErrorCode {
 
     DUPLICATE_ACCOUNT_REQUEST(HttpStatus.CONFLICT, "ACCOUNT_0003", "이미 처리된 요청입니다"),
 
-    KIS_TOKEN_ISSUE_FAILED(HttpStatus.BAD_GATEWAY, "ACCOUNT_0004", "KIS 토큰 발급에 실패했습니다"),
+    KIS_TOKEN_ISSUE_FAILED(HttpStatus.BAD_GATEWAY, "ACCOUNT_0004", "KIS 요청 처리에 실패했습니다"),
 
     INVALID_KIS_CREDENTIALS(HttpStatus.BAD_REQUEST, "ACCOUNT_0005", "유효하지 않은 KIS 인증 정보입니다"),
 
     ACCOUNT_NOT_FOUND(HttpStatus.NOT_FOUND,"ACCOUNT_0006" , "해당 계좌를 찾을 수 없습니다" ),
 
-    KIS_RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "ACCOUNT_0007", "KIS 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요");
+    KIS_RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "ACCOUNT_0007", "KIS 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요"),
+
+    INVALID_ACCOUNT_NO_FORMAT(HttpStatus.INTERNAL_SERVER_ERROR, "ACCOUNT_0008", "계좌번호 형식이 올바르지 않습니다"),
+
+    KIS_BALANCE_INQUIRY_FAILED(HttpStatus.BAD_GATEWAY, "ACCOUNT_0009", "KIS 잔고 조회에 실패했습니다"),
+
+    INVALID_CONTINUATION_CURSOR(HttpStatus.BAD_REQUEST, "ACCOUNT_0010", "ctxAreaFk100/ctxAreaNk100은 둘 다 있거나 둘 다 없어야 합니다"),
+
+    KIS_ORDERABLE_AMOUNT_INQUIRY_FAILED(HttpStatus.BAD_GATEWAY, "ACCOUNT_0011", "KIS 매수가능금액 조회에 실패했습니다");
 
     private final HttpStatus status;
     private final String errorCode;
