@@ -18,6 +18,8 @@ import java.util.UUID;
  *
  * 종목 투자지표 이력 (m_market_stocks_indicator).
  * 기준일(reference_date)별 스냅샷이다. 같은 기준일의 KIS 재수집 값은 갱신되므로 updated_at을 남긴다.
+ *
+ * BaseUpdatableEntity에는 이 도메인에 필요하지 않은 수정자·Soft Delete 필드가 포함되어 BaseEntity를 유지한다.
  */
 @Getter
 @Entity

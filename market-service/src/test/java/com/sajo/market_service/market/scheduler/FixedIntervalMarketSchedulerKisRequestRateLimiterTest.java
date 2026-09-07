@@ -5,8 +5,11 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.util.ArrayDeque;
-import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.locks.LockSupport;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -37,6 +40,35 @@ class FixedIntervalMarketSchedulerKisRequestRateLimiterTest {
         } finally {
             Thread.interrupted();
         }
+    }
+
+    @Test
+    void interruptDuringActualWaitStopsPermitAcquisitionAndPreservesFlag() throws Exception {
+        CountDownLatch waiting = new CountDownLatch(1);
+        AtomicReference<Boolean> acquired = new AtomicReference<>();
+        AtomicReference<Boolean> interrupted = new AtomicReference<>();
+        FixedIntervalMarketSchedulerKisRequestRateLimiter limiter = new FixedIntervalMarketSchedulerKisRequestRateLimiter(
+                new MarketSchedulerProperties(false, "", "", 10, false, "", Duration.ofSeconds(30)),
+                System::nanoTime,
+                nanos -> {
+                    waiting.countDown();
+                    LockSupport.parkNanos(nanos);
+                });
+
+        assertThat(limiter.tryAcquire()).isTrue();
+        Thread waitingThread = new Thread(() -> {
+            acquired.set(limiter.tryAcquire());
+            interrupted.set(Thread.currentThread().isInterrupted());
+        });
+        waitingThread.start();
+
+        assertThat(waiting.await(1, TimeUnit.SECONDS)).isTrue();
+        waitingThread.interrupt();
+        waitingThread.join(1_000);
+
+        assertThat(waitingThread.isAlive()).isFalse();
+        assertThat(acquired).hasValue(false);
+        assertThat(interrupted).hasValue(true);
     }
 
     private FixedIntervalMarketSchedulerKisRequestRateLimiter limiter(AtomicLong now, ArrayDeque<Long> waits) {

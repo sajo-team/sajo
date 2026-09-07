@@ -38,4 +38,8 @@ Apply V44, V52, then `V103__market_stock_indicator_upsert.sql` manually before s
 
 The daily-price and indicator schedulers use the same JVM-local KIS request limiter. Their default cron times are 16:10 and 16:20 (Asia/Seoul), but a long daily run can overlap the indicator run; the shared limiter therefore spaces their combined KIS calls by at least 500 ms (at most two requests per second).
 
+Spring's default scheduler uses a single scheduler thread, so scheduled jobs in one application instance run sequentially. This does not provide a global guarantee: multiple application instances each have their own limiter and can exceed the App Key limit together.
+
 Before enabling either scheduler in an environment, operate only one scheduler-active application instance for the system App Key and avoid overlap with other batches that use the same App Key. The limiter is not distributed, so multiple instances or separate applications can still exceed the KIS App Key limit. A distributed scheduler lock and distributed rate limiter remain follow-up work.
+
+Each scheduler obtains the system user's KIS credentials once per run and reuses them for the batch. If the token's remaining lifetime is shorter than the full batch duration, later stocks can fail after token expiry; token lifetime and batch size must be monitored operationally.
