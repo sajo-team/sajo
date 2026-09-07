@@ -7,6 +7,7 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
@@ -45,6 +46,21 @@ public class Backtest extends BaseUpdatableEntity {
 
     @Column(name = "requested_at", nullable = false)
     private Instant requestedAt;
+
+    @Column(name = "total_return_rate", precision = 10, scale = 4)
+    private BigDecimal totalReturnRate;
+
+    @Column(name = "mdd", precision = 10, scale = 4)
+    private BigDecimal mdd;
+
+    @Column(name = "win_rate", precision = 10, scale = 4)
+    private BigDecimal winRate;
+
+    @Column(name = "trade_count")
+    private Integer tradeCount;
+
+    @Column(name = "max_consecutive_losses")
+    private Integer maxConsecutiveLosses;
 
     private Backtest(
             Strategy strategy,
