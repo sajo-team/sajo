@@ -4,6 +4,7 @@ import com.sajo.common.exception.BusinessException;
 import com.sajo.user_service.account.client.dto.response.KisErrorInfo;
 import com.sajo.user_service.account.domain.AccountType;
 import com.sajo.user_service.account.exception.AccountErrorCode;
+import com.sajo.user_service.account.exception.KisBusinessException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.RestClient;
@@ -59,19 +60,19 @@ abstract class AbstractKisClient {
 
             // rate limit은 자격증명 문제가 아니므로 별도로 구분
             if (errorCode != null && RATE_LIMIT_ERROR_CODES.contains(errorCode)) {
-                throw new BusinessException(AccountErrorCode.KIS_RATE_LIMITED);
+                throw new KisBusinessException(AccountErrorCode.KIS_RATE_LIMITED, errorCode, message);
             }
 
             // 4xx는 우리가 보낸 요청/자격증명 문제, 5xx(+그 외)는 KIS 쪽 장애
             if (e.getStatusCode().is4xxClientError()) {
-                throw new BusinessException(AccountErrorCode.INVALID_KIS_CREDENTIALS);
+                throw new KisBusinessException(AccountErrorCode.INVALID_KIS_CREDENTIALS, errorCode, message);
             }
-            throw new BusinessException(defaultFailureCode);
+            throw new KisBusinessException(defaultFailureCode, errorCode, message);
 
         } catch (RestClientException e) {
             // 타임아웃/연결 실패 등 HTTP 응답 자체를 못 받은 경우
             log.warn("KIS 요청 중 네트워크 오류 발생. message={}", e.getMessage(), e);
-            throw new BusinessException(defaultFailureCode);
+            throw new KisBusinessException(defaultFailureCode, null, e.getMessage());
         }
 
         if (response == null || response.getBody() == null) {
