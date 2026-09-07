@@ -4,6 +4,7 @@ import com.sajo.user_service.account.controller.dto.response.AccessTokenResponse
 import com.sajo.user_service.account.controller.dto.response.AccountOrderInfoResponse;
 import com.sajo.user_service.account.controller.dto.response.ApprovalKeyResponse;
 import com.sajo.user_service.account.controller.dto.response.OrderableAmountResponse;
+import com.sajo.user_service.account.controller.dto.response.SellableQuantityResponse;
 import com.sajo.user_service.account.service.query.AccountKisQueryService;
 import com.sajo.user_service.account.service.query.AccountQueryService;
 import lombok.RequiredArgsConstructor;
@@ -43,6 +44,14 @@ public class AccountInternalController {
             @PathVariable UUID userId
     ) {
         return accountKisQueryService.getOrderableAmount(userId);
+    }
+
+    @GetMapping("/accounts/{userId}/holdings/{stockCode}")
+    public SellableQuantityResponse getSellableQuantity(
+            @PathVariable UUID userId,
+            @PathVariable String stockCode
+    ) {
+        return accountKisQueryService.getSellableQuantity(userId, stockCode);
     }
 
 }

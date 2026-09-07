@@ -3,6 +3,7 @@ package com.sajo.user_service.account.service.query;
 import com.sajo.common.exception.BusinessException;
 import com.sajo.user_service.account.client.KisContinuationResult;
 import com.sajo.user_service.account.client.KisTrClient;
+import com.sajo.user_service.account.client.dto.response.KisBalanceHoldingResponse;
 import com.sajo.user_service.account.client.dto.response.KisBalanceResponse;
 import com.sajo.user_service.account.client.dto.response.KisOrderableAmountResponse;
 import com.sajo.user_service.account.controller.dto.response.AccessTokenResponse;
@@ -10,6 +11,7 @@ import com.sajo.user_service.account.controller.dto.response.AccountDepositRespo
 import com.sajo.user_service.account.controller.dto.response.AccountHoldingsResponse;
 import com.sajo.user_service.account.controller.dto.response.ApprovalKeyResponse;
 import com.sajo.user_service.account.controller.dto.response.OrderableAmountResponse;
+import com.sajo.user_service.account.controller.dto.response.SellableQuantityResponse;
 import com.sajo.user_service.account.domain.Account;
 import com.sajo.user_service.account.exception.AccountErrorCode;
 import lombok.RequiredArgsConstructor;
@@ -17,12 +19,16 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class AccountKisQueryService {
+
+    // 전체 상장종목 수(코스피+코스닥+코넥스 약 2,863개) 기준, 모의투자 페이지당 20건으로 넉넉히 잡은 상한
+    private static final int MAX_HOLDINGS_PAGE = 150;
 
     private final AccountQueryService accountQueryService;
     private final KisTokenCacheQueryService kisTokenCacheQueryService;
@@ -156,5 +162,65 @@ public class AccountKisQueryService {
             log.warn("KIS 매수가능금액 응답 필드 파싱 실패. userId={}", userId, e);
             throw new BusinessException(AccountErrorCode.KIS_ORDERABLE_AMOUNT_INQUIRY_FAILED, "KIS 응답 필드 파싱에 실패했습니다.");
         }
+    }
+
+    // 매도 가능 수량 조회 (특정 종목) - inquire-balance를 페이지가 끝날 때까지(hasNext=false) 순회하며 stockCode를 찾음
+    // 한투 api 중 매도가능수량조회 모의투자는 지원 하지 않아서 주식 잔고 조회를 통해 매도 가능 수량 조회
+    // 주식 잔고 조회는 한번 요청에 최대 20개의 종목을 가져올 수 있음(모의투자 기준)
+    // 추후 실전 투자 계좌는 KIS 매도가능수량조회 API 사용하도록 변경
+    public SellableQuantityResponse getSellableQuantity(UUID userId, String stockCode) {
+        Account account = accountQueryService.getAccountByUserId(userId);
+        String token = kisTokenCacheQueryService.getAccessToken(
+                userId,
+                account.getAppKey(),
+                account.getSecretKey(),
+                account.getAccountType()
+        );
+
+        int count = 0;
+        String ctxFk100 = null;
+        String ctxNk100 = null;
+        while (count < MAX_HOLDINGS_PAGE) {
+            KisContinuationResult<KisBalanceResponse> result = kisTrClient.inquireBalance(
+                    token,
+                    account.getAppKey(),
+                    account.getSecretKey(),
+                    account.getCano(),
+                    account.getAccountProductCode(),
+                    account.getAccountType(),
+                    ctxFk100,
+                    ctxNk100
+            );
+
+            KisBalanceResponse response = result.body();
+            Optional<KisBalanceHoldingResponse> found = response.output1().stream()
+                    .filter(holding -> stockCode.equals(holding.pdno()))
+                    .findFirst();
+
+            if (found.isPresent()) {
+                try {
+                    return SellableQuantityResponse.from(found.get());
+                } catch (NumberFormatException e) {
+                    log.warn("KIS 매도가능수량 응답 필드 파싱 실패. userId={}, stockCode={}", userId, stockCode, e);
+                    throw new BusinessException(
+                            AccountErrorCode.KIS_BALANCE_INQUIRY_FAILED, "KIS 응답 필드 파싱에 실패했습니다.");
+                }
+            }
+
+            if (!result.hasNext()) {
+                return SellableQuantityResponse.notHeld();
+            }
+
+            ctxFk100 = response.ctx_area_fk100();
+            ctxNk100 = response.ctx_area_nk100();
+            count++;
+        }
+
+        // 정상적인 계좌라면 절대 도달하지 않음 (전체 상장종목 수 기준 넉넉히 잡은 안전장치) - KIS 응답 이상 시 무한 루프 방지
+        // 미보유(0)로 처리하면 실제로는 조회 실패인데 매도 가능한 것으로 오인될 수 있어 명시적으로 실패 처리한다
+        log.warn("보유종목 조회 페이지 상한({})에 도달해 조회를 중단합니다. userId={}, stockCode={}",
+                MAX_HOLDINGS_PAGE, userId, stockCode);
+        throw new BusinessException(
+                AccountErrorCode.KIS_BALANCE_INQUIRY_FAILED, "보유종목 조회 페이지 상한에 도달했습니다.");
     }
 }
