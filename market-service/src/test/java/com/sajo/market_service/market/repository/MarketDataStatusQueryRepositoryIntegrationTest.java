@@ -104,15 +104,17 @@ class MarketDataStatusQueryRepositoryIntegrationTest {
 
     private void insertStock(UUID id, String stockCode) {
         jdbcTemplate.update("""
-                INSERT INTO market_strategy.m_market_stocks (id, stock_code, stock_name, market_type)
-                VALUES (?, ?, ?, 'KOSPI')
+                INSERT INTO market_strategy.m_market_stocks
+                    (id, stock_code, stock_name, market_type, created_at)
+                VALUES (?, ?, ?, 'KOSPI', CURRENT_TIMESTAMP)
                 """, id, stockCode, "test-" + stockCode);
     }
 
     private void insertPrice(UUID stockId, String date, String time, Long closePrice, String source) {
         jdbcTemplate.update("""
-                INSERT INTO market_strategy.m_market_stocks_price (id, stock_id, date, time, close_price, source)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO market_strategy.m_market_stocks_price
+                    (id, stock_id, date, time, close_price, source, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
                 """, UUID.randomUUID(), stockId, LocalDate.parse(date), time, closePrice, source);
     }
 
