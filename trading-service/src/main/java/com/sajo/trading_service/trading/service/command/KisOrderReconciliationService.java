@@ -6,10 +6,13 @@ import com.sajo.trading_service.trading.client.KisOrderClient;
 import com.sajo.trading_service.trading.client.dto.response.AccountOrderInfoResponse;
 import com.sajo.trading_service.trading.client.dto.response.AccountTokenResponse;
 import com.sajo.trading_service.trading.client.dto.response.KisOrderInquiryItem;
+import com.sajo.trading_service.trading.client.dto.response.KisOrderInquiryResponse;
 import com.sajo.trading_service.trading.domain.Order;
 import com.sajo.trading_service.trading.domain.enums.OrderStatus;
+import com.sajo.trading_service.trading.domain.enums.OrderType;
 import com.sajo.trading_service.trading.exception.TradingErrorCode;
 import com.sajo.trading_service.trading.reconciliation.KisOrderMatcher;
+import com.sajo.trading_service.trading.reconciliation.MatchResult;
 import com.sajo.trading_service.trading.repository.query.OrderQueryRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -84,28 +87,89 @@ public class KisOrderReconciliationService {
                         .atZone(ZoneId.of("Asia/Seoul"))
                         .format(DATE_FORMATTER);
 
-        /*
-         * TODO:
-         * ORD_GNO_BRNO(주문채번지점번호)의 획득 방법 확인 필요.
-         * KIS 문서상 Required=Y이나 현재 Account Service에서는 제공하지 않는다.
-         */
+        String orderBranchNo = "";
 
-        String orderBranchNo = null;
+        String sellBuyDivisionCode =
+                order.getOrderType() == OrderType.BUY
+                ? "02"
+                : "01";
 
-        /*
-         * TODO:
-         * ORD_GNO_BRNO 값 확정 후 KisOrderClient.inquireDailyOrders() 호출.
-         *
-         * 이후 구현 순서:
-         *
-         * 1. KIS 주문 목록 조회
-         * 2. 내부 Order와 조회 결과 매칭
-         * 3. 정확히 일치하는 주문이 있으면 ACCEPTED / FAILED 보정
-         * 4. brokerOrderNo가 없다면 KIS 주문번호 복구
-         * 5. 결과가 불확실하면 기존 상태 유지
-         *
-         * KIS 조회 호출은 ORD_GNO_BRNO 확인 후
-         */
+        String orderNo =
+                order.getBrokerOrderNo() == null
+                ? ""
+                : order.getBrokerOrderNo();
+
+        KisOrderInquiryResponse response;
+        try {
+            response =
+                    kisOrderClient.inquireDailyOrders(
+                            "Bearer " + tokenResponse.accessToken(),
+                            tokenResponse.appKey(),
+                            tokenResponse.secretKey(),
+                            KIS_VIRTUAL_INQUIRY_TR_ID,
+                            CUSTOMER_TYPE,
+
+                            infoResponse.cano(),
+                            infoResponse.accountProductCode(),
+                            orderDate,
+                            orderDate,
+                            sellBuyDivisionCode,
+                            order.getStockCode(),
+                            orderBranchNo,
+                            orderNo,
+
+                            "00",
+                            "00",
+                            "",
+                            "00",
+                            KRX_EXCHANGE_CODE,
+                            "",
+                            ""
+                    );
+        } catch (RuntimeException e) {
+            log.warn(
+                    "KIS 주문 조회 중 오류가 발생하여 기존 상태를 유지합니다. orderId={}",
+                    orderId,
+                    e
+            );
+            return;
+        }
+
+        if(!"0".equals(response.rtCd())){
+            log.warn(
+                    "KIS 주문 조회 실패로 상태를 유지합니다. orderId={}, msgCd={}, message={}",
+                    orderId,
+                    response.msgCd(),
+                    response.message()
+            );
+            return;
+        }
+
+        MatchResult matchResult =
+                kisOrderMatcher.match(
+                        order,
+                        response.output1()
+                );
+
+        switch (matchResult.status()){
+            case MATCHED ->
+                reconcileMatchedOrder(
+                        orderId,
+                        matchResult.item()
+                );
+
+            case NOT_FOUND ->
+                    log.warn(
+                            "KIS 주문 조회 결과에서 일치하는 주문을 찾지 못했습니다. orderId={}",
+                            orderId
+                    );
+
+            case AMBIGUOUS ->
+                    log.warn(
+                            "KIS 주문 조회 결과가 여러 건 매칭되어 상태를 유지합니다. orderId={}",
+                            orderId
+                    );
+        }
 
     }
 
@@ -137,7 +201,8 @@ public class KisOrderReconciliationService {
          * 명확한 주문 실패로 판단한다.
          */
 
-        if (rejectedQuantity == orderQuantity) {
+        if (orderQuantity > 0
+                && rejectedQuantity == orderQuantity) {
             orderStatusCommandService.fail(
                     orderId,
                     "KIS_ORDER_REJECTED",

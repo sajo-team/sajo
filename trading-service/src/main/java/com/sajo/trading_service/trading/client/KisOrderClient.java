@@ -50,12 +50,8 @@ public interface KisOrderClient {
             // 종목코드
             @RequestParam("PDNO") String stockCode,
 
-            /*
-             * TODO:
-             * KIS 문서상 Required=Y인 주문채번지점번호.
-             * 현재 Account Service에서 해당 값을 제공하지 않으므로
-             * 값의 획득 방법 확인 후 연동 필요.
-             */
+            // 주문채번지점번호.
+            // 문서상 Required=Y이나 모의투자 조회에서는 빈 문자열로 정상 조회됨.
             @RequestParam("ORD_GNO_BRNO") String orderBranchNo,
 
             // KIS 주문번호. brokerOrderNo가 없는 TIMEOUT 주문은 빈 값 사용 여부 확인 필요.
