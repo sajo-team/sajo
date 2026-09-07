@@ -1,29 +1,28 @@
 package com.sajo.market_service.market.repository;
 
+import com.sajo.common.config.CommonJpaAuditingAutoConfiguration;
 import com.sajo.market_service.market.repository.query.MarketDataStatusProjection;
 import com.sajo.market_service.market.repository.query.MarketDataStatusQueryRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
+import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
+import org.springframework.context.annotation.Import;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
-import org.springframework.jdbc.core.JdbcTemplate;
-
 import java.time.LocalDate;
-import java.sql.Time;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-@SpringBootTest(properties = {
-        "spring.jpa.hibernate.ddl-auto=none",
-        "spring.flyway.enabled=false",
-        "spring.liquibase.enabled=false"
-})
+@DataJpaTest
+@AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
+@Import(CommonJpaAuditingAutoConfiguration.class)
 @Testcontainers
 class MarketDataStatusQueryRepositoryIntegrationTest {
 
@@ -42,36 +41,11 @@ class MarketDataStatusQueryRepositoryIntegrationTest {
         registry.add("spring.datasource.url", postgres::getJdbcUrl);
         registry.add("spring.datasource.username", postgres::getUsername);
         registry.add("spring.datasource.password", postgres::getPassword);
+        registry.add("spring.jpa.hibernate.ddl-auto", () -> "create-drop");
         registry.add("spring.jpa.properties.hibernate.default_schema", () -> "market_strategy");
 
         try (var connection = postgres.createConnection(""); var statement = connection.createStatement()) {
             statement.execute("CREATE SCHEMA IF NOT EXISTS market_strategy");
-            statement.execute("""
-                    CREATE TABLE IF NOT EXISTS market_strategy.m_market_stocks (
-                        id UUID PRIMARY KEY,
-                        stock_code VARCHAR(20) NOT NULL,
-                        stock_name VARCHAR(100) NOT NULL,
-                        market_type VARCHAR(20) NOT NULL
-                    )
-                    """);
-            statement.execute("""
-                    CREATE TABLE IF NOT EXISTS market_strategy.m_market_stocks_price (
-                        id UUID PRIMARY KEY,
-                        stock_id UUID NOT NULL,
-                        date DATE NOT NULL,
-                        time TIME,
-                        close_price BIGINT,
-                        source VARCHAR(20) NOT NULL
-                    )
-                    """);
-            statement.execute("""
-                    CREATE TABLE IF NOT EXISTS market_strategy.m_market_stocks_indicator (
-                        id UUID PRIMARY KEY,
-                        stock_id UUID NOT NULL,
-                        reference_date DATE,
-                        created_at TIMESTAMP WITH TIME ZONE
-                    )
-                    """);
         } catch (Exception exception) {
             throw new IllegalStateException("Testcontainers schema setup failed", exception);
         }
@@ -136,11 +110,10 @@ class MarketDataStatusQueryRepositoryIntegrationTest {
     }
 
     private void insertPrice(UUID stockId, String date, String time, Long closePrice, String source) {
-        Time sqlTime = time == null ? null : Time.valueOf(time);
         jdbcTemplate.update("""
                 INSERT INTO market_strategy.m_market_stocks_price (id, stock_id, date, time, close_price, source)
                 VALUES (?, ?, ?, ?, ?, ?)
-                """, UUID.randomUUID(), stockId, LocalDate.parse(date), sqlTime, closePrice, source);
+                """, UUID.randomUUID(), stockId, LocalDate.parse(date), time, closePrice, source);
     }
 
     private void insertIndicator(UUID stockId, String referenceDate) {
