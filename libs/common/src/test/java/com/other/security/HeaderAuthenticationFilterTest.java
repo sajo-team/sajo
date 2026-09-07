@@ -56,6 +56,15 @@ class HeaderAuthenticationFilterTest {
     }
 
     @Test
+    @DisplayName("X-User-Id가 유효한 UUID 형식이 아니면 익명으로 처리되어 403이 반환된다")
+    void malformedUserIdIsTreatedAsAnonymous() throws Exception {
+        // 게이트웨이를 정상적으로 거치면 발생하지 않지만, 우회 호출/오설정 대비 방어 확인
+        HttpResponse<String> response = send("not-a-valid-uuid", "MASTER");
+
+        assertThat(response.statusCode()).isEqualTo(403);
+    }
+
+    @Test
     @DisplayName("/internal 경로는 헤더 없이도 열려있다")
     void internalPathIsOpenWithoutAnyHeaders() throws Exception {
         HttpRequest request = HttpRequest.newBuilder()
