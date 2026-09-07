@@ -10,10 +10,12 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
+import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.util.UUID;
 
+@Getter
 @Table(name = "p_kis_token_logs")
 @Entity
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
