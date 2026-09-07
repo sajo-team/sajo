@@ -31,6 +31,7 @@ public class MarketStockIndicatorWriter {
     private final NamedParameterJdbcTemplate jdbcTemplate;
 
     public void upsert(UUID stockId, MarketStockIndicatorCommand indicator) {
+        // updated_at은 JPA Auditing이 아니라 마지막 정상 upsert 시각을 기록한다.
         Instant now = Instant.now();
         jdbcTemplate.update(UPSERT_INDICATOR, new MapSqlParameterSource()
                 .addValue("id", UUID.randomUUID())

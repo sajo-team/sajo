@@ -43,7 +43,7 @@ public class MarketStockIndicator extends BaseEntity {
     @Column(name = "reference_date", nullable = false)
     private LocalDate referenceDate;
 
-    // JPA Auditing 대상이 아니며, JDBC upsert SQL이 매 갱신 시 직접 관리한다.
+    // JPA Auditing 대상이 아니며, JDBC upsert SQL이 마지막 정상 upsert 시각으로 직접 관리한다.
     @Column(name = "updated_at")
     private java.time.Instant updatedAt;
 

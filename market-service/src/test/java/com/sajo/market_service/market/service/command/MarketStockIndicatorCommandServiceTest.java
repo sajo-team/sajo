@@ -1,9 +1,11 @@
 package com.sajo.market_service.market.service.command;
 
+import com.sajo.common.exception.BusinessException;
 import com.sajo.market_service.market.client.kis.KisApiClient;
 import com.sajo.market_service.market.client.user.UserAccountFeignClient;
 import com.sajo.market_service.market.client.user.dto.UserKisTokenResponse;
 import com.sajo.market_service.market.dto.response.QuoteResponse;
+import com.sajo.market_service.market.exception.MarketErrorCode;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -16,6 +18,7 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -55,6 +58,20 @@ class MarketStockIndicatorCommandServiceTest {
                 new BigDecimal("15.2"), null, null, null, null, null));
 
         assertThat(service.collectAndSaveIndicatorsForIdentifiedStock(credentials, UUID.randomUUID(), "005930")).isFalse();
+        verify(persistenceService, never()).save(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void convertsNullKisQuoteToExplicitBusinessExceptionWithoutLoggingNpe() {
+        MarketStockIndicatorCommandService service = new MarketStockIndicatorCommandService(
+                userAccountFeignClient, kisApiClient, persistenceService);
+        UserKisTokenResponse credentials = new UserKisTokenResponse("token", "key", "secret");
+        when(kisApiClient.getQuote(credentials, "005930")).thenReturn(null);
+
+        assertThatThrownBy(() -> service.collectAndSaveIndicatorsForIdentifiedStock(
+                credentials, UUID.randomUUID(), "005930"))
+                .isInstanceOfSatisfying(BusinessException.class, exception ->
+                        assertThat(exception.getErrorCode()).isEqualTo(MarketErrorCode.KIS_QUOTE_RESPONSE_INVALID));
         verify(persistenceService, never()).save(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
     }
 }

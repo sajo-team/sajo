@@ -58,6 +58,12 @@ public class MarketStockIndicatorCommandService {
 
         //KIS 호출
         QuoteResponse quote = kisApiClient.getQuote(credentials, stockCode);
+        if (quote == null) {
+            throw new BusinessException(
+                    MarketErrorCode.KIS_QUOTE_RESPONSE_INVALID,
+                    "KIS 현재가 응답이 비어 있습니다."
+            );
+        }
         Optional<MarketStockIndicatorCommand> indicator = MarketStockIndicatorCommand.from(quote);
         if (indicator.isEmpty()) {
             log.warn("KIS 투자지표 스냅샷 저장을 건너뜁니다. stockCode={}, referenceDate={}, reason={}",

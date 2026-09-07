@@ -20,8 +20,8 @@ public record MarketStockIndicatorCommand(
 ) {
 
     public static Optional<MarketStockIndicatorCommand> from(QuoteResponse quote) {
-        //QuoteResponse 자체가 없거나 KIS 실제 영업일이 없으면
-        if (quote == null || quote.businessDate() == null) {
+        // KIS 실제 영업일이 없으면 저장하지 않는다.
+        if (quote.businessDate() == null) {
             return Optional.empty();
         }
         //PER과 PBR이 둘 다 없으면
