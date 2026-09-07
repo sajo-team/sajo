@@ -28,6 +28,7 @@ public class StrategyCommandService {
 
     private final StrategyCommandRepository strategyCommandRepository;
     private final MarketInternalQueryService marketInternalQueryService;
+    private final StrategyActivationCommandService strategyActivationCommandService;
 
     @Transactional
     public StrategyCreateResponse createStrategy(
@@ -105,7 +106,6 @@ public class StrategyCommandService {
     }
 
     // Market 내부 API를 통해 현재가 및 전략에 설정된 PER/PBR 조건 검증, ROE 지표 보류
-    @Transactional
     public StrategyActivationResponse updateActivation(
             UUID userId,
             UUID strategyId,
@@ -123,14 +123,14 @@ public class StrategyCommandService {
             log.info("전략 활성화 전 Market 데이터 검증 시작. strategyId={}, stockCode={}",
                     strategyId, strategy.getStockCode());
             validateMarketDataAvailable(userId, strategy);
-            strategy.activate();
-            log.info("전략 활성화 완료. strategyId={}", strategyId);
-        } else {
-            strategy.deactivate();
-            log.info("전략 비활성화 완료. strategyId={}", strategyId);
         }
 
-        return StrategyActivationResponse.from(strategy);
+        // 별도 Bean의 @Transactional 메서드 호출
+        return strategyActivationCommandService.changeActivation(
+                userId,
+                strategyId,
+                request.active()
+        );
     }
 
     private void validateMarketDataAvailable(UUID userId, Strategy strategy) {
@@ -159,6 +159,15 @@ public class StrategyCommandService {
         InternalStockIndicatorResponse indicator =
                 marketInternalQueryService.getIndicator(strategy.getStockCode());
 
+        if (indicator == null) {
+            log.warn("전략 활성화 실패: 투자지표 응답이 없습니다. stockCode={}",
+                    strategy.getStockCode());
+            throw new BusinessException(
+                    StrategyErrorCode.INVALID_STRATEGY,
+                    "투자지표 정보가 없어 전략을 활성화할 수 없습니다."
+            );
+        }
+
         log.info("Market 투자지표 조회 완료. stockCode={}, per={}, pbr={}, referenceDate={}",
                 strategy.getStockCode(), indicator.per(), indicator.pbr(), indicator.referenceDate());
 
@@ -178,7 +187,7 @@ public class StrategyCommandService {
             String indicatorName
     ) {
         if (condition != null && actual == null) {
-            log.warn("전략 활성화 실패: {} 지표가 없습니다. indicatorName={}", indicatorName);
+            log.warn("전략 활성화 실패: {} 지표가 없습니다.", indicatorName);
             throw new BusinessException(
                     StrategyErrorCode.INVALID_STRATEGY,
                     indicatorName + " 지표가 없어 전략을 활성화할 수 없습니다."
