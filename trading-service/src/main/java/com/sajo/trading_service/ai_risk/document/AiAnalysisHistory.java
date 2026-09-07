@@ -1,11 +1,13 @@
 package com.sajo.trading_service.ai_risk.document;
 
-import com.sajo.trading_service.ai_risk.domain.AiPromptKey;
+import com.sajo.trading_service.ai_risk.domain.AiAnalysisFailureType;
+import com.sajo.trading_service.ai_risk.domain.AiAnalysisStatus;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.index.CompoundIndex;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
@@ -17,6 +19,10 @@ import java.util.UUID;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Document(collection = "p_ai_analysis_histories")
+@CompoundIndex(
+        name = "idx_ai_analysis_history_prompt_version",
+        def = "{'prompt.version': 1}"
+)
 public class AiAnalysisHistory {
 
     @Id
@@ -41,6 +47,8 @@ public class AiAnalysisHistory {
 
     private MetadataSnapshot metadata;
 
+    private ResultSnapshot result;
+
     private Instant createdAt;
 
     @Builder
@@ -53,7 +61,8 @@ public class AiAnalysisHistory {
             PromptSnapshot prompt,
             ResponseSnapshot response,
             ValidationSnapshot validation,
-            MetadataSnapshot metadata
+            MetadataSnapshot metadata,
+            ResultSnapshot result
     ) {
         this.analysisId = analysisId;
         this.userId = userId;
@@ -64,6 +73,7 @@ public class AiAnalysisHistory {
         this.response = response;
         this.validation = validation;
         this.metadata = metadata;
+        this.result = result;
         this.createdAt = Instant.now();
     }
 
@@ -85,5 +95,10 @@ public class AiAnalysisHistory {
     public record MetadataSnapshot(
             String model,
             Long latencyMs
+    ){}
+
+    public record ResultSnapshot(
+            AiAnalysisStatus status,
+            AiAnalysisFailureType failureType
     ){}
 }

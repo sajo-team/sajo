@@ -6,6 +6,7 @@ import com.sajo.common.exception.GlobalExceptionHandler;
 import com.sajo.trading_service.ai_risk.controller.dto.response.AiAnalysisAuditDetailResponse;
 import com.sajo.trading_service.ai_risk.controller.dto.response.AiRiskAnalysisFailureHistoryItemResponse;
 import com.sajo.trading_service.ai_risk.domain.AiAnalysisFailureType;
+import com.sajo.trading_service.ai_risk.domain.AiAnalysisStatus;
 import com.sajo.trading_service.ai_risk.exception.AiRiskErrorCode;
 import com.sajo.trading_service.ai_risk.service.query.AiAnalysisHistoryQueryService;
 import com.sajo.trading_service.ai_risk.service.query.AiRiskAnalysisQueryService;
@@ -129,6 +130,10 @@ class AiRiskAnalysisAdminQueryControllerTest {
                         new AiAnalysisAuditDetailResponse.MetadataResponse(
                                 "test-model",
                                 1000L
+                        ),
+                        new AiAnalysisAuditDetailResponse.Result(
+                                AiAnalysisStatus.COMPLETED,
+                                null
                         ),
                         Instant.now()
                 );

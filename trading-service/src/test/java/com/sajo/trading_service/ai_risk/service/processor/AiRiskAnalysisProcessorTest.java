@@ -33,7 +33,6 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
-import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -84,16 +83,19 @@ class AiRiskAnalysisProcessorTest {
     }
 
     @Test
-    @DisplayName("AI 분석과 검증에 성공하면 분석을 완료하고 성공 이력을 저장한다")
+    @DisplayName("AI 분석과 검증에 성공하면 분석을 완료하고 COMPLETED 이력을 저장한다")
     void process_success() {
+        // given
         AiRiskAnalysisResult result = createResult();
         AiRiskAnalysisOutput output = createOutput(result);
 
         when(aiRiskAnalyzer.analyze(strategy, backtest))
                 .thenReturn(output);
 
+        // when
         processor.process(event);
 
+        // then
         verify(responseValidator).validate(result);
 
         verify(resultService).complete(
@@ -143,11 +145,18 @@ class AiRiskAnalysisProcessorTest {
 
         assertThat(history.getMetadata().latencyMs())
                 .isEqualTo(100L);
+
+        assertThat(history.getResult()).isNotNull();
+        assertThat(history.getResult().status())
+                .isEqualTo(AiAnalysisStatus.COMPLETED);
+        assertThat(history.getResult().failureType())
+                .isNull();
     }
 
     @Test
-    @DisplayName("AI 응답 구조 검증에 실패하면 VALIDATION_ERROR로 실패 처리하고 이력을 저장한다")
+    @DisplayName("AI 응답 구조 검증에 실패하면 VALIDATION_ERROR 결과를 이력에 저장한다")
     void process_structureValidationFailure() {
+        // given
         AiRiskAnalysisResult result = createResult();
         AiRiskAnalysisOutput output = createOutput(result);
 
@@ -159,8 +168,10 @@ class AiRiskAnalysisProcessorTest {
                 "AI 응답 구조가 올바르지 않습니다."
         )).when(responseValidator).validate(result);
 
+        // when
         processor.process(event);
 
+        // then
         verify(resultService).fail(
                 analysisId,
                 AiAnalysisFailureType.VALIDATION_ERROR,
@@ -188,11 +199,18 @@ class AiRiskAnalysisProcessorTest {
 
         assertThat(history.getResponse().rawResponse())
                 .isEqualTo("{\"riskLevel\":\"HIGH\"}");
+
+        assertThat(history.getResult()).isNotNull();
+        assertThat(history.getResult().status())
+                .isEqualTo(AiAnalysisStatus.FAILED);
+        assertThat(history.getResult().failureType())
+                .isEqualTo(AiAnalysisFailureType.VALIDATION_ERROR);
     }
 
     @Test
-    @DisplayName("AI 응답 내용 검증에 실패하면 구조 검증 성공과 내용 검증 실패를 이력에 저장한다")
+    @DisplayName("AI 응답 내용 검증에 실패하면 VALIDATION_ERROR 결과를 이력에 저장한다")
     void process_contentValidationFailure() {
+        // given
         AiRiskAnalysisResult result = createResult();
         AiRiskAnalysisOutput output = createOutput(result);
 
@@ -204,8 +222,10 @@ class AiRiskAnalysisProcessorTest {
                 "AI 응답 내용이 올바르지 않습니다."
         )).when(responseValidator).validate(result);
 
+        // when
         processor.process(event);
 
+        // then
         verify(resultService).fail(
                 analysisId,
                 AiAnalysisFailureType.VALIDATION_ERROR,
@@ -224,11 +244,18 @@ class AiRiskAnalysisProcessorTest {
 
         assertThat(history.getValidation().contentValid())
                 .isFalse();
+
+        assertThat(history.getResult()).isNotNull();
+        assertThat(history.getResult().status())
+                .isEqualTo(AiAnalysisStatus.FAILED);
+        assertThat(history.getResult().failureType())
+                .isEqualTo(AiAnalysisFailureType.VALIDATION_ERROR);
     }
 
     @Test
-    @DisplayName("AI 응답 파싱에 실패하면 사용한 프롬프트와 원본 응답을 이력에 저장한다")
+    @DisplayName("AI 응답 파싱에 실패하면 RESPONSE_PARSE_ERROR 결과와 원본 응답을 이력에 저장한다")
     void process_parseFailure() {
+        // given
         String rawResponse = "invalid json";
 
         AiResponseParseException exception =
@@ -245,8 +272,10 @@ class AiRiskAnalysisProcessorTest {
         when(aiRiskAnalyzer.analyze(strategy, backtest))
                 .thenThrow(exception);
 
+        // when
         processor.process(event);
 
+        // then
         verify(resultService).fail(
                 analysisId,
                 AiAnalysisFailureType.RESPONSE_PARSE_ERROR,
@@ -263,10 +292,9 @@ class AiRiskAnalysisProcessorTest {
         AiAnalysisHistory history = captor.getValue();
 
         assertThat(history.getPrompt()).isNotNull();
-
         assertThat(history.getPrompt().version()).isEqualTo("v3");
-
-        assertThat(history.getPrompt().content()).isEqualTo("테스트 시스템 프롬프트");
+        assertThat(history.getPrompt().content())
+                .isEqualTo("테스트 시스템 프롬프트");
 
         assertThat(history.getResponse().rawResponse())
                 .isEqualTo(rawResponse);
@@ -285,11 +313,18 @@ class AiRiskAnalysisProcessorTest {
 
         assertThat(history.getMetadata().latencyMs())
                 .isEqualTo(100L);
+
+        assertThat(history.getResult()).isNotNull();
+        assertThat(history.getResult().status())
+                .isEqualTo(AiAnalysisStatus.FAILED);
+        assertThat(history.getResult().failureType())
+                .isEqualTo(AiAnalysisFailureType.RESPONSE_PARSE_ERROR);
     }
 
     @Test
-    @DisplayName("LLM 호출에 실패하면 해당 실패 유형으로 처리하고 실패 이력을 저장한다")
+    @DisplayName("LLM 호출에 실패하면 LLM_API_ERROR 결과를 이력에 저장한다")
     void process_llmFailure() {
+        // given
         AiAnalysisException exception =
                 new AiAnalysisException(
                         AiAnalysisFailureType.LLM_API_ERROR,
@@ -304,8 +339,10 @@ class AiRiskAnalysisProcessorTest {
         when(aiRiskAnalyzer.analyze(strategy, backtest))
                 .thenThrow(exception);
 
+        // when
         processor.process(event);
 
+        // then
         verify(resultService).fail(
                 analysisId,
                 AiAnalysisFailureType.LLM_API_ERROR,
@@ -348,11 +385,18 @@ class AiRiskAnalysisProcessorTest {
 
         assertThat(history.getValidation().errors())
                 .containsExactly("LLM API 호출에 실패했습니다.");
+
+        assertThat(history.getResult()).isNotNull();
+        assertThat(history.getResult().status())
+                .isEqualTo(AiAnalysisStatus.FAILED);
+        assertThat(history.getResult().failureType())
+                .isEqualTo(AiAnalysisFailureType.LLM_API_ERROR);
     }
 
     @Test
     @DisplayName("MongoDB 감사 이력 저장에 실패해도 완료된 AI 분석 처리는 실패하지 않는다")
     void process_historySaveFailure_doesNotAffectAnalysis() {
+        // given
         AiRiskAnalysisResult result = createResult();
         AiRiskAnalysisOutput output = createOutput(result);
 
@@ -362,6 +406,7 @@ class AiRiskAnalysisProcessorTest {
         when(historyRepository.save(any(AiAnalysisHistory.class)))
                 .thenThrow(new RuntimeException("MongoDB error"));
 
+        // when & then
         assertThatCode(() -> processor.process(event))
                 .doesNotThrowAnyException();
 
@@ -376,6 +421,129 @@ class AiRiskAnalysisProcessorTest {
 
         verify(resultService, never())
                 .fail(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("예상하지 못한 예외가 발생하면 INTERNAL_ERROR 결과를 감사 이력에 저장한다")
+    void process_unexpectedException_failsWithInternalError() {
+        // given
+        AiRiskAnalysisResult result = createResult();
+        AiRiskAnalysisOutput output = createOutput(result);
+
+        when(aiRiskAnalyzer.analyze(strategy, backtest))
+                .thenReturn(output);
+
+        doThrow(new RuntimeException("unexpected error"))
+                .when(responseValidator)
+                .validate(result);
+
+        // when
+        processor.process(event);
+
+        // then
+        verify(resultService).fail(
+                analysisId,
+                AiAnalysisFailureType.INTERNAL_ERROR,
+                "unexpected error"
+        );
+
+        verify(resultService, never())
+                .complete(any(), any(), any(), any(), any(), any());
+
+        ArgumentCaptor<AiAnalysisHistory> captor =
+                ArgumentCaptor.forClass(AiAnalysisHistory.class);
+
+        verify(historyRepository).save(captor.capture());
+
+        AiAnalysisHistory history = captor.getValue();
+
+        // analyze()는 성공했기 때문에 output 정보도 남아야 한다.
+        assertThat(history.getPrompt()).isNotNull();
+        assertThat(history.getPrompt().version())
+                .isEqualTo("v3");
+
+        assertThat(history.getResponse()).isNotNull();
+        assertThat(history.getResponse().rawResponse())
+                .isEqualTo("{\"riskLevel\":\"HIGH\"}");
+
+        assertThat(history.getMetadata()).isNotNull();
+        assertThat(history.getMetadata().model())
+                .isEqualTo("gpt-5-mini");
+        assertThat(history.getMetadata().latencyMs())
+                .isEqualTo(100L);
+
+        assertThat(history.getResult()).isNotNull();
+        assertThat(history.getResult().status())
+                .isEqualTo(AiAnalysisStatus.FAILED);
+        assertThat(history.getResult().failureType())
+                .isEqualTo(AiAnalysisFailureType.INTERNAL_ERROR);
+    }
+
+    @Test
+    @DisplayName("ACTIVE 프롬프트가 없으면 PROMPT_NOT_FOUND 결과를 감사 이력에 저장한다")
+    void process_activePromptNotFound_savesFailureHistory() {
+        // given
+        AiAnalysisException exception =
+                new AiAnalysisException(
+                        AiAnalysisFailureType.PROMPT_NOT_FOUND,
+                        "활성화된 AI 프롬프트를 찾을 수 없습니다.",
+                        null,
+                        null,
+                        "gpt-5-mini",
+                        0L,
+                        new BusinessException(
+                                AiRiskErrorCode.AI_ACTIVE_PROMPT_NOT_FOUND
+                        )
+                );
+
+        when(aiRiskAnalyzer.analyze(strategy, backtest))
+                .thenThrow(exception);
+
+        // when
+        processor.process(event);
+
+        // then
+        verify(resultService).fail(
+                analysisId,
+                AiAnalysisFailureType.PROMPT_NOT_FOUND,
+                "활성화된 AI 프롬프트를 찾을 수 없습니다."
+        );
+
+        verifyNoInteractions(responseValidator);
+
+        ArgumentCaptor<AiAnalysisHistory> captor =
+                ArgumentCaptor.forClass(AiAnalysisHistory.class);
+
+        verify(historyRepository).save(captor.capture());
+
+        AiAnalysisHistory history = captor.getValue();
+
+        assertThat(history.getAnalysisId())
+                .isEqualTo(analysisId);
+
+        assertThat(history.getPrompt())
+                .isNull();
+
+        assertThat(history.getResponse())
+                .isNull();
+
+        assertThat(history.getMetadata())
+                .isNull();
+
+        assertThat(history.getValidation().structureValid())
+                .isFalse();
+
+        assertThat(history.getValidation().contentValid())
+                .isFalse();
+
+        assertThat(history.getValidation().errors())
+                .containsExactly("활성화된 AI 프롬프트를 찾을 수 없습니다.");
+
+        assertThat(history.getResult()).isNotNull();
+        assertThat(history.getResult().status())
+                .isEqualTo(AiAnalysisStatus.FAILED);
+        assertThat(history.getResult().failureType())
+                .isEqualTo(AiAnalysisFailureType.PROMPT_NOT_FOUND);
     }
 
     private AiRiskAnalysisResult createResult() {
@@ -441,88 +609,5 @@ class AiRiskAnalysisProcessorTest {
                 30,
                 3
         );
-    }
-
-    @Test
-    @DisplayName("예상하지 못한 예외가 발생하면 INTERNAL_ERROR로 실패 처리한다")
-    void process_unexpectedException_failsWithInternalError() {
-        AiRiskAnalysisResult result = createResult();
-        AiRiskAnalysisOutput output = createOutput(result);
-
-        when(aiRiskAnalyzer.analyze(strategy, backtest))
-                .thenReturn(output);
-
-        doThrow(new RuntimeException("unexpected error"))
-                .when(responseValidator)
-                .validate(result);
-
-        processor.process(event);
-
-        verify(resultService).fail(
-                analysisId,
-                AiAnalysisFailureType.INTERNAL_ERROR,
-                "unexpected error"
-        );
-
-        verify(resultService, never())
-                .complete(any(), any(), any(), any(), any(), any());
-    }
-
-    @Test
-    @DisplayName("ACTIVE 프롬프트가 없으면 PROMPT_NOT_FOUND로 실패 처리하고 감사 이력을 저장한다")
-    void process_activePromptNotFound_savesFailureHistory() {
-        AiAnalysisException exception =
-                new AiAnalysisException(
-                        AiAnalysisFailureType.PROMPT_NOT_FOUND,
-                        "활성화된 AI 프롬프트를 찾을 수 없습니다.",
-                        null,
-                        null,
-                        "gpt-5-mini",
-                        0L,
-                        new BusinessException(
-                                AiRiskErrorCode.AI_ACTIVE_PROMPT_NOT_FOUND
-                        )
-                );
-
-        when(aiRiskAnalyzer.analyze(strategy, backtest))
-                .thenThrow(exception);
-
-        processor.process(event);
-
-        verify(resultService).fail(
-                analysisId,
-                AiAnalysisFailureType.PROMPT_NOT_FOUND,
-                "활성화된 AI 프롬프트를 찾을 수 없습니다."
-        );
-
-        verifyNoInteractions(responseValidator);
-
-        ArgumentCaptor<AiAnalysisHistory> captor =
-                ArgumentCaptor.forClass(AiAnalysisHistory.class);
-
-        verify(historyRepository).save(captor.capture());
-
-        AiAnalysisHistory history = captor.getValue();
-
-        assertThat(history.getAnalysisId())
-                .isEqualTo(analysisId);
-
-        assertThat(history.getPrompt())
-                .isNull();
-
-        assertThat(history.getResponse())
-                .isNull();
-
-        assertThat(history.getMetadata())
-                .isNull();
-
-        assertThat(history.getValidation().structureValid())
-                .isFalse();
-
-        assertThat(history.getValidation().contentValid())
-                .isFalse();
-
-        assertThat(history.getValidation().errors())
-                .containsExactly("활성화된 AI 프롬프트를 찾을 수 없습니다.");
     }
 }

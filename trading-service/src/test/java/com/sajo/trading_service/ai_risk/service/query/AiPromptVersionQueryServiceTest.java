@@ -3,11 +3,14 @@ package com.sajo.trading_service.ai_risk.service.query;
 import com.sajo.common.exception.BusinessException;
 import com.sajo.trading_service.ai_risk.controller.dto.response.AiPromptVersionHistoryResponse;
 import com.sajo.trading_service.ai_risk.document.AiAnalysisHistory;
-import com.sajo.trading_service.ai_risk.domain.*;
+import com.sajo.trading_service.ai_risk.domain.AiAnalysisFailureType;
+import com.sajo.trading_service.ai_risk.domain.AiAnalysisStatus;
+import com.sajo.trading_service.ai_risk.domain.AiPromptKey;
+import com.sajo.trading_service.ai_risk.domain.AiPromptStatus;
+import com.sajo.trading_service.ai_risk.domain.AiPromptVersion;
 import com.sajo.trading_service.ai_risk.exception.AiRiskErrorCode;
 import com.sajo.trading_service.ai_risk.repository.query.AiAnalysisHistoryQueryRepository;
 import com.sajo.trading_service.ai_risk.repository.query.AiPromptVersionQueryRepository;
-import com.sajo.trading_service.ai_risk.repository.query.AiRiskAnalysisQueryRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -24,10 +27,8 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.mock;
 
 @Tag("unit")
 @Tag("ai-risk")
@@ -40,15 +41,14 @@ class AiPromptVersionQueryServiceTest {
     @Mock
     private AiAnalysisHistoryQueryRepository aiAnalysisHistoryQueryRepository;
 
-    @Mock
-    private AiRiskAnalysisQueryRepository aiRiskAnalysisQueryRepository;
-
     @InjectMocks
     private AiPromptVersionQueryService promptVersionQueryService;
 
     private AiAnalysisHistory createHistory(
             UUID analysisId,
-            String version
+            String version,
+            AiAnalysisStatus status,
+            AiAnalysisFailureType failureType
     ) {
         return AiAnalysisHistory.builder()
                 .analysisId(analysisId)
@@ -59,35 +59,17 @@ class AiPromptVersionQueryServiceTest {
                         version,
                         "테스트 프롬프트"
                 ))
+                .result(new AiAnalysisHistory.ResultSnapshot(
+                        status,
+                        failureType
+                ))
                 .build();
-    }
-
-    private AiRiskAnalysis createCompletedAnalysis(UUID analysisId) {
-
-        AiRiskAnalysis analysis = mock(AiRiskAnalysis.class);
-
-        given(analysis.getId()).willReturn(analysisId);
-        given(analysis.getStatus()).willReturn(AiAnalysisStatus.COMPLETED);
-
-        return analysis;
-    }
-
-    private AiRiskAnalysis createFailedAnalysis(
-            UUID analysisId,
-            AiAnalysisFailureType failureType
-    ) {
-        AiRiskAnalysis analysis = mock(AiRiskAnalysis.class);
-
-        given(analysis.getId()).willReturn(analysisId);
-        given(analysis.getStatus()).willReturn(AiAnalysisStatus.FAILED);
-        given(analysis.getFailureType()).willReturn(failureType);
-
-        return analysis;
     }
 
     @Test
     @DisplayName("ACTIVE 프롬프트를 조회한다")
-    void getActivePrompt(){
+    void getActivePrompt() {
+        // given
         AiPromptVersion promptVersion = AiPromptVersion.create(
                 AiPromptKey.RISK_ANALYSIS,
                 "v1",
@@ -100,21 +82,26 @@ class AiPromptVersionQueryServiceTest {
                 AiPromptStatus.ACTIVE
         )).willReturn(Optional.of(promptVersion));
 
-        AiPromptVersion result = promptVersionQueryService.getActivePrompt(
-                AiPromptKey.RISK_ANALYSIS
-        );
+        // when
+        AiPromptVersion result =
+                promptVersionQueryService.getActivePrompt(
+                        AiPromptKey.RISK_ANALYSIS
+                );
 
+        // then
         assertThat(result).isSameAs(promptVersion);
     }
 
     @Test
     @DisplayName("ACTIVE 프롬프트가 없으면 비즈니스 예외가 발생한다")
-    void getActivePromptNotFound(){
+    void getActivePromptNotFound() {
+        // given
         given(promptVersionQueryRepository.findByPromptKeyAndStatus(
                 AiPromptKey.RISK_ANALYSIS,
                 AiPromptStatus.ACTIVE
         )).willReturn(Optional.empty());
 
+        // when
         BusinessException exception = assertThrows(
                 BusinessException.class,
                 () -> promptVersionQueryService.getActivePrompt(
@@ -122,6 +109,7 @@ class AiPromptVersionQueryServiceTest {
                 )
         );
 
+        // then
         assertThat(exception.getErrorCode())
                 .isEqualTo(AiRiskErrorCode.AI_ACTIVE_PROMPT_NOT_FOUND);
     }
@@ -146,65 +134,42 @@ class AiPromptVersionQueryServiceTest {
                         1
                 ));
 
-        UUID completedId1 = UUID.randomUUID();
-        UUID completedId2 = UUID.randomUUID();
-        UUID validationFailureId = UUID.randomUUID();
-        UUID parseFailureId = UUID.randomUUID();
+        AiAnalysisHistory completedHistory1 = createHistory(
+                UUID.randomUUID(),
+                "v1",
+                AiAnalysisStatus.COMPLETED,
+                null
+        );
 
-        AiAnalysisHistory completedHistory1 =
-                createHistory(completedId1, "v1");
+        AiAnalysisHistory completedHistory2 = createHistory(
+                UUID.randomUUID(),
+                "v1",
+                AiAnalysisStatus.COMPLETED,
+                null
+        );
 
-        AiAnalysisHistory completedHistory2 =
-                createHistory(completedId2, "v1");
+        AiAnalysisHistory validationFailureHistory = createHistory(
+                UUID.randomUUID(),
+                "v1",
+                AiAnalysisStatus.FAILED,
+                AiAnalysisFailureType.VALIDATION_ERROR
+        );
 
-        AiAnalysisHistory validationFailureHistory =
-                createHistory(validationFailureId, "v1");
-
-        AiAnalysisHistory parseFailureHistory =
-                createHistory(parseFailureId, "v1");
-
-        List<AiAnalysisHistory> histories = List.of(
-                completedHistory1,
-                completedHistory2,
-                validationFailureHistory,
-                parseFailureHistory
+        AiAnalysisHistory parseFailureHistory = createHistory(
+                UUID.randomUUID(),
+                "v1",
+                AiAnalysisStatus.FAILED,
+                AiAnalysisFailureType.RESPONSE_PARSE_ERROR
         );
 
         given(aiAnalysisHistoryQueryRepository
                 .findAllByPrompt_VersionIn(List.of("v1")))
-                .willReturn(histories);
-
-        AiRiskAnalysis completed1 =
-                createCompletedAnalysis(completedId1);
-
-        AiRiskAnalysis completed2 =
-                createCompletedAnalysis(completedId2);
-
-        AiRiskAnalysis validationFailure =
-                createFailedAnalysis(
-                        validationFailureId,
-                        AiAnalysisFailureType.VALIDATION_ERROR
-                );
-
-        AiRiskAnalysis parseFailure =
-                createFailedAnalysis(
-                        parseFailureId,
-                        AiAnalysisFailureType.RESPONSE_PARSE_ERROR
-                );
-
-        given(aiRiskAnalysisQueryRepository.findAllById(
-                List.of(
-                        completedId1,
-                        completedId2,
-                        validationFailureId,
-                        parseFailureId
-                )
-        )).willReturn(List.of(
-                completed1,
-                completed2,
-                validationFailure,
-                parseFailure
-        ));
+                .willReturn(List.of(
+                        completedHistory1,
+                        completedHistory2,
+                        validationFailureHistory,
+                        parseFailureHistory
+                ));
 
         // when
         Page<AiPromptVersionHistoryResponse> result =

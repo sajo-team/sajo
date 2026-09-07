@@ -64,6 +64,7 @@ spring:
       ddl-auto: validate
   mongodb:
     uri: mongodb://mongo-ai-risk:27017/ai_risk_db
+    auto-index-creation: true
   kafka:
     bootstrap-servers: kafka:9092
     consumer:
