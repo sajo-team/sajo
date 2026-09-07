@@ -11,11 +11,14 @@ import java.util.UUID;
 public interface KisTokenLogQueryRepository extends JpaRepository<KisTokenLog, UUID> {
 
     // 사용자+토큰타입 조합별 최신 이벤트 1건만 (관리자용 목록 조회)
+    // createdAt 동시각 tie 시 중복 반환을 막기 위해 id를 2차 정렬 기준으로 사용
     @Query("""
             SELECT e FROM KisTokenLog e
-            WHERE e.createdAt = (
-                SELECT MAX(e2.createdAt) FROM KisTokenLog e2
+            WHERE NOT EXISTS (
+                SELECT 1 FROM KisTokenLog e2
                 WHERE e2.userId = e.userId AND e2.tokenType = e.tokenType
+                AND (e2.createdAt > e.createdAt
+                     OR (e2.createdAt = e.createdAt AND e2.id > e.id))
             )
             """)
     Page<KisTokenLog> findLatestPerUser(Pageable pageable);
