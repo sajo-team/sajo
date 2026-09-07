@@ -1,30 +1,32 @@
 package com.sajo.gateway.filter;
- 
+
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletRequestWrapper;
- 
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
- 
-// X-User-Id/X-User-Role 헤더를 서버가 검증한 값으로 강제 치환 (클라이언트가 보낸 원본 값은
-// 항상 제거 - 스푸핑 방지)
+
+// X-User-Id/X-User-Role/X-Session-Id 헤더를 서버가 검증한 값으로 강제 치환 (클라이언트가
+// 보낸 원본 값은 항상 제거 - 스푸핑 방지)
 class UserIdHeaderRequestWrapper extends HttpServletRequestWrapper {
- 
+
     static final String USER_ID_HEADER = "X-User-Id";
     static final String USER_ROLE_HEADER = "X-User-Role";
- 
+    static final String SESSION_ID_HEADER = "X-Session-Id";
+
     private final Map<String, String> overriddenHeaders = new LinkedHashMap<>();
- 
-    UserIdHeaderRequestWrapper(HttpServletRequest request, String userId, String role) {
+
+    UserIdHeaderRequestWrapper(HttpServletRequest request, String userId, String role, String sessionId) {
         super(request);
         overriddenHeaders.put(USER_ID_HEADER, userId);
         overriddenHeaders.put(USER_ROLE_HEADER, role);
+        overriddenHeaders.put(SESSION_ID_HEADER, sessionId);
     }
- 
+
     @Override
     public String getHeader(String name) {
         for (Map.Entry<String, String> entry : overriddenHeaders.entrySet()) {
@@ -34,7 +36,7 @@ class UserIdHeaderRequestWrapper extends HttpServletRequestWrapper {
         }
         return super.getHeader(name);
     }
- 
+
     @Override
     public Enumeration<String> getHeaders(String name) {
         for (Map.Entry<String, String> entry : overriddenHeaders.entrySet()) {
@@ -47,7 +49,7 @@ class UserIdHeaderRequestWrapper extends HttpServletRequestWrapper {
         }
         return super.getHeaders(name);
     }
- 
+
     @Override
     public Enumeration<String> getHeaderNames() {
         List<String> names = new ArrayList<>();

@@ -34,6 +34,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     // 로그인 없이 접근 가능한 (method, path) 목록. 새 public API는 여기 명시적으로 추가할 것
     private static final List<PublicEndpoint> PERMIT_ALL_ENDPOINTS = List.of(
             new PublicEndpoint("POST", "/api/v1/auth/login"),
+            // access token이 만료된 상태에서 호출되는 게 정상 흐름이라 permitAll이어야 한다 -
+            // 리뷰 반영: 이게 빠져있으면 Gateway가 만료된 토큰을 보고 먼저 401을 반환해서
+            // refresh 자체가 영영 호출될 수 없다. 반대로 /logout은 인증된 사용자만 호출해야
+            // 하므로 여기 넣지 않는다.
+            new PublicEndpoint("POST", "/api/v1/auth/refresh"),
             new PublicEndpoint("POST", "/api/v1/users"),
             // 와일드카드(/actuator/**) 대신 명시적으로 나열 - 나중에 management.endpoints.web.exposure.include에
             // 다른 엔드포인트(env, heapdump 등)가 추가돼도 이 필터 코드를 안 건드리면 자동으로 열리지 않도록
@@ -53,8 +58,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     ) throws ServletException, IOException {
  
         if (isPermitAll(request)) {
-            // permitAll 경로도 X-User-Id/X-User-Role은 항상 제거 (스푸핑 방지)
-            filterChain.doFilter(new UserIdHeaderRequestWrapper(request, null, null), response);
+            // permitAll 경로도 X-User-Id/X-User-Role/X-Session-Id는 항상 제거 (스푸핑 방지)
+            filterChain.doFilter(new UserIdHeaderRequestWrapper(request, null, null, null), response);
             return;
         }
  
@@ -76,7 +81,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
  
         filterChain.doFilter(
-                new UserIdHeaderRequestWrapper(request, claims.userId().toString(), claims.role()),
+                new UserIdHeaderRequestWrapper(request, claims.userId().toString(), claims.role(), claims.sessionId()),
                 response
         );
     }
