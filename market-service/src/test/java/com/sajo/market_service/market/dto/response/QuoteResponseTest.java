@@ -43,6 +43,7 @@ class QuoteResponseTest {
         assertEquals(new BigDecimal("4605.00"), quote.eps());
         assertEquals(new BigDecimal("51850.00"), quote.bps());
         assertEquals("2026-09-04T14:30:00+09:00", quote.baseTime());
+        assertEquals(java.time.LocalDate.of(2026, 9, 4), quote.businessDate());
     }
 
     @Test
@@ -67,6 +68,22 @@ class QuoteResponseTest {
     }
 
     @Test
+    void convertsEachBlankOptionalIndicatorToNullWithoutDiscardingOtherIndicators() {
+        assertNull(QuoteResponse.from(responseWithIndicators(" ", "1.3", "4605", "51850"), "005930").per());
+        assertNull(QuoteResponse.from(responseWithIndicators("15.2", " ", "4605", "51850"), "005930").pbr());
+        assertNull(QuoteResponse.from(responseWithIndicators("15.2", "1.3", " ", "51850"), "005930").eps());
+        assertNull(QuoteResponse.from(responseWithIndicators("15.2", "1.3", "4605", " "), "005930").bps());
+    }
+
+    @Test
+    void convertsEachMalformedOptionalIndicatorToNullWithoutDiscardingOtherIndicators() {
+        assertNull(QuoteResponse.from(responseWithIndicators("invalid", "1.3", "4605", "51850"), "005930").per());
+        assertNull(QuoteResponse.from(responseWithIndicators("15.2", "invalid", "4605", "51850"), "005930").pbr());
+        assertNull(QuoteResponse.from(responseWithIndicators("15.2", "1.3", "invalid", "51850"), "005930").eps());
+        assertNull(QuoteResponse.from(responseWithIndicators("15.2", "1.3", "4605", "invalid"), "005930").bps());
+    }
+
+    @Test
     void returnsNullBaseTimeWhenBusinessDateIsMissingOrBlank() {
         assertNull(QuoteResponse.from(responseWithBaseTime(null, "143000"), "005930").baseTime());
         assertNull(QuoteResponse.from(responseWithBaseTime(" ", "143000"), "005930").baseTime());
@@ -76,6 +93,7 @@ class QuoteResponseTest {
     void returnsNullBaseTimeWhenBusinessDateIsMalformedOrDoesNotExist() {
         assertNull(QuoteResponse.from(responseWithBaseTime("invalid", "143000"), "005930").baseTime());
         assertNull(QuoteResponse.from(responseWithBaseTime("20260230", "143000"), "005930").baseTime());
+        assertNull(QuoteResponse.from(responseWithBaseTime("invalid", "143000"), "005930").businessDate());
     }
 
     @Test
@@ -109,5 +127,11 @@ class QuoteResponseTest {
         return new KisQuoteResponse("0", "MCA00000", "정상",
                 new KisQuoteResponse.KisQuoteOutput(
                         "70000", "", "", "", "", "", "", "", "", "", "", "", "", "", businessDate, contractTime));
+    }
+
+    private KisQuoteResponse responseWithIndicators(String per, String pbr, String eps, String bps) {
+        return new KisQuoteResponse("0", "MCA00000", "정상",
+                new KisQuoteResponse.KisQuoteOutput(
+                        "70000", "", "", "", "", "", "", "", "", "", per, pbr, eps, bps, "20260904", "143000"));
     }
 }

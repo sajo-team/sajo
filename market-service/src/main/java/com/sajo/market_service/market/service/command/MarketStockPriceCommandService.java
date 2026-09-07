@@ -3,6 +3,7 @@ package com.sajo.market_service.market.service.command;
 import com.sajo.common.exception.BusinessException;
 import com.sajo.market_service.market.client.kis.KisApiClient;
 import com.sajo.market_service.market.client.user.UserAccountFeignClient;
+import com.sajo.market_service.market.client.user.dto.UserKisTokenResponse;
 import com.sajo.market_service.market.domain.MarketStock;
 import com.sajo.market_service.market.dto.response.DailyPriceResponse;
 import com.sajo.market_service.market.exception.MarketErrorCode;
@@ -47,7 +48,20 @@ public class MarketStockPriceCommandService {
             throw new BusinessException(MarketErrorCode.INVALID_MARKET_STOCK, "종목 식별자가 올바르지 않습니다.");
         }
 
-        var credentials = userAccountFeignClient.getKisToken(userId);
+        return collectAndSaveDailyPricesForIdentifiedStock(userAccountFeignClient.getKisToken(userId), stockId, stockCode, startDate, endDate);
+    }
+
+    public UserKisTokenResponse getCollectionCredentials(UUID userId) {
+        return userAccountFeignClient.getKisToken(userId);
+    }
+
+    public int collectAndSaveDailyPricesForIdentifiedStock(
+            UserKisTokenResponse credentials, UUID stockId, String stockCode, LocalDate startDate, LocalDate endDate
+    ) {
+        validateDateRange(startDate, endDate);
+        if (stockId == null) {
+            throw new BusinessException(MarketErrorCode.INVALID_MARKET_STOCK, "종목 식별자가 올바르지 않습니다.");
+        }
         List<DailyPriceResponse> prices = kisApiClient.getDailyPrices(credentials, stockCode, startDate, endDate);
         return marketStockPriceDailyPersistenceService.saveDailyPrices(stockId, startDate, endDate, prices);
     }
