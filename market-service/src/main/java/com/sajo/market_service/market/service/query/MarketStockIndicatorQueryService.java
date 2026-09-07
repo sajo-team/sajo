@@ -10,6 +10,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Optional;
+import java.util.UUID;
+
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -25,5 +28,12 @@ public class MarketStockIndicatorQueryService {
         return marketStockIndicatorQueryRepository.findTopByStockIdOrderByReferenceDateDescCreatedAtDesc(stock.getId())
                 .map(MarketStockIndicatorResponse::from)
                 .orElseThrow(() -> new BusinessException(MarketErrorCode.MARKET_STOCK_INDICATOR_NOT_FOUND)); //종목은 있음 투자지표만 없음
+    }
+
+    /** 이미 존재가 확인된 종목의 ID로 최신 지표만 선택 조회한다. */
+    public Optional<MarketStockIndicatorResponse> findLatestIndicatorByConfirmedStockId(UUID stockId) {
+        return marketStockIndicatorQueryRepository
+                .findTopByStockIdOrderByReferenceDateDescCreatedAtDesc(stockId)
+                .map(MarketStockIndicatorResponse::from);
     }
 }
