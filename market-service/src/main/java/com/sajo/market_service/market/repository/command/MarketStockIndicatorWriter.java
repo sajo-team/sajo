@@ -21,10 +21,10 @@ public class MarketStockIndicatorWriter {
             ) values (
                 :id, :stockId, :referenceDate, :per, :pbr, :eps, :bps, null, :createdAt, :updatedAt
             ) on conflict (stock_id, reference_date) do update set
-                per = excluded.per,
-                pbr = excluded.pbr,
-                eps = excluded.eps,
-                bps = excluded.bps,
+                per = coalesce(excluded.per, m_market_stocks_indicator.per),
+                pbr = coalesce(excluded.pbr, m_market_stocks_indicator.pbr),
+                eps = coalesce(excluded.eps, m_market_stocks_indicator.eps),
+                bps = coalesce(excluded.bps, m_market_stocks_indicator.bps),
                 updated_at = excluded.updated_at
             """;
 

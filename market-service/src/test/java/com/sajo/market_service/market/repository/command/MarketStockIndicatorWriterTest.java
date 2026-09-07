@@ -34,10 +34,10 @@ class MarketStockIndicatorWriterTest {
         assertThat(normalizedSql).doesNotContain("roe = excluded.roe");
         assertThat(normalizedSql).doesNotContain("roe = null");
         assertThat(normalizedSql).contains("updated_at = excluded.updated_at");
-        assertThat(normalizedSql).contains("per = excluded.per");
-        assertThat(normalizedSql).contains("pbr = excluded.pbr");
-        assertThat(normalizedSql).contains("eps = excluded.eps");
-        assertThat(normalizedSql).contains("bps = excluded.bps");
+        assertThat(normalizedSql).contains("per = coalesce(excluded.per, m_market_stocks_indicator.per)");
+        assertThat(normalizedSql).contains("pbr = coalesce(excluded.pbr, m_market_stocks_indicator.pbr)");
+        assertThat(normalizedSql).contains("eps = coalesce(excluded.eps, m_market_stocks_indicator.eps)");
+        assertThat(normalizedSql).contains("bps = coalesce(excluded.bps, m_market_stocks_indicator.bps)");
         assertThat(normalizedSql).doesNotContain("id = excluded.id");
         assertThat(normalizedSql).doesNotContain("created_at = excluded.created_at");
     }

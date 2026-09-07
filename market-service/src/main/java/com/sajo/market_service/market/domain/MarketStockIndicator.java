@@ -7,7 +7,6 @@ import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.springframework.data.annotation.LastModifiedDate;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -44,7 +43,7 @@ public class MarketStockIndicator extends BaseEntity {
     @Column(name = "reference_date", nullable = false)
     private LocalDate referenceDate;
 
-    @LastModifiedDate
+    // JPA Auditing 대상이 아니며, JDBC upsert SQL이 매 갱신 시 직접 관리한다.
     @Column(name = "updated_at")
     private java.time.Instant updatedAt;
 
