@@ -19,4 +19,8 @@ public interface AutoTradingQueryRepository extends JpaRepository<AutoTrading, U
             UUID autoTradingId,
             UUID userId
     );
+
+    boolean existsByUserIdAndEnabledTrueAndDeletedAtIsNull(
+            UUID userId
+    );
 }
