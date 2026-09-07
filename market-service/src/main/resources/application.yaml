@@ -30,6 +30,9 @@ sajo:
     system-user-id: ${MARKET_SCHEDULER_SYSTEM_USER_ID:}
     daily-price-cron: "${MARKET_SCHEDULER_DAILY_PRICE_CRON:0 10 16 * * MON-FRI}"
     page-size: ${MARKET_SCHEDULER_PAGE_SIZE:100}
+    indicator-enabled: ${MARKET_INDICATOR_SCHEDULER_ENABLED:false}
+    indicator-cron: "${MARKET_INDICATOR_SCHEDULER_CRON:0 20 16 * * MON-FRI}"
+    kis-request-interval: ${MARKET_SCHEDULER_KIS_REQUEST_INTERVAL:500ms}
 
 ---
 spring:

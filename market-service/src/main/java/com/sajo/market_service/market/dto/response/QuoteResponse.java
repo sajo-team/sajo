@@ -3,6 +3,7 @@ package com.sajo.market_service.market.dto.response;
 import com.sajo.common.exception.BusinessException;
 import com.sajo.market_service.market.dto.kis.KisQuoteResponse;
 import com.sajo.market_service.market.exception.MarketErrorCode;
+import lombok.extern.slf4j.Slf4j;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -13,6 +14,7 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 
 /** Market 내부에서 사용하는 현재가 응답 모델이다. */
+@Slf4j
 public record QuoteResponse(
         String stockCode,
         Long currentPrice,
@@ -29,7 +31,8 @@ public record QuoteResponse(
         BigDecimal pbr,
         BigDecimal eps,
         BigDecimal bps,
-        String baseTime
+        String baseTime,
+        LocalDate businessDate
 ) {
 
     public QuoteResponse(
@@ -38,7 +41,17 @@ public record QuoteResponse(
             Long tradeAmount, Long marketCapitalization, BigDecimal per, BigDecimal pbr, BigDecimal eps, BigDecimal bps
     ) {
         this(stockCode, currentPrice, openPrice, highPrice, lowPrice, previousClosePrice, changePrice, changeRate,
-                accumulatedVolume, tradeAmount, marketCapitalization, per, pbr, eps, bps, null);
+                accumulatedVolume, tradeAmount, marketCapitalization, per, pbr, eps, bps, null, null);
+    }
+
+    public QuoteResponse(
+            String stockCode, Long currentPrice, Long openPrice, Long highPrice, Long lowPrice,
+            Long previousClosePrice, Long changePrice, BigDecimal changeRate, Long accumulatedVolume,
+            Long tradeAmount, Long marketCapitalization, BigDecimal per, BigDecimal pbr, BigDecimal eps,
+            BigDecimal bps, String baseTime
+    ) {
+        this(stockCode, currentPrice, openPrice, highPrice, lowPrice, previousClosePrice, changePrice, changeRate,
+                accumulatedVolume, tradeAmount, marketCapitalization, per, pbr, eps, bps, baseTime, null);
     }
 
     public static QuoteResponse from(KisQuoteResponse response, String stockCode) {
@@ -67,11 +80,12 @@ public record QuoteResponse(
                 toLong(output.accumulatedVolume()),
                 toLong(output.tradeAmount()),
                 toLong(output.marketCapitalization()),
-                toBigDecimal(output.per()),
-                toBigDecimal(output.pbr()),
-                toBigDecimal(output.eps()),
-                toBigDecimal(output.bps()),
-                toBaseTime(output.businessDate(), output.contractTime())
+                toOptionalBigDecimal(output.per(), stockCode, "per"),
+                toOptionalBigDecimal(output.pbr(), stockCode, "pbr"),
+                toOptionalBigDecimal(output.eps(), stockCode, "eps"),
+                toOptionalBigDecimal(output.bps(), stockCode, "bps"),
+                toBaseTime(output.businessDate(), output.contractTime()),
+                toBusinessDate(output.businessDate())
         );
     }
 
@@ -81,6 +95,30 @@ public record QuoteResponse(
 
     private static BigDecimal toBigDecimal(String value) {
         return value == null || value.isBlank() ? null : new BigDecimal(value);
+    }
+
+    private static BigDecimal toOptionalBigDecimal(String value, String stockCode, String fieldName) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return new BigDecimal(value);
+        } catch (NumberFormatException exception) {
+            log.warn("KIS 현재가 선택 지표 파싱을 건너뜁니다. stockCode={}, field={}, exceptionType={}",
+                    stockCode, fieldName, exception.getClass().getSimpleName());
+            return null;
+        }
+    }
+
+    private static LocalDate toBusinessDate(String businessDate) {
+        if (businessDate == null || businessDate.isBlank()) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(businessDate, DateTimeFormatter.BASIC_ISO_DATE);
+        } catch (DateTimeParseException exception) {
+            return null;
+        }
     }
 
     private static String toBaseTime(String businessDate, String contractTime) {

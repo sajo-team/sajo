@@ -7,15 +7,17 @@ import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.LastModifiedDate;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.UUID;
 
 /**
+ * 종목별 PER·PBR·EPS·BPS를 KIS 실제 영업일 기준으로 저장하고, 같은 날 다시 수집하면 최신 값으로 갱신하는 Entity
+ *
  * 종목 투자지표 이력 (m_market_stocks_indicator).
- * 기준일(reference_date)별 스냅샷이며 수정되지 않는 이력 데이터라 BaseEntity(생성 시각만)를 상속한다.
- * stock_id + reference_date 조합은 유일해야 한다(DB 유니크 제약으로 강제, 애플리케이션에서는 저장 전 존재 여부를 확인한다).
+ * 기준일(reference_date)별 스냅샷이다. 같은 기준일의 KIS 재수집 값은 갱신되므로 updated_at을 남긴다.
  */
 @Getter
 @Entity
@@ -39,6 +41,10 @@ public class MarketStockIndicator extends BaseEntity {
     //지표의 기준일
     @Column(name = "reference_date", nullable = false)
     private LocalDate referenceDate;
+
+    @LastModifiedDate
+    @Column(name = "updated_at")
+    private java.time.Instant updatedAt;
 
     //주가가 주당순이익의 몇 배인지
     @Column(precision = 10, scale = 4)

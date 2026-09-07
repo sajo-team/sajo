@@ -1,6 +1,7 @@
 package com.sajo.market_service.market.scheduler;
 
 import com.sajo.market_service.market.config.MarketSchedulerProperties;
+import com.sajo.market_service.market.client.user.dto.UserKisTokenResponse;
 import com.sajo.market_service.market.repository.query.MarketStockCollectionTarget;
 import com.sajo.market_service.market.repository.query.MarketStockQueryRepository;
 import com.sajo.market_service.market.service.command.MarketStockPriceCommandService;
@@ -25,6 +26,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -34,11 +36,14 @@ class MarketDailyPriceSchedulerTest {
 
     private static final UUID SYSTEM_USER_ID = UUID.fromString("11111111-1111-1111-1111-111111111111");
     private static final LocalDate FRIDAY = LocalDate.of(2026, 9, 4);
+    private static final UserKisTokenResponse CREDENTIALS = new UserKisTokenResponse("token", "key", "secret");
 
     @Mock
     private MarketStockQueryRepository marketStockQueryRepository;
     @Mock
     private MarketStockPriceCommandService marketStockPriceCommandService;
+    @Mock
+    private MarketSchedulerKisRequestRateLimiter requestRateLimiter;
 
     @Test
     void reportsDisabledRunWithoutCountingASkippedStock() {
@@ -88,6 +93,7 @@ class MarketDailyPriceSchedulerTest {
                 .willReturn(List.of(second));
         given(marketStockQueryRepository.findCollectionTargetsAfterStockCode(eq("005930"), any(Pageable.class)))
                 .willReturn(List.of());
+        given(marketStockPriceCommandService.getCollectionCredentials(SYSTEM_USER_ID)).willReturn(CREDENTIALS);
 
         MarketDailyPriceScheduler.DailyPriceCollectionSummary summary = scheduler.collectDailyPrices();
 
@@ -105,12 +111,14 @@ class MarketDailyPriceSchedulerTest {
         MarketDailyPriceScheduler scheduler = scheduler(true, SYSTEM_USER_ID.toString(), 2);
         given(marketStockQueryRepository.findCollectionTargetsAfterStockCode(isNull(), any(Pageable.class)))
                 .willReturn(List.of());
+        given(marketStockPriceCommandService.getCollectionCredentials(SYSTEM_USER_ID)).willReturn(CREDENTIALS);
 
         MarketDailyPriceScheduler.DailyPriceCollectionSummary summary = scheduler.collectDailyPrices();
 
         assertThat(summary).isEqualTo(summary(MarketDailyPriceScheduler.SchedulerRunStatus.COMPLETED, 0, 0, 0));
         verify(marketStockQueryRepository).findCollectionTargetsAfterStockCode(isNull(), any(Pageable.class));
-        verify(marketStockPriceCommandService, never()).collectAndSaveDailyPricesForIdentifiedStock(any(), any(), any(), any(), any());
+        verify(marketStockPriceCommandService, never()).collectAndSaveDailyPricesForIdentifiedStock(
+                any(UserKisTokenResponse.class), any(), any(), any(), any());
     }
 
     @Test
@@ -119,6 +127,7 @@ class MarketDailyPriceSchedulerTest {
         MarketStockCollectionTarget target = target("005930");
         given(marketStockQueryRepository.findCollectionTargetsAfterStockCode(isNull(), any(Pageable.class)))
                 .willReturn(List.of(target));
+        given(marketStockPriceCommandService.getCollectionCredentials(SYSTEM_USER_ID)).willReturn(CREDENTIALS);
 
         MarketDailyPriceScheduler.DailyPriceCollectionSummary summary = scheduler.collectDailyPrices();
 
@@ -134,8 +143,9 @@ class MarketDailyPriceSchedulerTest {
         MarketStockCollectionTarget succeeded = target("005930");
         given(marketStockQueryRepository.findCollectionTargetsAfterStockCode(isNull(), any(Pageable.class)))
                 .willReturn(List.of(failed, succeeded));
+        given(marketStockPriceCommandService.getCollectionCredentials(SYSTEM_USER_ID)).willReturn(CREDENTIALS);
         given(marketStockPriceCommandService.collectAndSaveDailyPricesForIdentifiedStock(
-                SYSTEM_USER_ID, failed.getStockId(), failed.getStockCode(), FRIDAY, FRIDAY))
+                CREDENTIALS, failed.getStockId(), failed.getStockCode(), FRIDAY, FRIDAY))
                 .willThrow(new IllegalStateException("KIS failed"));
 
         MarketDailyPriceScheduler.DailyPriceCollectionSummary summary = scheduler.collectDailyPrices();
@@ -154,22 +164,56 @@ class MarketDailyPriceSchedulerTest {
         assertThat(collectionMethod.isAnnotationPresent(Transactional.class)).isFalse();
     }
 
+    @Test
+    void stopsBeforeStockLookupWhenCredentialLookupFails() {
+        MarketDailyPriceScheduler scheduler = scheduler(true, SYSTEM_USER_ID.toString(), 1);
+        given(marketStockPriceCommandService.getCollectionCredentials(SYSTEM_USER_ID))
+                .willThrow(new IllegalStateException("credential failure"));
+
+        MarketDailyPriceScheduler.DailyPriceCollectionSummary summary = scheduler.collectDailyPrices();
+
+        assertThat(summary).isEqualTo(summary(MarketDailyPriceScheduler.SchedulerRunStatus.CREDENTIALS_FAILED, 0, 0, 0));
+        verify(marketStockQueryRepository, never()).findCollectionTargetsAfterStockCode(any(), any());
+        verify(marketStockPriceCommandService, never()).collectAndSaveDailyPricesForIdentifiedStock(
+                any(UserKisTokenResponse.class), any(), any(), any(), any());
+    }
+
+    @Test
+    void stopsProcessingFurtherStocksWhenRateLimiterIsInterrupted() {
+        MarketDailyPriceScheduler scheduler = scheduler(true, SYSTEM_USER_ID.toString(), 10);
+        MarketStockCollectionTarget first = target("000660");
+        MarketStockCollectionTarget second = target("005930");
+        given(marketStockPriceCommandService.getCollectionCredentials(SYSTEM_USER_ID)).willReturn(CREDENTIALS);
+        given(marketStockQueryRepository.findCollectionTargetsAfterStockCode(isNull(), any(Pageable.class)))
+                .willReturn(List.of(first, second));
+        given(requestRateLimiter.tryAcquire()).willReturn(false);
+
+        MarketDailyPriceScheduler.DailyPriceCollectionSummary summary = scheduler.collectDailyPrices();
+
+        assertThat(summary).isEqualTo(summary(MarketDailyPriceScheduler.SchedulerRunStatus.INTERRUPTED, 0, 0, 0));
+        verify(marketStockPriceCommandService, never()).collectAndSaveDailyPricesForIdentifiedStock(
+                any(UserKisTokenResponse.class), any(), any(), any(), any());
+        verify(requestRateLimiter).tryAcquire();
+    }
+
     private MarketDailyPriceScheduler scheduler(boolean enabled, String systemUserId, int pageSize) {
         return scheduler(enabled, systemUserId, pageSize, fridayClock());
     }
 
     private MarketDailyPriceScheduler scheduler(boolean enabled, String systemUserId, int pageSize, Clock clock) {
+        lenient().when(requestRateLimiter.tryAcquire()).thenReturn(true);
         return new MarketDailyPriceScheduler(
                 new MarketSchedulerProperties(enabled, systemUserId, "0 10 16 * * MON-FRI", pageSize),
                 marketStockQueryRepository,
                 marketStockPriceCommandService,
+                requestRateLimiter,
                 clock
         );
     }
 
     private void verifyCollected(MarketStockCollectionTarget target) {
         verify(marketStockPriceCommandService).collectAndSaveDailyPricesForIdentifiedStock(
-                SYSTEM_USER_ID, target.getStockId(), target.getStockCode(), FRIDAY, FRIDAY);
+                CREDENTIALS, target.getStockId(), target.getStockCode(), FRIDAY, FRIDAY);
     }
 
     private MarketDailyPriceScheduler.DailyPriceCollectionSummary summary(

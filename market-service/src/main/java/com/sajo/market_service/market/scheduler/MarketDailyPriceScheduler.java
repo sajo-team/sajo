@@ -4,6 +4,7 @@ import com.sajo.market_service.market.config.MarketSchedulerProperties;
 import com.sajo.market_service.market.repository.query.MarketStockCollectionTarget;
 import com.sajo.market_service.market.repository.query.MarketStockQueryRepository;
 import com.sajo.market_service.market.service.command.MarketStockPriceCommandService;
+import com.sajo.market_service.market.client.user.dto.UserKisTokenResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
@@ -29,6 +30,7 @@ public class MarketDailyPriceScheduler {
     private final MarketSchedulerProperties properties;
     private final MarketStockQueryRepository marketStockQueryRepository;
     private final MarketStockPriceCommandService marketStockPriceCommandService;
+    private final MarketSchedulerKisRequestRateLimiter requestRateLimiter;
     private final Clock marketSchedulerClock;
 
     @Scheduled(cron = "${sajo.scheduler.daily-price-cron:0 10 16 * * MON-FRI}", zone = "Asia/Seoul")
@@ -53,13 +55,24 @@ public class MarketDailyPriceScheduler {
             return DailyPriceCollectionSummary.notExecuted(SchedulerRunStatus.WEEKEND);
         }
 
-        DailyPriceCollectionSummary summary = collectStocks(systemUserIdResolution.systemUserId(), collectionDate);
+        UserKisTokenResponse credentials;
+        try {
+            credentials = marketStockPriceCommandService.getCollectionCredentials(systemUserIdResolution.systemUserId());
+        } catch (Exception exception) {
+            log.warn("일별 시세 Scheduler 인증정보 조회에 실패했습니다. exceptionType={}", exception.getClass().getSimpleName());
+            return DailyPriceCollectionSummary.notExecuted(SchedulerRunStatus.CREDENTIALS_FAILED);
+        }
+        if (credentials == null) {
+            log.warn("일별 시세 Scheduler 인증정보 조회 결과가 비어 있어 실행하지 않습니다.");
+            return DailyPriceCollectionSummary.notExecuted(SchedulerRunStatus.CREDENTIALS_FAILED);
+        }
+        DailyPriceCollectionSummary summary = collectStocks(credentials, collectionDate);
         log.info("일별 시세 수집을 완료했습니다. collectionDate={}, successCount={}, failureCount={}, skippedStockCount={}",
                 collectionDate, summary.successCount(), summary.failureCount(), summary.skippedStockCount());
         return summary;
     }
 
-    private DailyPriceCollectionSummary collectStocks(UUID systemUserId, LocalDate collectionDate) {
+    private DailyPriceCollectionSummary collectStocks(UserKisTokenResponse credentials, LocalDate collectionDate) {
         // KIS가 휴장일에 빈 일별 시세를 반환하면 기존 Step 6 Command가 정상 무수집으로 처리한다.
         // TODO: 멀티 인스턴스에서는 DB 중복은 Step 6 제약으로 막히지만 KIS 호출 중복은 가능하다.
         //       분산 Scheduler lock 정책이 확정되면 이 실행 경계를 보호한다.
@@ -73,7 +86,11 @@ public class MarketDailyPriceScheduler {
                 return summary;
             }
             for (MarketStockCollectionTarget target : targets) {
-                summary = collectStock(systemUserId, collectionDate, target, summary);
+                summary = collectStock(credentials, collectionDate, target, summary);
+                if (summary.runStatus() == SchedulerRunStatus.INTERRUPTED) {
+                    log.warn("일별 시세 수집이 interrupt되어 이후 종목 처리를 중단합니다.");
+                    return summary;
+                }
             }
 
             String nextLastStockCode = targets.getLast().getStockCode();
@@ -90,7 +107,7 @@ public class MarketDailyPriceScheduler {
     }
 
     private DailyPriceCollectionSummary collectStock(
-            UUID systemUserId,
+            UserKisTokenResponse credentials,
             LocalDate collectionDate,
             MarketStockCollectionTarget target,
             DailyPriceCollectionSummary summary
@@ -102,8 +119,11 @@ public class MarketDailyPriceScheduler {
         }
 
         try {
+            if (!requestRateLimiter.tryAcquire()) {
+                return summary.interrupted();
+            }
             marketStockPriceCommandService.collectAndSaveDailyPricesForIdentifiedStock(
-                    systemUserId, target.getStockId(), stockCode, collectionDate, collectionDate);
+                    credentials, target.getStockId(), stockCode, collectionDate, collectionDate);
             return summary.incrementSuccess();
         } catch (Exception exception) {
             log.warn("일별 시세 수집에 실패했습니다. stockCode={}, exceptionType={}",
@@ -136,7 +156,9 @@ public class MarketDailyPriceScheduler {
         DISABLED,
         SYSTEM_USER_ID_MISSING,
         SYSTEM_USER_ID_INVALID,
-        WEEKEND
+        CREDENTIALS_FAILED,
+        WEEKEND,
+        INTERRUPTED
     }
 
     record SystemUserIdResolution(UUID systemUserId, SchedulerRunStatus status) {
@@ -167,6 +189,10 @@ public class MarketDailyPriceScheduler {
 
         DailyPriceCollectionSummary incrementSkippedStock() {
             return new DailyPriceCollectionSummary(runStatus, successCount, failureCount, skippedStockCount + 1);
+        }
+
+        DailyPriceCollectionSummary interrupted() {
+            return new DailyPriceCollectionSummary(SchedulerRunStatus.INTERRUPTED, successCount, failureCount, skippedStockCount);
         }
     }
 }
