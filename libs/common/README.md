@@ -20,6 +20,7 @@ dependencies {
 - `CommonAuditorAwareAutoConfiguration` → `RequestHeaderAuditorAware` (`AuditorAware<UUID>` 빈)
 - `CommonPageableAutoConfiguration` → `CommonPageableArgumentResolver` (`Pageable` size/sort 공통 처리)
 - `CommonFeignAutoConfiguration` → Feign 헤더 전파 인터셉터, 공통 `ErrorDecoder`, 로그 레벨
+- `CommonSecurityAutoConfiguration` → `HeaderAuthenticationFilter` + 기본 `SecurityFilterChain`
 
 ## 공통 응답 포맷
 
@@ -122,4 +123,37 @@ Feign 클라이언트를 쓰는 서비스라면 (`@FeignClient` 인터페이스 
 - 사용자 식별자(`createdBy` 등): `UUID` (`String`/`Long` 아님)
 
 ## Security
-추후 인증 구현되면 구현 예정
+
+게이트웨이가 JWT 검증을 하고, 내부 서비스로는 `X-User-Id`(UUID) + `X-User-Role`(단일 role, 콤마 구분 아님) 헤더만 넘겨줌. `common`은 그 헤더를 믿고 파싱만 함 — 서비스가 JWT를 직접 검증하는 게 아님.
+
+- `HeaderAuthenticationFilter` — 저 두 헤더를 읽어서 `Authentication`(`ROLE_<role>` 권한)을 만들고 `SecurityContextHolder`에 세팅. 실제 서명/JWT 검증을 하는 게 아니라, 이미 게이트웨이가 검증해서 내려준 결과를 SecurityContext에 반영만 하는 역할. 헤더가 없으면 그냥 익명 인증 상태로 넘어감(예외 안 던짐).
+- `commonSecurityFilterChain` (기본 체인) — csrf/httpBasic/formLogin 비활성화, stateless 세션, 위 필터 등록까지 자동으로 해줌. `authorizeHttpRequests`는 URL 단위로 세밀하게 안 나누고 `anyRequest().permitAll()`로 둠 — "로그인 여부"는 게이트웨이가 이미 걸러주고, "누가 어떤 API를 쓸 수 있는가" 같은 세밀한 권한은 각 서비스 컨트롤러 메서드에 `@PreAuthorize`를 붙이는 방식으로 처리(권한 로직을 URL 매처와 `@PreAuthorize` 두 군데로 안 쪼개려는 의도).
+- 서비스가 정말로 자기만의 `SecurityFilterChain`이 필요하면 직접 빈으로 정의하면 됨 — `@ConditionalOnMissingBean(SecurityFilterChain.class)`라서 서비스가 정의하는 순간 위 기본 체인은 자동으로 안 뜸. `HeaderAuthenticationFilter`는 별개 빈이라 그 경우에도 재사용 가능.
+
+```text
+@PreAuthorize("hasRole('ADMIN')")
+@GetMapping("/admin/accounts/token-status")
+public ResponseEntity<GeneralResponse<PageResponse<TokenStatusResponse>>> getTokenStatuses(Pageable pageable) {
+    ...
+}
+```
+
+### 서비스에서 `@PreAuthorize` 쓰려면
+
+`HeaderAuthenticationFilter`가 `SecurityContext`를 채워주는 것과, `@PreAuthorize`가 실제로 동작하는 것은 별개임. 서비스마다 아래 두 가지를 직접 추가해야 함 — `common` 라이브러리 의존성만 추가한다고 자동으로 켜지지 않음:
+
+1. **서비스 메인 클래스에 `@EnableMethodSecurity` 추가** — 서비스마다 독립된 Spring 컨텍스트(별도 JVM)라서, 이 스위치는 서비스별로 각자 켜야 함. `common`에서 대신 켜줄 수 없음.
+
+```text
+@SpringBootApplication
+@EnableMethodSecurity
+public class UserServiceApplication { ... }
+```
+
+2. **서비스 `build.gradle`에 `spring-security-config` 의존성 추가** — `common`의 `spring-boot-starter-security`는 `implementation`이라 컴파일 클래스패스로는 전이 안 되고 런타임에만 전이됨. `@EnableMethodSecurity`/`@PreAuthorize` 어노테이션 자체가 컴파일 시점에 필요하므로, 서비스가 직접 이 의존성을 가져야 함.
+
+```text
+implementation 'org.springframework.security:spring-security-config'
+```
+
+**주의**: 이 필터는 헤더를 서명 검증 없이 그대로 믿는 구조라, 서비스에 네트워크로 직접 접근 가능하면 헤더를 위조해서 우회할 수 있음. 실제 방어선은 (1) 게이트웨이의 JWT 검증, (2) 서비스가 외부에 노출되지 않는 네트워크 격리(`docker-compose.prod.yaml`에서 user/trading/market-service는 `ports` 없이 내부망에만 존재) — 이 필터 자체는 인증을 "검증"하는 게 아니라 이미 검증된 결과를 "전파"하는 역할.
