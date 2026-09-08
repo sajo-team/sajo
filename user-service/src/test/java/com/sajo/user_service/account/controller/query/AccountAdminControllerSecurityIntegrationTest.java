@@ -4,7 +4,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 
@@ -14,9 +13,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 // 실제 libs:common의 CommonSecurityAutoConfiguration + HeaderAuthenticationFilter가
-// @PreAuthorize와 함께 정상 동작하는지 확인하기 위한 풀 컨텍스트 통합 테스트
+// @PreAuthorize와 함께 정상 동작하는지 확인하기 위한 풀 컨텍스트 통합 테스트.
 @SpringBootTest
-@ActiveProfiles("local")
 @AutoConfigureMockMvc
 class AccountAdminControllerSecurityIntegrationTest {
 

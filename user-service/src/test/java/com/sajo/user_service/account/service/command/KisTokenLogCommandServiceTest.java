@@ -4,13 +4,12 @@ import com.sajo.user_service.account.domain.EventType;
 import com.sajo.user_service.account.domain.KisTokenLog;
 import com.sajo.user_service.account.domain.KisTokenType;
 import com.sajo.user_service.account.repository.command.KisTokenLogCommandRepository;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.UUID;
 
@@ -21,18 +20,14 @@ import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-@ExtendWith(MockitoExtension.class)
+@SpringBootTest
 class KisTokenLogCommandServiceTest {
 
-    @Mock
-    private KisTokenLogCommandRepository kisTokenLogCommandRepository;
-
+    @Autowired
     private KisTokenLogCommandService kisTokenLogCommandService;
 
-    @BeforeEach
-    void setUp() {
-        kisTokenLogCommandService = new KisTokenLogCommandService(kisTokenLogCommandRepository);
-    }
+    @MockitoBean
+    private KisTokenLogCommandRepository kisTokenLogCommandRepository;
 
     @Test
     @DisplayName("recordSuccess는 TOKEN_ISSUE_SUCCESS 이벤트를 tokenType과 함께 저장한다")
