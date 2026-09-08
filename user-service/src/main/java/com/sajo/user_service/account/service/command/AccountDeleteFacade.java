@@ -39,7 +39,16 @@ public class AccountDeleteFacade {
         try {
             response = tradingClient.getActiveStatus(userId);
         } catch (Exception e) {
-            accountCommandService.reactivate(userId);
+            // reactivate 자체가 실패해도 원본 예외(왜 trading-service 호출이 실패했는지)를
+            // 유실하지 않는다 - 이 계좌는 PENDING_DELETION에 고착됐을 수 있으니 별도로 남긴다.
+            try {
+                accountCommandService.reactivate(userId);
+            } catch (Exception reactivateException) {
+                log.error(
+                        "trading-service 호출 실패 후 계좌 원상복구까지 실패 - PENDING_DELETION에 고착됐을 수 있음. userId={}",
+                        userId, reactivateException);
+                e.addSuppressed(reactivateException);
+            }
             throw e;
         }
 
