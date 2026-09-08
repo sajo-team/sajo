@@ -86,8 +86,6 @@ public class KisOrderReconciliationService {
                     orderId,
                     e
             );
-
-            orderStatusCommandService.recordReconciliationFailure(orderId);
             return;
         }
 
@@ -157,7 +155,6 @@ public class KisOrderReconciliationService {
                     e
             );
 
-            orderStatusCommandService.recordReconciliationFailure(orderId);
             return;
         }
 
@@ -169,7 +166,6 @@ public class KisOrderReconciliationService {
                     response.message()
             );
 
-            orderStatusCommandService.recordReconciliationFailure(orderId);
             return;
         }
 
@@ -275,7 +271,6 @@ public class KisOrderReconciliationService {
                     item.orderNo()
             );
 
-            orderStatusCommandService.recordReconciliationFailure(orderId);
             return;
         }
 
