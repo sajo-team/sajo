@@ -134,7 +134,7 @@ public class AiRiskAnalysisHistoryIntegrationTest {
                         get("/api/v1/ai/analyses")
                                 .header("X-User-Id", userId)
                                 .param("page", "0")
-                                .param("size", "2")
+                                .param("size", "10")
                 )
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content.length()").value(10))
