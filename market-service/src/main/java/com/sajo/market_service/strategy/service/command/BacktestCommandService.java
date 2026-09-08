@@ -48,9 +48,12 @@ public class BacktestCommandService {
 
         backtestExecutionService.execute(savedBacktest.getId());
 
-        log.info("백테스트 생성 완료. backtestId={}, strategyId={}, status={}",
-                savedBacktest.getId(), strategyId, savedBacktest.getStatus());
+        Backtest executedBacktest = backtestCommandRepository.findById(savedBacktest.getId())
+                .orElseThrow(() -> new BusinessException(StrategyErrorCode.BACKTEST_NOT_FOUND));
 
-        return BacktestCreateResponse.from(savedBacktest);
+        log.info("백테스트 생성 완료. backtestId={}, strategyId={}, status={}",
+                executedBacktest.getId(), strategyId, executedBacktest.getStatus());
+
+        return BacktestCreateResponse.from(executedBacktest);
     }
 }

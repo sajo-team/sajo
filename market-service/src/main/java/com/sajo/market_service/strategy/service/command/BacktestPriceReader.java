@@ -6,7 +6,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 @Component
@@ -21,15 +20,7 @@ public class BacktestPriceReader {
             LocalDate startDate,
             LocalDate endDate
     ) {
-        long requestedDays = ChronoUnit.DAYS.between(startDate, endDate) + 10;
-        int days = (int) Math.min(Math.max(requestedDays, 1), 365);
-
         return marketStockPriceQueryService
-                .getRecentDailyPrices(stockCode, days)
-                .stream()
-                .filter(price ->
-                        !price.tradeDate().isBefore(startDate)
-                                && !price.tradeDate().isAfter(endDate))
-                .toList();
+                .getDailyPrices(stockCode, startDate, endDate);
     }
 }
