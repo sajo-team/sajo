@@ -39,11 +39,18 @@ class BacktestCommandServiceTest {
     @Mock
     private BacktestCommandRepository backtestCommandRepository;
 
+    @Mock
+    private BacktestExecutionService backtestExecutionService;
+
     private BacktestCommandService backtestCommandService;
 
     @BeforeEach
     void setUp() {
-        backtestCommandService = new BacktestCommandService(strategyCommandRepository, backtestCommandRepository);
+        backtestCommandService = new BacktestCommandService(
+                strategyCommandRepository,
+                backtestCommandRepository,
+                backtestExecutionService
+        );
     }
 
     @Test
@@ -66,19 +73,26 @@ class BacktestCommandServiceTest {
         given(strategyCommandRepository.findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId))
                 .willReturn(Optional.of(strategy));
 
-        given(backtestCommandRepository.save(any(Backtest.class)))
+        given(backtestCommandRepository.saveAndFlush(any(Backtest.class)))
                 .willAnswer(invocation -> {
                     Backtest backtest = invocation.getArgument(0);
                     ReflectionTestUtils.setField(backtest, "id", backtestId);
                     return backtest;
                 });
 
+        // 동기 실행 자체는 BacktestExecutionServiceTest에서 검증한다.
+        // 이 테스트에서는 생성 서비스가 실행 서비스를 연결하는지만 확인한다.
+        org.mockito.BDDMockito.willDoNothing()
+                .given(backtestExecutionService)
+                .execute(backtestId);
+
         // when
         BacktestCreateResponse response = backtestCommandService.createBacktest(userId, strategyId, request);
 
         // then
         ArgumentCaptor<Backtest> captor = ArgumentCaptor.forClass(Backtest.class);
-        verify(backtestCommandRepository).save(captor.capture());
+        verify(backtestCommandRepository).saveAndFlush(captor.capture());
+        verify(backtestExecutionService).execute(backtestId);
 
         Backtest savedBacktest = captor.getValue();
         assertThat(savedBacktest.getStrategyId()).isEqualTo(strategyId);
@@ -165,6 +179,7 @@ class BacktestCommandServiceTest {
                 new BigDecimal("5.0000"),
                 null,
                 3_000_000L,
+                100_000L,
                 null,
                 null,
                 null

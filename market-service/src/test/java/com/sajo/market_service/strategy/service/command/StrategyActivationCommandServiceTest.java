@@ -128,12 +128,14 @@ class StrategyActivationCommandServiceTest {
                 new BigDecimal("5.0000"),
                 null,
                 3_000_000L,
+                100_000L,
                 new BigDecimal("10.0000"),
                 new BigDecimal("1.5000"),
                 null
         );
         StrategyActivationSnapshot snapshot = StrategyActivationSnapshot.from(strategy);
         strategy.update(
+                null,
                 null,
                 null,
                 null,
@@ -176,6 +178,7 @@ class StrategyActivationCommandServiceTest {
                 new BigDecimal("5.0000"),
                 null,
                 3_000_000L,
+                100_000L,
                 null,
                 null,
                 null

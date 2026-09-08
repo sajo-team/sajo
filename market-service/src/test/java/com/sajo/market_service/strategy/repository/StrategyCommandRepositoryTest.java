@@ -53,7 +53,7 @@ class StrategyCommandRepositoryTest {
         Strategy strategy = Strategy.create(
                 userId, stockId, "005930", "삼성전자 눌림목 전략",
                 70_000L, 80_000L, new BigDecimal("5.0000"), null,
-                3_000_000L, null, null, null
+                3_000_000L, 100_000L, null, null, null
         );
 
         // when
@@ -77,12 +77,12 @@ class StrategyCommandRepositoryTest {
         Strategy first = Strategy.create(
                 userId, UUID.randomUUID(), "005930", "전략 A",
                 70_000L, 80_000L, new BigDecimal("5.0000"), null,
-                3_000_000L, null, null, null
+                3_000_000L, 100_000L, null, null, null
         );
         Strategy second = Strategy.create(
                 userId, UUID.randomUUID(), "000660", "전략 B",
                 100_000L, 120_000L, new BigDecimal("3.0000"), null,
-                2_000_000L, null, null, null
+                2_000_000L, 100_000L, null, null, null
         );
 
         // when
