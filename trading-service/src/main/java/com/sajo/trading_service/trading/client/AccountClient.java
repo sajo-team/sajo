@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import java.util.UUID;
 
 @FeignClient(name = "user-service")
-public interface AccountClient { // todo: account internal api 구현 완료 시 현재 코드와 같은지 검증
+public interface AccountClient {
 
     @PostMapping("/internal/v1/accounts/{userId}/token") // KIS 인증 정보 조회 (accessToken / appKey / secretKey)
     AccountTokenResponse getAccessToken(

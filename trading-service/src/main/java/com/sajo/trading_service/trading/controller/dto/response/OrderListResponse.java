@@ -15,6 +15,8 @@ public record OrderListResponse(
         OrderType orderType,
         Long signalPrice,
         Integer orderQuantity,
+        Integer filledQuantity,
+        Integer remainingQuantity,
         Long estimatedOrderAmount,
         OrderStatus status,
         Instant createdAt
@@ -28,6 +30,8 @@ public record OrderListResponse(
                 order.getOrderType(),
                 order.getSignalPrice(),
                 order.getOrderQuantity(),
+                order.getFilledQuantity(),
+                order.getRemainingQuantity(),
                 order.getEstimatedOrderAmount(),
                 order.getStatus(),
                 order.getCreatedAt()

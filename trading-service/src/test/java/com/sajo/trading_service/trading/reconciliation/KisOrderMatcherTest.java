@@ -231,6 +231,8 @@ class KisOrderMatcherTest {
                 orderPrice,
                 orderTime,
                 "0",
+                "0",
+                "0",
                 orderQuantity,
                 "0",
                 "N"

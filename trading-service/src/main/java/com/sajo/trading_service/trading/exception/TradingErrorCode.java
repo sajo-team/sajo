@@ -30,6 +30,7 @@ public enum TradingErrorCode implements ErrorCode {
     ORDERABLE_AMOUNT_NOT_ENOUGH(HttpStatus.BAD_REQUEST, "AUTO_TRADING_0019", "주문 가능 금액이 부족합니다."),
     SELLABLE_QUANTITY_NOT_ENOUGH(HttpStatus.BAD_REQUEST, "AUTO_TRADING_0020", "매도 가능 수량이 부족합니다."),
     ORDER_EXECUTION_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "AUTO_TRADING_0021", "현재 주문 상태에서는 주문을 실행할 수 없습니다."),
+    EXECUTION_NOT_FOUND(HttpStatus.NOT_FOUND, "AUTO_TRADING_0022", "주문 체결 결과를 찾을 수 없습니다."),
 
     ;
 

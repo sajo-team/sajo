@@ -80,11 +80,26 @@ public record KisOrderInquiryItem(
         /**
          * 총 체결 수량.
          *
-         * 이번 #98에서는 상태 보정 참고 정보로만 사용하고,
-         * PARTIALLY_FILLED / FILLED 처리는 후속 Execution 이슈에서 처리한다.
+         * 주문 체결 상태와 누적 체결 수량을 판단할 때 사용한다.
          */
         @JsonProperty("tot_ccld_qty")
         String totalFilledQuantity,
+
+        /**
+         * 평균 체결 가격.
+         *
+         * 주문의 누적 체결 평균 가격.
+         */
+        @JsonProperty("avg_prvs")
+        String averageExecutionPrice,
+
+        /**
+         * 총 체결 금액.
+         *
+         * 현재까지 누적된 체결 금액.
+         */
+        @JsonProperty("tot_ccld_amt")
+        String totalExecutionAmount,
 
         /**
          * 아직 체결되지 않은 잔여 주문 수량.

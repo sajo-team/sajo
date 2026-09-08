@@ -22,11 +22,13 @@ public class OrderRecoveryCommandService {
     // 5분 이후 주문 조회 기반 reconciliation 대상으로 처리한다.
     private static final long PROCESSING_STALE_MINUTES = 5L;
     private static final long TIMEOUT_RECONCILIATION_MINUTES = 1L;
+    private static final long EXECUTION_INQUIRY_INTERVAL_SECONDS = 30L;
 
     private final OrderQueryRepository orderQueryRepository;
     private final OrderStatusCommandService orderStatusCommandService;
     private final OrderRecoveryExecutor orderRecoveryExecutor;
     private final KisOrderReconciliationService kisOrderReconciliationService;
+    private final KisOrderExecutionService kisOrderExecutionService;
 
     public void recoverRequestedOrders() {
 
@@ -95,6 +97,31 @@ public class OrderRecoveryCommandService {
             } catch (RuntimeException e) {
                 log.error(
                         "TIMEOUT 주문 보정 실패. orderId={}",
+                        orderId,
+                        e
+                );
+            }
+        }
+    }
+
+    public void recoverExecutions() {
+
+        Instant cutoff =
+                Instant.now().minus(
+                        EXECUTION_INQUIRY_INTERVAL_SECONDS,
+                        ChronoUnit.SECONDS
+                );
+
+        List<UUID> orderIds =
+                orderQueryRepository.findExecutionTargetOrderIds(cutoff);
+
+        for (UUID orderId : orderIds) {
+            try {
+                kisOrderExecutionService.processExecution(orderId);
+
+            } catch (RuntimeException e) {
+                log.error(
+                        "주문 체결 조회 처리 실패. orderId={}",
                         orderId,
                         e
                 );

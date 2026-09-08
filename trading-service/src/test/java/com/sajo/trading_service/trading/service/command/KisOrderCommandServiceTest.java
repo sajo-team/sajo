@@ -288,9 +288,8 @@ class KisOrderCommandServiceTest {
                 .thenReturn(
                         new AccountOrderInfoResponse(
                                 "12345678-01",
-                                AccountType.VIRTUAL,
-                                "12345678",
-                                "01"
+                                "01",
+                                AccountType.VIRTUAL
                         )
                 );
 
@@ -346,9 +345,8 @@ class KisOrderCommandServiceTest {
                 .thenReturn(
                         new AccountOrderInfoResponse(
                                 "12345678-01",
-                                AccountType.VIRTUAL,
-                                "12345678",
-                                "01"
+                                "01",
+                                AccountType.VIRTUAL
                         )
                 );
 
@@ -855,9 +853,8 @@ class KisOrderCommandServiceTest {
                 .thenReturn(
                         new AccountOrderInfoResponse(
                                 "12345678-01",
-                                AccountType.VIRTUAL,
-                                "12345678",
-                                "01"
+                                "01",
+                                AccountType.VIRTUAL
                         )
                 );
     }
@@ -1124,9 +1121,8 @@ class KisOrderCommandServiceTest {
                 .thenReturn(
                         new AccountOrderInfoResponse(
                                 "12345678-01",
-                                AccountType.REAL,
-                                "12345678",
-                                "01"
+                                "01",
+                                AccountType.REAL
                         )
                 );
 
