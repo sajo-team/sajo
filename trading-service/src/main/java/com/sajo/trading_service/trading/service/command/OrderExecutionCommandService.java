@@ -82,7 +82,7 @@ public class OrderExecutionCommandService {
             int remainingQuantity,
             long averageExecutionPrice,
             long totalExecutionAmount
-    ){
+    ) {
         Order order =
                 orderCommandRepository.findByIdForUpdate(orderId)
                         .orElseThrow(() ->
@@ -91,11 +91,10 @@ public class OrderExecutionCommandService {
                                 )
                         );
 
-        int newlyFilledQuantity =
-                order.cancel(
-                        totalFilledQuantity,
-                        remainingQuantity
-                );
+        order.cancel(
+                totalFilledQuantity,
+                remainingQuantity
+        );
 
         /*
          * 체결 없이 전체 취소된 경우에는
@@ -123,13 +122,9 @@ public class OrderExecutionCommandService {
         }
 
         /*
-         * 이전 조회 이후 추가 체결이 없더라도
-         * 취소 시점의 최신 누적 체결 결과를 반영할 수 있다.
+         * 추가 체결이 없어도 취소로 인해 remainingQuantity 등이
+         * 변경될 수 있으므로 최신 누적 결과를 항상 반영한다.
          */
-        if (newlyFilledQuantity == 0) {
-            return;
-        }
-
         execution.update(
                 totalFilledQuantity,
                 averageExecutionPrice,

@@ -227,17 +227,6 @@ public class KisOrderExecutionService {
             return;
         }
 
-        if (totalFilledQuantity == 0) {
-            /*
-             * 아직 체결되지 않은 ACCEPTED 주문이다.
-             */
-            return;
-        }
-
-        /*
-         * 취소 주문은 일반 체결과 잔여 수량 규칙이 다를 수 있다.
-         * 부분 체결 후 취소 정책은 별도 흐름에서 처리한다.
-         */
         if ("Y".equalsIgnoreCase(item.canceled())) {
             orderExecutionCommandService.applyCancellation(
                     orderId,
@@ -254,6 +243,13 @@ public class KisOrderExecutionService {
                     totalFilledQuantity
             );
 
+            return;
+        }
+
+        if (totalFilledQuantity == 0) {
+            /*
+             * 아직 체결되지 않은 ACCEPTED 주문이다.
+             */
             return;
         }
 
