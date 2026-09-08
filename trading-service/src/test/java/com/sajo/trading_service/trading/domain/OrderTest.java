@@ -432,6 +432,90 @@ class OrderTest {
                 .isEqualTo("ACCOUNT_RETRY_EXHAUSTED");
     }
 
+    @Test
+    @DisplayName("주문 보정 실패 횟수가 최대 횟수 미만이면 기존 상태를 유지한다")
+    void recordReconciliationFailure_keepStatus() {
+        // given
+        Order order = createOrder();
+        order.startProcessing();
+
+        // when
+        order.recordReconciliationFailure(
+                3,
+                "KIS_RECONCILIATION_EXHAUSTED",
+                "KIS 주문 조회로 주문 상태를 확정하지 못했습니다."
+        );
+
+        // then
+        assertThat(order.getStatus())
+                .isEqualTo(OrderStatus.PROCESSING);
+
+        assertThat(order.getReconciliationRetryCount())
+                .isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("주문 보정 실패 횟수가 최대 횟수에 도달하면 FAILED로 전환한다")
+    void recordReconciliationFailure_exhausted_fail() {
+        // given
+        Order order = createOrder();
+        order.startProcessing();
+
+        // when
+        order.recordReconciliationFailure(
+                3,
+                "KIS_RECONCILIATION_EXHAUSTED",
+                "KIS 주문 조회로 주문 상태를 확정하지 못했습니다."
+        );
+
+        order.recordReconciliationFailure(
+                3,
+                "KIS_RECONCILIATION_EXHAUSTED",
+                "KIS 주문 조회로 주문 상태를 확정하지 못했습니다."
+        );
+
+        order.recordReconciliationFailure(
+                3,
+                "KIS_RECONCILIATION_EXHAUSTED",
+                "KIS 주문 조회로 주문 상태를 확정하지 못했습니다."
+        );
+
+        // then
+        assertThat(order.getStatus())
+                .isEqualTo(OrderStatus.FAILED);
+
+        assertThat(order.getReconciliationRetryCount())
+                .isEqualTo(3);
+
+        assertThat(order.getFailureCode())
+                .isEqualTo("KIS_RECONCILIATION_EXHAUSTED");
+    }
+
+    @Test
+    @DisplayName("KIS 주문번호를 알고 있는 상태에서 TIMEOUT 전환 시 주문번호를 함께 저장한다")
+    void timeoutWithBrokerOrderNo_saveBrokerOrderNo() {
+        // given
+        Order order = createOrder();
+        order.startProcessing();
+
+        // when
+        order.timeoutWithBrokerOrderNo(
+                "0001234567",
+                "KIS_ACCEPT_SAVE_ERROR",
+                "KIS 주문은 접수되었으나 주문 상태 저장에 실패했습니다."
+        );
+
+        // then
+        assertThat(order.getStatus())
+                .isEqualTo(OrderStatus.TIMEOUT);
+
+        assertThat(order.getBrokerOrderNo())
+                .isEqualTo("0001234567");
+
+        assertThat(order.getFailureCode())
+                .isEqualTo("KIS_ACCEPT_SAVE_ERROR");
+    }
+
     private Order createOrder() {
         return Order.create(
                 UUID.randomUUID(),

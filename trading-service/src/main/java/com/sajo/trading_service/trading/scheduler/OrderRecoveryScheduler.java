@@ -17,5 +17,6 @@ public class OrderRecoveryScheduler {
     public void recoverStaleOrders() {
         orderRecoveryCommandService.recoverRequestedOrders();
         orderRecoveryCommandService.recoverProcessingOrders();
+        orderRecoveryCommandService.recoverTimeoutOrders();
     }
 }

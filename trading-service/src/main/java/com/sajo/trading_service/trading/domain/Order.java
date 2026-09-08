@@ -65,6 +65,9 @@ public class Order extends BaseUpdatableEntity {
     @Column(name = "account_retry_count", nullable = false)
     private Integer accountRetryCount;
 
+    @Column(name = "reconciliation_retry_count", nullable = false)
+    private Integer reconciliationRetryCount;
+
     private Order(
             UUID userId,
             UUID autoTradingId,
@@ -87,6 +90,7 @@ public class Order extends BaseUpdatableEntity {
                 signalPrice * orderQuantity.longValue();
         this.status = OrderStatus.REQUESTED;
         this.accountRetryCount = 0;
+        this.reconciliationRetryCount = 0;
     }
 
     public static Order create(
@@ -207,5 +211,47 @@ public class Order extends BaseUpdatableEntity {
         this.status = OrderStatus.REQUESTED;
         this.failureCode = null;
         this.failureMessage = null;
+    }
+
+    public void recordReconciliationFailure(
+            int maxRetryCount,
+            String failureCode,
+            String failureMessage
+    ) {
+        if (this.status != OrderStatus.PROCESSING
+                && this.status != OrderStatus.TIMEOUT) {
+            throw new BusinessException(
+                    TradingErrorCode.ORDER_STATUS_CHANGE_NOT_ALLOWED
+            );
+        }
+
+        this.reconciliationRetryCount++;
+
+        if (this.reconciliationRetryCount >= maxRetryCount) {
+            this.status = OrderStatus.FAILED;
+            this.failureCode = failureCode;
+            this.failureMessage = failureMessage;
+        }
+    }
+
+    public void timeoutWithBrokerOrderNo(
+            String brokerOrderNo,
+            String failureCode,
+            String failureMessage
+    ) {
+        if (this.status != OrderStatus.PROCESSING) {
+            throw new BusinessException(
+                    TradingErrorCode.ORDER_STATUS_CHANGE_NOT_ALLOWED
+            );
+        }
+
+        if (brokerOrderNo == null || brokerOrderNo.isBlank()) {
+            throw new IllegalArgumentException("brokerOrderNo는 필수입니다.");
+        }
+
+        this.status = OrderStatus.TIMEOUT;
+        this.brokerOrderNo = brokerOrderNo;
+        this.failureCode = failureCode;
+        this.failureMessage = failureMessage;
     }
 }
