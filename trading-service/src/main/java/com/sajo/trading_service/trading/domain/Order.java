@@ -342,7 +342,8 @@ public class Order extends BaseUpdatableEntity {
 
         if (totalFilledQuantity < 0
                 || remainingQuantity < 0
-                || totalFilledQuantity > this.orderQuantity) {
+                || totalFilledQuantity > this.orderQuantity
+                || remainingQuantity != 0) {
             throw new BusinessException(
                     TradingErrorCode.INVALID_ORDER
             );

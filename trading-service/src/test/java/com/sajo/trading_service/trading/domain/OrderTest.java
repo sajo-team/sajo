@@ -741,6 +741,30 @@ class OrderTest {
                 .isEqualTo(OrderStatus.CANCELED);
     }
 
+    @Test
+    @DisplayName("취소 주문의 잔여 수량이 0이 아니면 취소할 수 없다")
+    void cancel_remainingQuantityNotZero_fail() {
+        // given
+        Order order = createAcceptedOrder();
+
+        // when & then
+        assertThatThrownBy(() ->
+                order.cancel(
+                        2,
+                        2
+                )
+        )
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception ->
+                        assertThat(
+                                ((BusinessException) exception)
+                                        .getErrorCode()
+                        ).isEqualTo(
+                                TradingErrorCode.INVALID_ORDER
+                        )
+                );
+    }
+
     private Order createAcceptedOrder() {
         Order order = createOrder();
         order.startProcessing();

@@ -228,22 +228,37 @@ public class KisOrderExecutionService {
         }
 
         if ("Y".equalsIgnoreCase(item.canceled())) {
-            orderExecutionCommandService.applyCancellation(
-                    orderId,
-                    totalFilledQuantity,
-                    remainingQuantity,
-                    averageExecutionPrice,
-                    totalExecutionAmount
-            );
+            try {
+                orderExecutionCommandService.applyCancellation(
+                        orderId,
+                        totalFilledQuantity,
+                        remainingQuantity,
+                        averageExecutionPrice,
+                        totalExecutionAmount
+                );
 
-            log.info(
-                    "KIS 취소 주문 결과를 반영했습니다. orderId={}, orderNo={}, filledQuantity={}",
-                    orderId,
-                    item.orderNo(),
-                    totalFilledQuantity
-            );
+                log.info(
+                        "KIS 취소 주문 결과를 반영했습니다. orderId={}, orderNo={}, filledQuantity={}",
+                        orderId,
+                        item.orderNo(),
+                        totalFilledQuantity
+                );
+            } catch (BusinessException e) {
+                /*
+                 * 주문 상태 불일치, 체결 수량 역전,
+                 * 취소 주문의 잔여 수량 오류 등 비정상 응답은
+                 * 임의로 Order 상태를 변경하지 않는다.
+                 */
+                log.warn(
+                        "KIS 취소 결과를 Order에 반영할 수 없습니다. orderId={}, orderNo={}",
+                        orderId,
+                        item.orderNo(),
+                        e
+                );
+            }
 
             return;
+
         }
 
         if (totalFilledQuantity == 0) {

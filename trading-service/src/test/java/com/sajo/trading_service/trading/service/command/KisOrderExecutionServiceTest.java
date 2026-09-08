@@ -1,5 +1,6 @@
 package com.sajo.trading_service.trading.service.command;
 
+import com.sajo.common.exception.BusinessException;
 import com.sajo.trading_service.trading.client.AccountClient;
 import com.sajo.trading_service.trading.client.KisOrderClient;
 import com.sajo.trading_service.trading.client.dto.response.AccountOrderInfoResponse;
@@ -9,6 +10,7 @@ import com.sajo.trading_service.trading.client.dto.response.KisOrderInquiryRespo
 import com.sajo.trading_service.trading.domain.Order;
 import com.sajo.trading_service.trading.domain.enums.AccountType;
 import com.sajo.trading_service.trading.domain.enums.OrderType;
+import com.sajo.trading_service.trading.exception.TradingErrorCode;
 import com.sajo.trading_service.trading.repository.query.OrderQueryRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -535,5 +537,63 @@ class KisOrderExecutionServiceTest {
         order.accept("0001234567");
 
         return order;
+    }
+
+    @Test
+    @DisplayName("취소 결과 반영 중 BusinessException이 발생해도 외부로 전파하지 않는다")
+    void processExecution_cancellationBusinessException() {
+        // given
+        UUID orderId = UUID.randomUUID();
+        Order order = createAcceptedOrder();
+
+        when(orderQueryRepository.findByIdAndDeletedAtIsNull(orderId))
+                .thenReturn(Optional.of(order));
+
+        mockAccountResponses(order);
+
+        KisOrderInquiryItem item =
+                createInquiryItem(
+                        order.getBrokerOrderNo(),
+                        "2",
+                        "1",
+                        "69800",
+                        "139600",
+                        "Y"
+                );
+
+        when(kisOrderClient.inquireDailyOrders(
+                any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any()
+        )).thenReturn(
+                successResponse(List.of(item))
+        );
+
+        doThrow(
+                new BusinessException(
+                        TradingErrorCode.INVALID_ORDER
+                )
+        ).when(orderExecutionCommandService)
+                .applyCancellation(
+                        orderId,
+                        2,
+                        1,
+                        69_800L,
+                        139_600L
+                );
+
+// when
+        kisOrderExecutionService.processExecution(orderId);
+
+// then
+        verify(orderExecutionCommandService)
+                .applyCancellation(
+                        orderId,
+                        2,
+                        1,
+                        69_800L,
+                        139_600L
+                );
     }
 }
