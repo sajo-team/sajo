@@ -5,7 +5,9 @@ import com.sajo.user_service.account.client.KisOAuthClient;
 import com.sajo.user_service.account.client.dto.response.KisAccessTokenResponse;
 import com.sajo.user_service.account.domain.Account;
 import com.sajo.user_service.account.domain.AccountType;
+import com.sajo.user_service.account.domain.KisTokenType;
 import com.sajo.user_service.account.exception.AccountErrorCode;
+import com.sajo.user_service.account.exception.KisBusinessException;
 import com.sajo.user_service.account.service.query.AccountQueryService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -42,12 +44,16 @@ class AccountCreateFacadeTest {
     @Mock
     private KisTokenCacheCommandService kisTokenCacheCommandService;
 
+    @Mock
+    private KisTokenLogCommandService kisTokenLogCommandService;
+
     private AccountCreateFacade accountCreateFacade;
 
     @BeforeEach
     void setUp() {
-        accountCreateFacade =
-                new AccountCreateFacade(kisOAuthClient, accountQueryService, accountCommandService, kisTokenCacheCommandService);
+        accountCreateFacade = new AccountCreateFacade(
+                kisOAuthClient, accountQueryService, accountCommandService, kisTokenCacheCommandService,
+                kisTokenLogCommandService);
     }
 
     @Test
@@ -78,6 +84,7 @@ class AccountCreateFacadeTest {
                 .createAccount(userId, "app-key", "secret-key", "12345678-01", AccountType.REAL);
         inOrder.verify(kisTokenCacheCommandService)
                 .primeKisAccessTokenCache(userId, "issued-token");
+        verify(kisTokenLogCommandService).recordSuccess(account.getId(), userId, KisTokenType.ACCESS_TOKEN);
     }
 
     @Test
@@ -102,15 +109,18 @@ class AccountCreateFacadeTest {
         verify(accountCommandService, never())
                 .createAccount(any(), any(), any(), any(), any());
         verifyNoInteractions(kisTokenCacheCommandService);
+        verifyNoInteractions(kisTokenLogCommandService);
     }
 
     @Test
-    @DisplayName("KIS 자격증명 검증에 실패하면 계좌 생성도, 캐시 채우기도 하지 않는다")
+    @DisplayName("KIS 자격증명 검증에 실패하면 계좌 생성/캐시 채우기는 안 하고, accountId 없이 실패 이력만 남긴다")
     void createAccountFailsWhenKisCredentialsInvalid() {
         // given
         UUID userId = UUID.randomUUID();
+        KisBusinessException kisException =
+                new KisBusinessException(AccountErrorCode.INVALID_KIS_CREDENTIALS, "EGW00123", "유효하지 않은 앱키입니다.");
         given(kisOAuthClient.getAccessToken("app-key", "secret-key", AccountType.REAL))
-                .willThrow(new BusinessException(AccountErrorCode.INVALID_KIS_CREDENTIALS));
+                .willThrow(kisException);
 
         // when & then
         assertThatThrownBy(() -> accountCreateFacade.createAccount(
@@ -125,6 +135,8 @@ class AccountCreateFacadeTest {
         verify(accountCommandService, never())
                 .createAccount(any(), any(), any(), any(), any());
         verifyNoInteractions(kisTokenCacheCommandService);
+        verify(kisTokenLogCommandService)
+                .recordFail(null, userId, KisTokenType.ACCESS_TOKEN, "EGW00123", "유효하지 않은 앱키입니다.");
     }
 
     @Test
@@ -150,10 +162,11 @@ class AccountCreateFacadeTest {
                 });
 
         verifyNoInteractions(kisTokenCacheCommandService);
+        verifyNoInteractions(kisTokenLogCommandService);
     }
 
     @Test
-    @DisplayName("계좌 저장까지 성공한 뒤 캐시 프라이밍이 실패해도 계좌 생성 자체는 성공 처리한다")
+    @DisplayName("계좌 저장까지 성공한 뒤 캐시 프라이밍이 실패해도 계좌 생성은 성공 처리하고, 발급 성공 이력은 그대로 남긴다")
     void createAccountSucceedsEvenWhenCachePrimingFails() {
         // given
         UUID userId = UUID.randomUUID();
@@ -174,5 +187,7 @@ class AccountCreateFacadeTest {
 
         // then
         assertThat(result).isEqualTo(account);
+        verify(kisTokenLogCommandService).recordSuccess(account.getId(), userId, KisTokenType.ACCESS_TOKEN);
     }
+
 }
