@@ -47,6 +47,7 @@ public class StrategyCommandService {
                 request.stopLossRate(),
                 request.targetReturnRate(),
                 request.allocatedAmount(),
+                request.orderAmount(),
                 request.perCondition(),
                 request.pbrCondition(),
                 request.roeCondition()
@@ -81,6 +82,7 @@ public class StrategyCommandService {
                 request.stopLossRate(),
                 request.targetReturnRate(),
                 request.allocatedAmount(),
+                request.orderAmount(),
                 request.perCondition(),
                 request.pbrCondition(),
                 request.roeCondition()
@@ -124,6 +126,7 @@ public class StrategyCommandService {
         if (Boolean.TRUE.equals(request.active())) {
             log.info("전략 활성화 전 Market 데이터 검증 시작. strategyId={}, stockCode={}",
                     strategyId, strategy.getStockCode());
+            validateOrderAmountForActivation(strategy);
             validateMarketDataAvailable(userId, strategy);
         }
 
@@ -134,6 +137,12 @@ public class StrategyCommandService {
                 request.active(),
                 snapshot
         );
+    }
+
+    private void validateOrderAmountForActivation(Strategy strategy) {
+        if (strategy.getOrderAmount() == null || strategy.getOrderAmount() <= 0) {
+            throw new BusinessException(StrategyErrorCode.INVALID_STRATEGY, "1회 주문 금액이 없어 전략을 활성화 할 수 없습니다.");
+        }
     }
 
     private void validateMarketDataAvailable(UUID userId, Strategy strategy) {

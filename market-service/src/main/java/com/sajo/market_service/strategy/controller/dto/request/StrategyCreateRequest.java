@@ -36,6 +36,10 @@ public record StrategyCreateRequest(
         @Positive
         Long allocatedAmount,
 
+        @NotNull
+        @Positive
+        Long orderAmount,
+
         @Positive
         BigDecimal perCondition,
 
