@@ -29,7 +29,7 @@ import java.util.UUID;
 @Testcontainers
 @SpringBootTest
 @AutoConfigureMockMvc
-public class AiRiskAnalysisFailureHistoryIntegration {
+public class AiRiskAnalysisFailureHistoryIntegrationTest {
     @Container
     static PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:16-alpine");
 
