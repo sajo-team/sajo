@@ -6,7 +6,12 @@ dev → main 최초 이관 및 최초 프로덕션 배포를 위한 체크리스
 
 ## 0. 배포 전 팀 확인 (코드 변경 없음, 사람이 확인/합의)
 
-- [ ] `sajo-config-repo`에 gateway/user-service의 `sajo.jwt.secret` 운영 값이 등록되어 있고, 두 서비스가 **동일한 값**을 참조하는지 확인 (코드에 TODO로 남아있던 항목)
+- [ ] `sajo-config-repo`의 공유 `application.yml`에 아래 값이 **모두** 올바른 경로로, 실제 암호화된(또는 최소한 실제) 값으로 들어있는지 확인:
+  - `sajo.jwt.secret` (⚠️ `jwt.secret`처럼 `sajo` 접두어를 빠뜨리면 gateway/user-service가 못 읽음)
+  - `sajo.crypto.account-key`, `sajo.crypto.account-salt`, `sajo.crypto.account-hash-key` (user-service 계좌 정보 암호화용, docker-compose.prod.yaml이 이 값들을 컨테이너에 안 넘겨주므로 config-repo가 유일한 공급처)
+  - `spring.data.redis.password` (user-service, market-service 둘 다 필요 — 두 서비스 다 docker-compose.prod.yaml에서 REDIS_PASSWORD를 못 받음)
+  - `{cipher}...`로 넣을 경우, placeholder 텍스트가 아니라 config-server `/encrypt` 엔드포인트로 실제로 암호화한 값이어야 함 (가짜 암호문이 들어있으면 config-server가 그 설정 전체를 서빙하다 에러남 — 공유 파일이라 영향 범위가 넓음)
+  - `koreainvestment.api-key`/`api-secret`처럼 코드가 실제로 읽지 않는 죽은 설정은 제거 (KIS appKey/secretKey는 계좌별로 사용자가 직접 입력하는 구조)
 - [ ] GitHub Actions repo secrets에 `EC2_HOST`, `EC2_USER`, `EC2_SSH_KEY`가 등록되어 있는지 확인 (최초 배포라 미검증 상태일 수 있음)
 - [ ] EC2에 `~/sajo`가 미리 clone되어 있고, docker/docker compose가 설치되어 있으며, `.env` 파일이 채워져 있는지 확인
   (`DB_PASSWORD, MONGO_PASSWORD, REDIS_PASSWORD, GRAFANA_ADMIN_USER/PASSWORD, GITHUB_USERNAME/TOKEN, ENCRYPT_KEY, ACCOUNT_ENCRYPTION_KEY/SALT, ACCOUNT_HASH_KEY, OPENAI_API_KEY, JWT_SECRET`)

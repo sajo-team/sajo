@@ -74,6 +74,11 @@ spring:
         default_schema: market_strategy
     hibernate:
       ddl-auto: validate
+  data:
+    redis:
+      host: redis
+      port: 6379
+      password: ${REDIS_PASSWORD}
 
 eureka:
   client:
