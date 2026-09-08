@@ -627,9 +627,11 @@ class KisOrderReconciliationServiceTest {
                         "10",
                         "69900",
                         "100000",
-                        "0",
-                        "0",
-                        "0",
+                        "0",  // totalFilledQuantity
+                        "0",  // averageExecutionPrice
+                        "0",  // totalExecutionAmount
+                        "0",  // remainingQuantity
+                        "0",  // rejectedQuantity
                         "Y"
                 );
 
@@ -759,6 +761,8 @@ class KisOrderReconciliationServiceTest {
                 "69900",
                 "100000",
                 "0",
+                "0",   // averageExecutionPrice
+                "0",   // totalExecutionAmount
                 orderQuantity,
                 rejectedQuantity,
                 "N"
