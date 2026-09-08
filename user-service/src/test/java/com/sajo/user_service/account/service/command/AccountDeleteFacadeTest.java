@@ -108,8 +108,8 @@ class AccountDeleteFacadeTest {
     }
 
     @Test
-    @DisplayName("계좌 삭제(DB)가 실패하면 KIS 폐기도 캐시 제거도 시도하지 않고 예외를 그대로 전파한다")
-    void deleteAccountPropagatesFailureWithoutSideEffectsWhenDbDeleteFails() {
+    @DisplayName("계좌 삭제(DB)가 실패하면 ACTIVE로 되돌리고, KIS 폐기/캐시 제거는 시도하지 않은 채 예외를 그대로 전파한다")
+    void deleteAccountReactivatesAndPropagatesFailureWhenDbDeleteFails() {
         // given
         UUID userId = UUID.randomUUID();
         givenNoActiveTrading(userId);
@@ -124,6 +124,31 @@ class AccountDeleteFacadeTest {
                     assertThat(businessException.getErrorCode())
                             .isEqualTo(AccountErrorCode.ACCOUNT_NOT_FOUND);
                 });
+
+        // markPendingDeletion이 이미 커밋된 뒤라, 삭제 실패해도 반드시 원상복구해야 한다
+        verify(accountCommandService).reactivate(userId);
+        verifyNoInteractions(kisOAuthClient);
+        verifyNoInteractions(cacheQueryService);
+        verifyNoInteractions(cacheCommandService);
+        verifyNoInteractions(kisTokenLogCommandService);
+    }
+
+    @Test
+    @DisplayName("계좌 삭제(DB) 실패 후 reactivate 자체도 실패하면, 원본 예외를 유실하지 않고 그대로 전파한다")
+    void deleteAccountPreservesOriginalExceptionWhenReactivateAlsoFailsAfterDbDeleteFailure() {
+        // given
+        UUID userId = UUID.randomUUID();
+        givenNoActiveTrading(userId);
+        BusinessException dbDeleteFailure = new BusinessException(AccountErrorCode.ACCOUNT_NOT_FOUND);
+        RuntimeException reactivateFailure = new RuntimeException("DB 커넥션 끊김");
+        willThrow(dbDeleteFailure).given(accountCommandService).deleteAccount(userId);
+        willThrow(reactivateFailure).given(accountCommandService).reactivate(userId);
+
+        // when & then
+        assertThatThrownBy(() -> accountDeleteFacade.deleteAccount(userId))
+                .isSameAs(dbDeleteFailure)
+                .satisfies(exception ->
+                        assertThat(exception.getSuppressed()).contains(reactivateFailure));
 
         verifyNoInteractions(kisOAuthClient);
         verifyNoInteractions(cacheQueryService);
