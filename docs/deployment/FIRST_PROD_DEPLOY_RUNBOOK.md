@@ -26,12 +26,15 @@ prod 프로필이 `ddl-auto: validate`라 그대로 두면 기동 자체가 실�
 (자세한 근거와 실제 검증 결과는 `market-service/docs/migrations/README.md`의
 "Bootstrapping a brand-new (empty) production database" 절 참고)
 
-1. [ ] sajo-config-repo에서 market-service, trading-service의 prod `ddl-auto`를
-       **일시적으로** `update`로 변경
+1. [ ] `docker-compose.prod.yaml`에 이미 준비된 임시 override
+       (`SPRING_JPA_HIBERNATE_DDL_AUTO: update`, market-service/trading-service 둘 다)를
+       **포함한 상태로** 최초 배포 진행 — sajo-config-repo는 건드릴 필요 없음
 2. [ ] 두 서비스를 정상 기동 → 헬스체크 UP 확인
 3. [ ] market-service 컨테이너/호스트에서 `V44__market_stock_price_daily_unique.sql`
        **만** 수동 실행 (V52/V53/V103은 실행하지 않음 — 불필요하거나 에러 발생)
-4. [ ] sajo-config-repo에서 두 서비스 prod `ddl-auto`를 다시 `validate`로 되돌리고 재기동
+4. [ ] `docker-compose.prod.yaml`에서 `SPRING_JPA_HIBERNATE_DDL_AUTO: update` 두 줄(market-service,
+       trading-service 각각)을 삭제하는 커밋을 올리고, 그 커밋으로 재배포 → prod가 다시
+       기본값(`validate`)으로 동작하게 됨
 5. [ ] 재기동 후에도 헬스체크 UP 유지되는지 확인 (validate가 실제로 통과하는지 확인하는 단계)
 
 ## 2. main으로 이관 및 배포 트리거

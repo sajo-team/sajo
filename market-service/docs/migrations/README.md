@@ -58,6 +58,10 @@ Verified against a schema generated from the current entities (2026-09-08):
    **once** with `hibernate.ddl-auto: update` against the empty schema. Since there are
    no existing tables, this behaves identically to a manual `CREATE TABLE` script and
    only creates what's missing — it does not run any risky `ALTER` on real data.
+   In practice this is done via a temporary `SPRING_JPA_HIBERNATE_DDL_AUTO: update`
+   environment override already staged in `docker-compose.prod.yaml` (rather than
+   editing `sajo-config-repo`, which doesn't set `ddl-auto` at all) — remove those two
+   lines and redeploy once step 2 below is confirmed healthy.
 2. After a healthy boot, run **V44 only**. It is safe and rerunnable (confirmed by
    running it twice back-to-back).
 3. Do **not** run V52 or V103 against a freshly bootstrapped schema:
