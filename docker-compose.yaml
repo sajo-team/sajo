@@ -200,6 +200,7 @@ services:
       ACCOUNT_ENCRYPTION_SALT: ${ACCOUNT_ENCRYPTION_SALT}
       ACCOUNT_HASH_KEY: ${ACCOUNT_HASH_KEY}
       JWT_SECRET: ${JWT_SECRET}
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET}
     ports:
       - "127.0.0.1:8081:8081"
     networks:
@@ -224,6 +225,8 @@ services:
       SPRING_PROFILES_ACTIVE: prod
       CONFIG_SERVER_URL: http://config-server:8888
       DB_PASSWORD: ${DB_PASSWORD}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET}
     ports:
       - "127.0.0.1:8082:8082"
     networks:
@@ -234,6 +237,8 @@ services:
       config-server:
         condition: service_healthy
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     restart: unless-stopped
 
@@ -248,6 +253,7 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       MONGO_PASSWORD: ${MONGO_PASSWORD}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET}
     ports:
       - "127.0.0.1:8083:8083"
     networks:

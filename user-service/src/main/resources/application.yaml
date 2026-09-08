@@ -54,6 +54,9 @@ sajo:
   jwt:
     secret: local-dev-jwt-secret-key-do-not-use-in-prod-32bytes-min
     access-token-validity-seconds: 3600
+  # market-service/trading-service local 프로필과 반드시 동일해야 함 (internal API 호출/검증 쌍)
+  internal:
+    api-secret: local-dev-internal-api-secret-do-not-use-in-prod
 
 eureka:
   client:
@@ -94,6 +97,8 @@ sajo:
   jwt:
     secret: ${JWT_SECRET}
     access-token-validity-seconds: 3600
+  internal:
+    api-secret: ${INTERNAL_API_SECRET}
 
 
 eureka:

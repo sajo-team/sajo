@@ -207,6 +207,7 @@ services:
       SPRING_PROFILES_ACTIVE: prod
       CONFIG_SERVER_URL: http://config-server:8888
       DB_PASSWORD: ${DB_PASSWORD}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
     # ports 없음 - user-service와 동일한 이유 (Gateway만 내부 DNS로 접근하면 됨)
     networks:
       - sajo-net
@@ -216,6 +217,8 @@ services:
       config-server:
         condition: service_healthy
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     restart: unless-stopped
 
@@ -239,5 +242,7 @@ services:
       postgres:
         condition: service_healthy
       mongo-ai-risk:
+        condition: service_healthy
+      kafka:
         condition: service_healthy
     restart: unless-stopped
