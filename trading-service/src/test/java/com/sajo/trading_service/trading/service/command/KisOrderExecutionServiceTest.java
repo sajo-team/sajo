@@ -642,4 +642,50 @@ class KisOrderExecutionServiceTest {
                         209_450L
                 );
     }
+
+    @Test
+    @DisplayName("거절 수량이 존재하면 체결 결과를 자동 반영하지 않는다")
+    void processExecution_rejectedQuantity() {
+        // given
+        UUID orderId = UUID.randomUUID();
+        Order order = createAcceptedOrder();
+
+        when(orderQueryRepository.findByIdAndDeletedAtIsNull(orderId))
+                .thenReturn(Optional.of(order));
+
+        mockAccountResponses(order);
+
+        KisOrderInquiryItem item =
+                new KisOrderInquiryItem(
+                        "20260908",
+                        "00000",
+                        order.getBrokerOrderNo(),
+                        "02",
+                        "005930",
+                        "4",
+                        "70000",
+                        "100000",
+                        "2",
+                        "69800",
+                        "139600",
+                        "0",
+                        "2",
+                        "N"
+                );
+
+        when(kisOrderClient.inquireDailyOrders(
+                any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any()
+        )).thenReturn(
+                successResponse(List.of(item))
+        );
+
+        // when
+        kisOrderExecutionService.processExecution(orderId);
+
+        // then
+        verifyNoInteractions(orderExecutionCommandService);
+    }
 }

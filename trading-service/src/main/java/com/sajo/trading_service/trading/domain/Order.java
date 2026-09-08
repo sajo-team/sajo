@@ -299,7 +299,8 @@ public class Order extends BaseUpdatableEntity {
          *
          * 취소/부분체결 후 취소는 별도 정책으로 처리한다.
          */
-        if (totalFilledQuantity + remainingQuantity
+        if (totalFilledQuantity
+                + remainingQuantity
                 != this.orderQuantity) {
             throw new BusinessException(
                     TradingErrorCode.INVALID_ORDER

@@ -204,6 +204,7 @@ public class KisOrderExecutionService {
         int remainingQuantity;
         BigDecimal averageExecutionPrice;
         long totalExecutionAmount;
+        int rejectedQuantity;
 
         try {
             totalFilledQuantity =
@@ -217,6 +218,9 @@ public class KisOrderExecutionService {
 
             totalExecutionAmount =
                     parseLong(item.totalExecutionAmount());
+
+            rejectedQuantity =
+                    parseInteger(item.rejectedQuantity());
 
         } catch (ArithmeticException | NumberFormatException | NullPointerException e) {
             log.warn(
@@ -259,6 +263,16 @@ public class KisOrderExecutionService {
 
             return;
 
+        }
+
+        if (rejectedQuantity > 0) {
+            log.warn(
+                    "KIS 주문에 거절 수량이 포함되어 있어 체결 반영을 보류합니다. orderId={}, orderNo={}, rejectedQuantity={}",
+                    orderId,
+                    item.orderNo(),
+                    rejectedQuantity
+            );
+            return;
         }
 
         if (totalFilledQuantity == 0) {
