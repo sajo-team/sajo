@@ -19,6 +19,9 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.verify;
@@ -39,12 +42,16 @@ class AccountDeleteFacadeTest {
     @Mock
     private AccountCommandService accountCommandService;
 
+    @Mock
+    private KisTokenLogCommandService kisTokenLogCommandService;
+
     private AccountDeleteFacade accountDeleteFacade;
 
     @BeforeEach
     void setUp() {
-        accountDeleteFacade =
-                new AccountDeleteFacade(kisOAuthClient, cacheQueryService, cacheCommandService, accountCommandService);
+        accountDeleteFacade = new AccountDeleteFacade(
+                kisOAuthClient, cacheQueryService, cacheCommandService, accountCommandService,
+                kisTokenLogCommandService);
     }
 
     private Account account(UUID userId) {
@@ -67,6 +74,7 @@ class AccountDeleteFacadeTest {
         // then
         verify(kisOAuthClient).revokeAccessToken("app-key", "secret-key", "cached-token", AccountType.REAL);
         verify(cacheCommandService).evictKisTokenCaches(userId);
+        verify(kisTokenLogCommandService).recordRevokeSuccess(account.getId(), userId);
     }
 
     @Test
@@ -84,6 +92,7 @@ class AccountDeleteFacadeTest {
         // then
         verifyNoInteractions(kisOAuthClient);
         verify(cacheCommandService).evictKisTokenCaches(userId);
+        verifyNoInteractions(kisTokenLogCommandService);
     }
 
     @Test
@@ -106,6 +115,7 @@ class AccountDeleteFacadeTest {
         verifyNoInteractions(kisOAuthClient);
         verifyNoInteractions(cacheQueryService);
         verifyNoInteractions(cacheCommandService);
+        verifyNoInteractions(kisTokenLogCommandService);
     }
 
     @Test
@@ -123,6 +133,25 @@ class AccountDeleteFacadeTest {
         assertThatCode(() -> accountDeleteFacade.deleteAccount(userId)).doesNotThrowAnyException();
 
         verify(cacheCommandService).evictKisTokenCaches(userId);
+        verify(kisTokenLogCommandService).recordRevokeFail(eq(account.getId()), eq(userId), isNull(), any());
+    }
+
+    @Test
+    @DisplayName("캐시된 토큰 조회(Redis) 자체가 실패하면 KIS 폐기를 시도하지 않고, 폐기 실패로 잘못 기록하지도 않는다")
+    void deleteAccountDoesNotRecordRevokeFailWhenPeekAccessTokenFails() {
+        // given
+        UUID userId = UUID.randomUUID();
+        Account account = account(userId);
+        given(accountCommandService.deleteAccount(userId)).willReturn(account);
+        willThrow(new RuntimeException("Redis 타임아웃"))
+                .given(cacheQueryService).peekAccessToken(userId);
+
+        // when & then
+        assertThatCode(() -> accountDeleteFacade.deleteAccount(userId)).doesNotThrowAnyException();
+
+        verifyNoInteractions(kisOAuthClient);
+        verify(cacheCommandService).evictKisTokenCaches(userId);
+        verifyNoInteractions(kisTokenLogCommandService);
     }
 
     @Test

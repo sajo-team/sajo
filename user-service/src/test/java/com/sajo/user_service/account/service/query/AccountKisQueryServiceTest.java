@@ -69,7 +69,7 @@ class AccountKisQueryServiceTest {
                 "0", "MSG_CD", "정상처리 되었습니다", null, null, List.of(), List.of(depositSummary()));
 
         given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
-        given(kisTokenCacheQueryService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL))
+        given(kisTokenCacheQueryService.getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL))
                 .willReturn("issued-token");
         given(kisTrClient.inquireBalance(
                 "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.REAL))
@@ -88,7 +88,7 @@ class AccountKisQueryServiceTest {
 
         InOrder inOrder = inOrder(accountQueryService, kisTokenCacheQueryService, kisTrClient);
         inOrder.verify(accountQueryService).getAccountByUserId(userId);
-        inOrder.verify(kisTokenCacheQueryService).getAccessToken(userId, "app-key", "secret-key", AccountType.REAL);
+        inOrder.verify(kisTokenCacheQueryService).getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL);
         inOrder.verify(kisTrClient).inquireBalance(
                 "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.REAL);
     }
@@ -124,7 +124,7 @@ class AccountKisQueryServiceTest {
                 new KisBalanceResponse("0", "MSG_CD", "정상처리 되었습니다", null, null, List.of(), List.of());
 
         given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
-        given(kisTokenCacheQueryService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL))
+        given(kisTokenCacheQueryService.getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL))
                 .willReturn("issued-token");
         given(kisTrClient.inquireBalance(
                 "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.REAL))
@@ -183,7 +183,7 @@ class AccountKisQueryServiceTest {
                 new KisContinuationResult<>(kisBalanceResponse, true);
 
         given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
-        given(kisTokenCacheQueryService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL))
+        given(kisTokenCacheQueryService.getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL))
                 .willReturn("issued-token");
         given(kisTrClient.inquireBalance(
                 "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.REAL, null, null))
@@ -216,7 +216,7 @@ class AccountKisQueryServiceTest {
                 new KisContinuationResult<>(kisBalanceResponse, false);
 
         given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
-        given(kisTokenCacheQueryService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL))
+        given(kisTokenCacheQueryService.getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL))
                 .willReturn("issued-token");
         given(kisTrClient.inquireBalance(
                 "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.REAL,
@@ -329,7 +329,7 @@ class AccountKisQueryServiceTest {
                 userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
 
         given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
-        given(kisTokenCacheQueryService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL))
+        given(kisTokenCacheQueryService.getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL))
                 .willReturn("issued-token");
 
         // when
@@ -342,7 +342,7 @@ class AccountKisQueryServiceTest {
 
         InOrder inOrder = inOrder(accountQueryService, kisTokenCacheQueryService);
         inOrder.verify(accountQueryService).getAccountByUserId(userId);
-        inOrder.verify(kisTokenCacheQueryService).getAccessToken(userId, "app-key", "secret-key", AccountType.REAL);
+        inOrder.verify(kisTokenCacheQueryService).getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL);
     }
 
     @Test
@@ -374,7 +374,7 @@ class AccountKisQueryServiceTest {
                 userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
 
         given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
-        given(kisTokenCacheQueryService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL))
+        given(kisTokenCacheQueryService.getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL))
                 .willThrow(new BusinessException(AccountErrorCode.KIS_TOKEN_ISSUE_FAILED));
 
         // when & then
@@ -396,7 +396,7 @@ class AccountKisQueryServiceTest {
                 userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
 
         given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
-        given(kisTokenCacheQueryService.getApprovalKey(userId, "app-key", "secret-key", AccountType.REAL))
+        given(kisTokenCacheQueryService.getApprovalKey(userId, null, "app-key", "secret-key", AccountType.REAL))
                 .willReturn("issued-approval-key");
 
         // when
@@ -407,7 +407,7 @@ class AccountKisQueryServiceTest {
 
         InOrder inOrder = inOrder(accountQueryService, kisTokenCacheQueryService);
         inOrder.verify(accountQueryService).getAccountByUserId(userId);
-        inOrder.verify(kisTokenCacheQueryService).getApprovalKey(userId, "app-key", "secret-key", AccountType.REAL);
+        inOrder.verify(kisTokenCacheQueryService).getApprovalKey(userId, null, "app-key", "secret-key", AccountType.REAL);
     }
 
     @Test
@@ -442,7 +442,7 @@ class AccountKisQueryServiceTest {
                 "0", "MSG_CD", "정상처리 되었습니다", new KisOrderableAmountDetailResponse("9998580"));
 
         given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
-        given(kisTokenCacheQueryService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL))
+        given(kisTokenCacheQueryService.getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL))
                 .willReturn("issued-token");
         given(kisTrClient.inquireOrderableAmount(
                 "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.REAL, "", "", "00"))
@@ -456,7 +456,7 @@ class AccountKisQueryServiceTest {
 
         InOrder inOrder = inOrder(accountQueryService, kisTokenCacheQueryService, kisTrClient);
         inOrder.verify(accountQueryService).getAccountByUserId(userId);
-        inOrder.verify(kisTokenCacheQueryService).getAccessToken(userId, "app-key", "secret-key", AccountType.REAL);
+        inOrder.verify(kisTokenCacheQueryService).getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL);
         inOrder.verify(kisTrClient).inquireOrderableAmount(
                 "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.REAL, "", "", "00");
     }
@@ -492,7 +492,7 @@ class AccountKisQueryServiceTest {
                 new KisOrderableAmountResponse("0", "MSG_CD", "정상처리 되었습니다", null);
 
         given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
-        given(kisTokenCacheQueryService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL))
+        given(kisTokenCacheQueryService.getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL))
                 .willReturn("issued-token");
         given(kisTrClient.inquireOrderableAmount(
                 "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.REAL, "", "", "00"))
@@ -519,7 +519,7 @@ class AccountKisQueryServiceTest {
                 "0", "MSG_CD", "정상처리 되었습니다", new KisOrderableAmountDetailResponse("not-a-number"));
 
         given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
-        given(kisTokenCacheQueryService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL))
+        given(kisTokenCacheQueryService.getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL))
                 .willReturn("issued-token");
         given(kisTrClient.inquireOrderableAmount(
                 "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.REAL, "", "", "00"))
@@ -547,7 +547,7 @@ class AccountKisQueryServiceTest {
                 List.of(holding("005930", "10")), List.of());
 
         given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
-        given(kisTokenCacheQueryService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL))
+        given(kisTokenCacheQueryService.getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL))
                 .willReturn("issued-token");
         given(kisTrClient.inquireBalance(
                 "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.REAL, null, null))
@@ -577,7 +577,7 @@ class AccountKisQueryServiceTest {
                 List.of(holding("005930", "10")), List.of());
 
         given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
-        given(kisTokenCacheQueryService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL))
+        given(kisTokenCacheQueryService.getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL))
                 .willReturn("issued-token");
         given(kisTrClient.inquireBalance(
                 "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.REAL, null, null))
@@ -605,7 +605,7 @@ class AccountKisQueryServiceTest {
                 List.of(holding("000660", "5")), List.of());
 
         given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
-        given(kisTokenCacheQueryService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL))
+        given(kisTokenCacheQueryService.getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL))
                 .willReturn("issued-token");
         given(kisTrClient.inquireBalance(
                 "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.REAL, null, null))
@@ -630,7 +630,7 @@ class AccountKisQueryServiceTest {
                 List.of(holding("000660", "5")), List.of());
 
         given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
-        given(kisTokenCacheQueryService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL))
+        given(kisTokenCacheQueryService.getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL))
                 .willReturn("issued-token");
         given(kisTrClient.inquireBalance(
                 eq("issued-token"), eq("app-key"), eq("secret-key"), eq("12345678"), eq("01"), eq(AccountType.REAL),
@@ -662,7 +662,7 @@ class AccountKisQueryServiceTest {
                 List.of(holding("005930", "not-a-number")), List.of());
 
         given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
-        given(kisTokenCacheQueryService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL))
+        given(kisTokenCacheQueryService.getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL))
                 .willReturn("issued-token");
         given(kisTrClient.inquireBalance(
                 "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.REAL, null, null))

@@ -6,6 +6,7 @@ import com.sajo.user_service.account.client.dto.response.KisAccessTokenResponse;
 import com.sajo.user_service.account.client.dto.response.KisApprovalKeyResponse;
 import com.sajo.user_service.account.domain.AccountType;
 import com.sajo.user_service.account.exception.AccountErrorCode;
+import com.sajo.user_service.account.service.command.KisTokenLogCommandService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -34,11 +35,15 @@ class KisTokenCacheQueryServiceTest {
     @Mock
     private Cache cache;
 
+    @Mock
+    private KisTokenLogCommandService kisTokenLogCommandService;
+
     private KisTokenCacheQueryService kisTokenCacheQueryService;
 
     @BeforeEach
     void setUp() {
-        kisTokenCacheQueryService = new KisTokenCacheQueryService(kisOAuthClient, cacheManager);
+        kisTokenCacheQueryService =
+                new KisTokenCacheQueryService(kisOAuthClient, cacheManager, kisTokenLogCommandService);
     }
 
     @Test
@@ -50,7 +55,7 @@ class KisTokenCacheQueryServiceTest {
                 .willReturn(new KisAccessTokenResponse("issued-token", "Bearer", 86400f, "2026-01-01 00:00:00"));
 
         // when
-        String result = kisTokenCacheQueryService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL);
+        String result = kisTokenCacheQueryService.getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL);
 
         // then
         assertThat(result).isEqualTo("issued-token");
@@ -66,7 +71,7 @@ class KisTokenCacheQueryServiceTest {
 
         // when & then
         assertThatThrownBy(() ->
-                kisTokenCacheQueryService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL))
+                kisTokenCacheQueryService.getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(exception -> {
                     BusinessException businessException = (BusinessException) exception;
@@ -84,7 +89,7 @@ class KisTokenCacheQueryServiceTest {
                 .willReturn(new KisApprovalKeyResponse("issued-approval-key"));
 
         // when
-        String result = kisTokenCacheQueryService.getApprovalKey(userId, "app-key", "secret-key", AccountType.REAL);
+        String result = kisTokenCacheQueryService.getApprovalKey(userId, null, "app-key", "secret-key", AccountType.REAL);
 
         // then
         assertThat(result).isEqualTo("issued-approval-key");
@@ -100,7 +105,7 @@ class KisTokenCacheQueryServiceTest {
 
         // when & then
         assertThatThrownBy(() ->
-                kisTokenCacheQueryService.getApprovalKey(userId, "app-key", "secret-key", AccountType.REAL))
+                kisTokenCacheQueryService.getApprovalKey(userId, null, "app-key", "secret-key", AccountType.REAL))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(exception -> {
                     BusinessException businessException = (BusinessException) exception;
