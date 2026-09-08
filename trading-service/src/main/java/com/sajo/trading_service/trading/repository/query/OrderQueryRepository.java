@@ -55,6 +55,20 @@ where o.status = com.sajo.trading_service.trading.domain.enums.OrderStatus.REQUE
             @Param("cutoff") Instant cutoff
     );
 
+    @Query("""
+    select o.id
+    from Order o
+    where o.status in (
+        com.sajo.trading_service.trading.domain.enums.OrderStatus.ACCEPTED,
+        com.sajo.trading_service.trading.domain.enums.OrderStatus.PARTIALLY_FILLED
+    )
+      and o.updatedAt < :cutoff
+      and o.deletedAt is null
+""")
+    List<UUID> findExecutionTargetOrderIds(
+            @Param("cutoff") Instant cutoff
+    );
+
     Optional<Order> findByIdAndDeletedAtIsNull(UUID orderId);
 
     @Query("""
