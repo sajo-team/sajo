@@ -22,6 +22,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -54,12 +55,13 @@ class BacktestCommandServiceTest {
     }
 
     @Test
-    @DisplayName("백테스트 실행을 요청하면 REQUESTED 상태로 저장하고 응답을 반환한다.")
+    @DisplayName("백테스트 실행이 완료되면 최신 상태를 조회해 응답한다.")
     void createBacktest() {
         // given
         UUID userId = UUID.randomUUID();
         UUID strategyId = UUID.randomUUID();
         UUID backtestId = UUID.randomUUID();
+        AtomicReference<Backtest> savedReference = new AtomicReference<>();
 
         Strategy strategy = newStrategy(userId);
         ReflectionTestUtils.setField(strategy, "id", strategyId);
@@ -77,6 +79,7 @@ class BacktestCommandServiceTest {
                 .willAnswer(invocation -> {
                     Backtest backtest = invocation.getArgument(0);
                     ReflectionTestUtils.setField(backtest, "id", backtestId);
+                    savedReference.set(backtest);
                     return backtest;
                 });
 
@@ -85,6 +88,14 @@ class BacktestCommandServiceTest {
         org.mockito.BDDMockito.willDoNothing()
                 .given(backtestExecutionService)
                 .execute(backtestId);
+
+        given(backtestCommandRepository.findById(backtestId))
+                .willAnswer(invocation -> {
+                    Backtest executedBacktest = savedReference.get();
+                    executedBacktest.start();
+                    executedBacktest.complete(BigDecimal.ZERO, 0);
+                    return Optional.of(executedBacktest);
+                });
 
         // when
         BacktestCreateResponse response = backtestCommandService.createBacktest(userId, strategyId, request);
@@ -101,12 +112,12 @@ class BacktestCommandServiceTest {
         assertThat(savedBacktest.getStartDate()).isEqualTo(LocalDate.of(2026, 1, 1));
         assertThat(savedBacktest.getEndDate()).isEqualTo(LocalDate.of(2026, 3, 31));
         assertThat(savedBacktest.getInitialCash()).isEqualTo(1_000_000L);
-        assertThat(savedBacktest.getStatus()).isEqualTo(BacktestStatus.REQUESTED);
+        assertThat(savedBacktest.getStatus()).isEqualTo(BacktestStatus.COMPLETED);
         assertThat(savedBacktest.getRequestedAt()).isNotNull();
 
         assertThat(response.backtestId()).isEqualTo(backtestId);
         assertThat(response.strategyId()).isEqualTo(strategyId);
-        assertThat(response.status()).isEqualTo(BacktestStatus.REQUESTED);
+        assertThat(response.status()).isEqualTo(BacktestStatus.COMPLETED);
         assertThat(response.requestedAt()).isNotNull();
     }
 
