@@ -43,3 +43,53 @@ Spring's default scheduler uses a single scheduler thread, so scheduled jobs in 
 Before enabling either scheduler in an environment, operate only one scheduler-active application instance for the system App Key and avoid overlap with other batches that use the same App Key. The limiter is not distributed, so multiple instances or separate applications can still exceed the KIS App Key limit. A distributed scheduler lock and distributed rate limiter remain follow-up work.
 
 Each scheduler obtains the system user's KIS credentials once per run and reuses them for the batch. If the token's remaining lifetime is shorter than the full batch duration, later stocks can fail after token expiry; token lifetime and batch size must be monitored operationally.
+
+## Bootstrapping a brand-new (empty) production database
+
+The current entities already include everything V52, V53, and V103 were written to add
+(`stock_code` unique/not-null, the backtest result columns, and the
+`stock_id + reference_date` unique constraint on `m_market_stocks_indicator`). Only V44
+adds something Hibernate cannot generate from annotations: the **partial** unique index
+`uk_market_stock_price_daily_rest` (`WHERE time IS NULL AND source = 'REST'`).
+
+Verified against a schema generated from the current entities (2026-09-08):
+
+1. Boot `market-service` (and `trading-service`, which has no migration files at all)
+   **once** with `hibernate.ddl-auto: update` against the empty schema. Since there are
+   no existing tables, this behaves identically to a manual `CREATE TABLE` script and
+   only creates what's missing — it does not run any risky `ALTER` on real data.
+2. After a healthy boot, run **V44 only**. It is safe and rerunnable (confirmed by
+   running it twice back-to-back).
+3. Do **not** run V52 or V103 against a freshly bootstrapped schema:
+   - V52 will not error, but its "does an equivalent index already exist" check never
+     matches (see bug note below), so it silently creates a **duplicate** unique index
+     on `stock_code` alongside the one Hibernate already created from the entity
+     annotation.
+   - V103 will **fail with a hard error**
+     (`relation "uk_market_stock_indicator_stock_reference_date" already exists"`)
+     because the entity's `@UniqueConstraint` already created an index under that exact
+     name.
+   - V53 is a harmless no-op (all its `ADD COLUMN IF NOT EXISTS` guards correctly skip),
+     but there is no reason to run it either.
+4. Switch `ddl-auto` back to `validate` for both services immediately after step 2 and
+   never set it back to `update` in production again.
+
+### Known bug: V52 / V103 existence checks (non-blocking, tracked separately)
+
+Both scripts detect an existing matching index with:
+
+```sql
+index_definition.indkey::smallint[] = ARRAY[...]
+```
+
+Casting `pg_index.indkey` (an `int2vector`) to `smallint[]` produces an array with a
+`[0:1]` lower bound, which never equals a normal `ARRAY[...]` literal (`[1:n]` bound) —
+so the "already exists" branch can never be taken. A working replacement, verified
+locally:
+
+```sql
+indkey::text = array_to_string(ARRAY[...], ' ')
+```
+
+This is left as a follow-up fix (see issue tracker) rather than being edited in place,
+since these files represent an already-applied migration history.
