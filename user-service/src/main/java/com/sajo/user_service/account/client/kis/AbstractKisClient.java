@@ -1,6 +1,6 @@
-package com.sajo.user_service.account.client;
+package com.sajo.user_service.account.client.kis;
 
-import com.sajo.user_service.account.client.dto.response.KisErrorInfo;
+import com.sajo.user_service.account.client.kis.dto.response.KisErrorInfo;
 import com.sajo.user_service.account.domain.AccountType;
 import com.sajo.user_service.account.exception.AccountErrorCode;
 import com.sajo.user_service.account.exception.KisBusinessException;

@@ -1,13 +1,13 @@
 package com.sajo.user_service.account.service.query;
 
 import com.sajo.common.exception.BusinessException;
-import com.sajo.user_service.account.client.KisTrClient;
-import com.sajo.user_service.account.client.KisContinuationResult;
-import com.sajo.user_service.account.client.dto.response.KisBalanceHoldingResponse;
-import com.sajo.user_service.account.client.dto.response.KisBalanceResponse;
-import com.sajo.user_service.account.client.dto.response.KisBalanceSummaryResponse;
-import com.sajo.user_service.account.client.dto.response.KisOrderableAmountDetailResponse;
-import com.sajo.user_service.account.client.dto.response.KisOrderableAmountResponse;
+import com.sajo.user_service.account.client.kis.KisTrClient;
+import com.sajo.user_service.account.client.kis.KisContinuationResult;
+import com.sajo.user_service.account.client.kis.dto.response.KisBalanceHoldingResponse;
+import com.sajo.user_service.account.client.kis.dto.response.KisBalanceResponse;
+import com.sajo.user_service.account.client.kis.dto.response.KisBalanceSummaryResponse;
+import com.sajo.user_service.account.client.kis.dto.response.KisOrderableAmountDetailResponse;
+import com.sajo.user_service.account.client.kis.dto.response.KisOrderableAmountResponse;
 import com.sajo.user_service.account.controller.dto.response.AccessTokenResponse;
 import com.sajo.user_service.account.controller.dto.response.AccountDepositResponse;
 import com.sajo.user_service.account.controller.dto.response.AccountHoldingsResponse;

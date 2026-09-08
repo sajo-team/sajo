@@ -1,4 +1,4 @@
-package com.sajo.user_service.account.client.dto.response;
+package com.sajo.user_service.account.client.kis.dto.response;
 
 // KIS 주식잔고조회 output2 (예수금 등 계좌 요약, 배열이지만 실질적으로 원소 1개)
 public record KisBalanceSummaryResponse(

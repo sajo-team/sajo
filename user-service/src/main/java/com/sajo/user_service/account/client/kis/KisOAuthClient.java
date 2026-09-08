@@ -1,12 +1,12 @@
-package com.sajo.user_service.account.client;
+package com.sajo.user_service.account.client.kis;
 
-import com.sajo.user_service.account.client.dto.request.AccessTokenRequest;
-import com.sajo.user_service.account.client.dto.request.AccessTokenRevokeRequest;
-import com.sajo.user_service.account.client.dto.request.ApprovalKeyRequest;
-import com.sajo.user_service.account.client.dto.response.AccessTokenRevokeResponse;
-import com.sajo.user_service.account.client.dto.response.KisAccessTokenResponse;
-import com.sajo.user_service.account.client.dto.response.KisApprovalKeyResponse;
-import com.sajo.user_service.account.client.dto.response.KisOAuthErrorResponse;
+import com.sajo.user_service.account.client.kis.dto.request.AccessTokenRequest;
+import com.sajo.user_service.account.client.kis.dto.request.AccessTokenRevokeRequest;
+import com.sajo.user_service.account.client.kis.dto.request.ApprovalKeyRequest;
+import com.sajo.user_service.account.client.kis.dto.response.AccessTokenRevokeResponse;
+import com.sajo.user_service.account.client.kis.dto.response.KisAccessTokenResponse;
+import com.sajo.user_service.account.client.kis.dto.response.KisApprovalKeyResponse;
+import com.sajo.user_service.account.client.kis.dto.response.KisOAuthErrorResponse;
 import com.sajo.user_service.account.domain.AccountType;
 import com.sajo.user_service.account.exception.AccountErrorCode;
 import org.springframework.http.MediaType;

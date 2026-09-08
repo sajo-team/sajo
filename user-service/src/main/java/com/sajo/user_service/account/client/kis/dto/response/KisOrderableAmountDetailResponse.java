@@ -1,4 +1,4 @@
-package com.sajo.user_service.account.client.dto.response;
+package com.sajo.user_service.account.client.kis.dto.response;
 
 // KIS 매수가능조회(inquire-psbl-order) output - 필요한 필드만 선별 매핑 (나머지는 Jackson이 무시함)
 public record KisOrderableAmountDetailResponse(

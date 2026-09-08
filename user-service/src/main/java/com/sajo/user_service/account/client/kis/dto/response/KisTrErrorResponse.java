@@ -1,4 +1,4 @@
-package com.sajo.user_service.account.client.dto.response;
+package com.sajo.user_service.account.client.kis.dto.response;
 
 // kis tr(잔고조회 등 거래 조회) 에러 응답 - KisBalanceResponse와 동일한 rt_cd/msg_cd/msg1 포맷
 public record KisTrErrorResponse(

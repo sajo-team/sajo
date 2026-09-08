@@ -1,4 +1,4 @@
-package com.sajo.user_service.account.client.dto.response;
+package com.sajo.user_service.account.client.kis.dto.response;
 
 // KIS 주식잔고조회 output1 (보유종목별 상세)
 public record KisBalanceHoldingResponse(

@@ -1,4 +1,4 @@
-package com.sajo.user_service.account.client;
+package com.sajo.user_service.account.client.kis;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
