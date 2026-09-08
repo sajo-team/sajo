@@ -37,10 +37,45 @@ where o.status = com.sajo.trading_service.trading.domain.enums.OrderStatus.REQUE
     select o.id
     from Order o
     where o.status = com.sajo.trading_service.trading.domain.enums.OrderStatus.PROCESSING
-      and o.updatedAt < :cutoff
+      and o.updatedAt <  :cutoff
       and o.deletedAt is null
     """)
     List<UUID> findStaleProcessingOrderIds(
             @Param("cutoff") Instant cutoff
+    );
+
+    @Query("""
+    select o.id
+    from Order o
+    where o.status = com.sajo.trading_service.trading.domain.enums.OrderStatus.TIMEOUT
+      and o.updatedAt < :cutoff
+      and o.deletedAt is null
+    """)
+    List<UUID> findStaleTimeoutOrderIds(
+            @Param("cutoff") Instant cutoff
+    );
+
+    Optional<Order> findByIdAndDeletedAtIsNull(UUID orderId);
+
+    @Query("""
+    select case when count(o) > 0 then true else false end
+    from Order o
+    where o.userId = :userId
+      and o.deletedAt is null
+      and o.status in (
+          com.sajo.trading_service.trading.domain.enums.OrderStatus.REQUESTED,
+          com.sajo.trading_service.trading.domain.enums.OrderStatus.PROCESSING,
+          com.sajo.trading_service.trading.domain.enums.OrderStatus.TIMEOUT,
+          com.sajo.trading_service.trading.domain.enums.OrderStatus.ACCEPTED,
+          com.sajo.trading_service.trading.domain.enums.OrderStatus.PARTIALLY_FILLED
+      )
+    """)
+    boolean existsActiveOrderByUserId(
+            @Param("userId") UUID userId
+    );
+
+    boolean existsByBrokerOrderNoAndIdNotAndDeletedAtIsNull(
+            String brokerOrderNo,
+            UUID orderId
     );
 }

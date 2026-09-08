@@ -26,7 +26,7 @@ class OrderRecoveryCommandServiceTest {
     private OrderRecoveryExecutor orderRecoveryExecutor;
 
     @Mock
-    private OrderStatusCommandService orderStatusCommandService;
+    private KisOrderReconciliationService kisOrderReconciliationService;
 
     @InjectMocks
     private OrderRecoveryCommandService orderRecoveryCommandService;
@@ -62,7 +62,7 @@ class OrderRecoveryCommandServiceTest {
     }
 
     @Test
-    @DisplayName("오래된 PROCESSING 주문은 TIMEOUT 처리한다")
+    @DisplayName("오래된 PROCESSING 주문은 KIS 주문 조회 기반 보정을 시도한다")
     void recoverProcessingOrders() {
         // given
         when(orderQueryRepository.findStaleProcessingOrderIds(any(Instant.class)))
@@ -72,52 +72,50 @@ class OrderRecoveryCommandServiceTest {
         orderRecoveryCommandService.recoverProcessingOrders();
 
         // then
-        verify(orderStatusCommandService)
-                .timeout(
-                        orderId1,
-                        "ORDER_PROCESSING_TIMEOUT",
-                        "주문 처리 결과를 확인할 수 없습니다."
-                );
+        verify(kisOrderReconciliationService)
+                .reconcile(orderId1);
 
-        verify(orderStatusCommandService)
-                .timeout(
-                        orderId2,
-                        "ORDER_PROCESSING_TIMEOUT",
-                        "주문 처리 결과를 확인할 수 없습니다."
-                );
+        verify(kisOrderReconciliationService)
+                .reconcile(orderId2);
     }
 
     @Test
-    @DisplayName("PROCESSING 주문 복구 중 하나가 실패해도 다음 주문을 계속 처리한다")
+    @DisplayName("PROCESSING 주문 보정 중 하나가 실패해도 다음 주문을 계속 처리한다")
     void recoverProcessingOrdersContinuesAfterFailure() {
         // given
         when(orderQueryRepository.findStaleProcessingOrderIds(any(Instant.class)))
                 .thenReturn(List.of(orderId1, orderId2));
 
         doThrow(new RuntimeException("unexpected"))
-                .when(orderStatusCommandService)
-                .timeout(
-                        eq(orderId1),
-                        anyString(),
-                        anyString()
-                );
+                .when(kisOrderReconciliationService)
+                .reconcile(orderId1);
 
         // when
         orderRecoveryCommandService.recoverProcessingOrders();
 
         // then
-        verify(orderStatusCommandService)
-                .timeout(
-                        eq(orderId1),
-                        anyString(),
-                        anyString()
-                );
+        verify(kisOrderReconciliationService)
+                .reconcile(orderId1);
 
-        verify(orderStatusCommandService)
-                .timeout(
-                        eq(orderId2),
-                        anyString(),
-                        anyString()
-                );
+        verify(kisOrderReconciliationService)
+                .reconcile(orderId2);
+    }
+
+    @Test
+    @DisplayName("오래된 TIMEOUT 주문을 KIS 주문 보정 대상으로 전달한다")
+    void recoverTimeoutOrders_reconcile() {
+        // given
+        UUID orderId1 = UUID.randomUUID();
+        UUID orderId2 = UUID.randomUUID();
+
+        when(orderQueryRepository.findStaleTimeoutOrderIds(any()))
+                .thenReturn(List.of(orderId1, orderId2));
+
+        // when
+        orderRecoveryCommandService.recoverTimeoutOrders();
+
+        // then
+        verify(kisOrderReconciliationService).reconcile(orderId1);
+        verify(kisOrderReconciliationService).reconcile(orderId2);
     }
 }
