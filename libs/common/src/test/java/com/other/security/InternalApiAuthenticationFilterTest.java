@@ -50,8 +50,7 @@ class InternalApiAuthenticationFilterTest {
     @Test
     @DisplayName("시크릿 헤더 값이 틀리면 401이 반환된다")
     void wrongSecretIsUnauthorized() throws Exception {
-        HttpResponse<String> response = send("완전히-틀린-값");
-
+        HttpResponse<String> response = send("completely-wrong-secret");
         assertThat(response.statusCode()).isEqualTo(401);
     }
 
