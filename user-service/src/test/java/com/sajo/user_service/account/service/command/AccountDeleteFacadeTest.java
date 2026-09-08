@@ -212,4 +212,26 @@ class AccountDeleteFacadeTest {
         verifyNoInteractions(cacheCommandService);
         verifyNoInteractions(kisTokenLogCommandService);
     }
+
+    @Test
+    @DisplayName("trading-service 호출 자체가 실패해도 계좌를 ACTIVE로 되돌리고 예외를 그대로 전파한다")
+    void deleteAccountReactivatesWhenTradingServiceCallFails() {
+        // given
+        UUID userId = UUID.randomUUID();
+        RuntimeException tradingServiceFailure = new RuntimeException("trading-service 타임아웃");
+        given(tradingFeignClient.getActiveStatus(userId)).willThrow(tradingServiceFailure);
+
+        // when & then
+        assertThatThrownBy(() -> accountDeleteFacade.deleteAccount(userId))
+                .isSameAs(tradingServiceFailure);
+
+        // PENDING_DELETION에 영구히 고착되지 않도록 반드시 원상복구해야 한다
+        verify(accountCommandService).markPendingDeletion(userId);
+        verify(accountCommandService).reactivate(userId);
+        verify(accountCommandService, never()).deleteAccount(any());
+        verifyNoInteractions(kisOAuthClient);
+        verifyNoInteractions(cacheQueryService);
+        verifyNoInteractions(cacheCommandService);
+        verifyNoInteractions(kisTokenLogCommandService);
+    }
 }

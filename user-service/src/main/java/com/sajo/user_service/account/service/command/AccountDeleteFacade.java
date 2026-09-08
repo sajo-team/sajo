@@ -34,8 +34,15 @@ public class AccountDeleteFacade {
         // AccountQueryService.getAccountByUserId가 이 계좌를 거부하게 된다.
         accountCommandService.markPendingDeletion(userId);
 
-        // 활성화 된 자동매매 또는 체결 확정 안된 주문 있는지 확인
-        TradingActiveStatusResponse response = tradingClient.getActiveStatus(userId);
+        // 활성화 된 자동매매 또는 체결 확정 안된 주문 있는지 확인.
+        TradingActiveStatusResponse response;
+        try {
+            response = tradingClient.getActiveStatus(userId);
+        } catch (Exception e) {
+            accountCommandService.reactivate(userId);
+            throw e;
+        }
+
         if (response.hasActiveTrading()) {
             accountCommandService.reactivate(userId);
             throw new BusinessException(AccountErrorCode.ACTIVE_TRADING_EXISTS);
