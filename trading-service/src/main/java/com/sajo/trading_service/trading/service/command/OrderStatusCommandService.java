@@ -103,4 +103,26 @@ public class OrderStatusCommandService {
                 "KIS 주문 조회로 주문 상태를 확정하지 못했습니다."
         );
     }
+
+    @Transactional
+    public void timeoutWithBrokerOrderNo(
+            UUID orderId,
+            String brokerOrderNo,
+            String failureCode,
+            String failureMessage
+    ) {
+        Order order =
+                orderCommandRepository.findByIdForUpdate(orderId)
+                        .orElseThrow(() ->
+                                new BusinessException(
+                                        TradingErrorCode.ORDER_NOT_FOUND
+                                )
+                        );
+
+        order.timeoutWithBrokerOrderNo(
+                brokerOrderNo,
+                failureCode,
+                failureMessage
+        );
+    }
 }

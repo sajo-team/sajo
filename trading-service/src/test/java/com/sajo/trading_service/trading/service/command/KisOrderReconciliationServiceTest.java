@@ -156,7 +156,14 @@ class KisOrderReconciliationServiceTest {
         );
 
         // then
-        verifyNoInteractions(orderStatusCommandService);
+        verify(orderStatusCommandService)
+                .recordReconciliationFailure(orderId);
+
+        verify(orderStatusCommandService, never())
+                .accept(any(), any());
+
+        verify(orderStatusCommandService, never())
+                .fail(any(), any(), any());
     }
 
     @Test
@@ -179,7 +186,14 @@ class KisOrderReconciliationServiceTest {
         );
 
         // then
-        verifyNoInteractions(orderStatusCommandService);
+        verify(orderStatusCommandService)
+                .recordReconciliationFailure(orderId);
+
+        verify(orderStatusCommandService, never())
+                .accept(any(), any());
+
+        verify(orderStatusCommandService, never())
+                .fail(any(), any(), any());
     }
 
     @Test
@@ -626,6 +640,9 @@ class KisOrderReconciliationServiceTest {
         );
 
         // then
+        verify(orderStatusCommandService)
+                .recordReconciliationFailure(orderId);
+
         verify(orderStatusCommandService, never())
                 .accept(any(), any());
 

@@ -221,12 +221,14 @@ public class KisOrderReconciliationService {
             rejectedQuantity =
                     Integer.parseInt(item.rejectedQuantity());
         }
-        catch (NumberFormatException | NullPointerException e){
+        catch (NumberFormatException | NullPointerException e) {
             log.warn(
-                    "KIS 주문 수량 파싱 실패로 상태 보정을 중단합니다. orderId={}, orderNo={}",
+                    "KIS 주문 수량 파싱 실패로 상태를 확정할 수 없습니다. orderId={}, orderNo={}",
                     orderId,
                     item.orderNo()
             );
+
+            orderStatusCommandService.recordReconciliationFailure(orderId);
             return;
         }
 
@@ -254,11 +256,12 @@ public class KisOrderReconciliationService {
          */
         if ("Y".equalsIgnoreCase(item.canceled())) {
             log.warn(
-                    "KIS에서 취소된 주문으로 확인되어 상태 보정을 보류합니다. orderId={}, orderNo={}",
+                    "KIS에서 취소된 주문으로 확인되어 현재 이슈 범위에서는 상태를 확정하지 않습니다. orderId={}, orderNo={}",
                     orderId,
                     item.orderNo()
             );
 
+            orderStatusCommandService.recordReconciliationFailure(orderId);
             return;
         }
 
@@ -287,6 +290,8 @@ public class KisOrderReconciliationService {
                 "KIS 주문 조회 결과만으로 상태를 확정할 수 없습니다. orderId={}",
                 orderId
         );
+
+        orderStatusCommandService.recordReconciliationFailure(orderId);
     }
 
 

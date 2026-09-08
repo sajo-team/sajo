@@ -491,6 +491,31 @@ class OrderTest {
                 .isEqualTo("KIS_RECONCILIATION_EXHAUSTED");
     }
 
+    @Test
+    @DisplayName("KIS 주문번호를 알고 있는 상태에서 TIMEOUT 전환 시 주문번호를 함께 저장한다")
+    void timeoutWithBrokerOrderNo_saveBrokerOrderNo() {
+        // given
+        Order order = createOrder();
+        order.startProcessing();
+
+        // when
+        order.timeoutWithBrokerOrderNo(
+                "0001234567",
+                "KIS_ACCEPT_SAVE_ERROR",
+                "KIS 주문은 접수되었으나 주문 상태 저장에 실패했습니다."
+        );
+
+        // then
+        assertThat(order.getStatus())
+                .isEqualTo(OrderStatus.TIMEOUT);
+
+        assertThat(order.getBrokerOrderNo())
+                .isEqualTo("0001234567");
+
+        assertThat(order.getFailureCode())
+                .isEqualTo("KIS_ACCEPT_SAVE_ERROR");
+    }
+
     private Order createOrder() {
         return Order.create(
                 UUID.randomUUID(),

@@ -233,4 +233,25 @@ public class Order extends BaseUpdatableEntity {
             this.failureMessage = failureMessage;
         }
     }
+
+    public void timeoutWithBrokerOrderNo(
+            String brokerOrderNo,
+            String failureCode,
+            String failureMessage
+    ) {
+        if (this.status != OrderStatus.PROCESSING) {
+            throw new BusinessException(
+                    TradingErrorCode.ORDER_STATUS_CHANGE_NOT_ALLOWED
+            );
+        }
+
+        if (brokerOrderNo == null || brokerOrderNo.isBlank()) {
+            throw new IllegalArgumentException("brokerOrderNo는 필수입니다.");
+        }
+
+        this.status = OrderStatus.TIMEOUT;
+        this.brokerOrderNo = brokerOrderNo;
+        this.failureCode = failureCode;
+        this.failureMessage = failureMessage;
+    }
 }

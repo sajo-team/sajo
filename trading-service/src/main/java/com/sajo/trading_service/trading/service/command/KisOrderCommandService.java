@@ -317,10 +317,11 @@ public class KisOrderCommandService {
                         e
                 );
 
-                orderStatusCommandService.timeout(
+                orderStatusCommandService.timeoutWithBrokerOrderNo(
                         orderId,
+                        response.output().orderNo(),
                         "KIS_ACCEPT_SAVE_ERROR",
-                        "KIS 주문 결과 저장에 실패했습니다."
+                        "KIS 주문은 접수되었으나 주문 상태 저장에 실패했습니다."
                 );
             }
 
