@@ -63,6 +63,8 @@ class OrderControllerTest {
                         OrderType.BUY,
                         69900L,
                         7,
+                        0,
+                        7,
                         489300L,
                         OrderStatus.REQUESTED,
                         Instant.now()
@@ -92,6 +94,12 @@ class OrderControllerTest {
                         .value("005930"))
                 .andExpect(jsonPath("$.data.content[0].orderType")
                         .value("BUY"))
+                .andExpect(jsonPath("$.data.content[0].orderQuantity")
+                        .value(7))
+                .andExpect(jsonPath("$.data.content[0].filledQuantity")
+                        .value(0))
+                .andExpect(jsonPath("$.data.content[0].remainingQuantity")
+                        .value(7))
                 .andExpect(jsonPath("$.data.content[0].status")
                         .value("REQUESTED"))
                 .andExpect(jsonPath("$.data.page").value(0))
@@ -136,7 +144,7 @@ class OrderControllerTest {
         UUID signalId = UUID.randomUUID();
  
         Instant now = Instant.now();
- 
+
         OrderDetailResponse response =
                 new OrderDetailResponse(
                         orderId,
@@ -147,8 +155,10 @@ class OrderControllerTest {
                         OrderType.BUY,
                         69900L,
                         7,
+                        3,
+                        4,
                         489300L,
-                        OrderStatus.ACCEPTED,
+                        OrderStatus.PARTIALLY_FILLED,
                         "0001234567",
                         null,
                         null,
@@ -177,7 +187,11 @@ class OrderControllerTest {
                 .andExpect(jsonPath("$.data.orderType")
                         .value("BUY"))
                 .andExpect(jsonPath("$.data.status")
-                        .value("ACCEPTED"))
+                        .value("PARTIALLY_FILLED"))
+                .andExpect(jsonPath("$.data.filledQuantity")
+                        .value(3))
+                .andExpect(jsonPath("$.data.remainingQuantity")
+                        .value(4))
                 .andExpect(jsonPath("$.data.brokerOrderNo")
                         .value("0001234567"));
     }

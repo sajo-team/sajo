@@ -46,6 +46,8 @@ class OrderTest {
         assertThat(order.getStockCode()).isEqualTo("005930");
         assertThat(order.getOrderType()).isEqualTo(OrderType.BUY);
         assertThat(order.getSignalPrice()).isEqualTo(signalPrice);
+        assertThat(order.getFilledQuantity()).isZero();
+        assertThat(order.getRemainingQuantity()).isEqualTo(orderQuantity);
         assertThat(order.getOrderQuantity()).isEqualTo(orderQuantity);
         assertThat(order.getEstimatedOrderAmount())
                 .isEqualTo(signalPrice * orderQuantity);
@@ -514,6 +516,236 @@ class OrderTest {
 
         assertThat(order.getFailureCode())
                 .isEqualTo("KIS_ACCEPT_SAVE_ERROR");
+    }
+
+    @Test
+    @DisplayName("ACCEPTED 주문이 일부 체결되면 PARTIALLY_FILLED로 변경된다")
+    void applyFill_partialFill() {
+        // given
+        Order order = createAcceptedOrder();
+
+        // when
+        int newlyFilledQuantity =
+                order.applyFill(
+                        2,
+                        2
+                );
+
+        // then
+        assertThat(newlyFilledQuantity).isEqualTo(2);
+        assertThat(order.getFilledQuantity()).isEqualTo(2);
+        assertThat(order.getRemainingQuantity()).isEqualTo(2);
+        assertThat(order.getStatus())
+                .isEqualTo(OrderStatus.PARTIALLY_FILLED);
+    }
+
+    @Test
+    @DisplayName("PARTIALLY_FILLED 주문이 전체 체결되면 FILLED로 변경된다")
+    void applyFill_fullFill() {
+        // given
+        Order order = createAcceptedOrder();
+
+        order.applyFill(
+                2,
+                2
+        );
+
+        // when
+        int newlyFilledQuantity =
+                order.applyFill(
+                        4,
+                        0
+                );
+
+        // then
+        assertThat(newlyFilledQuantity).isEqualTo(2);
+        assertThat(order.getFilledQuantity()).isEqualTo(4);
+        assertThat(order.getRemainingQuantity()).isZero();
+        assertThat(order.getStatus())
+                .isEqualTo(OrderStatus.FILLED);
+    }
+
+    @Test
+    @DisplayName("동일한 누적 체결 수량을 다시 반영하면 상태를 변경하지 않는다")
+    void applyFill_sameQuantity_idempotent() {
+        // given
+        Order order = createAcceptedOrder();
+
+        order.applyFill(
+                2,
+                2
+        );
+
+        // when
+        int newlyFilledQuantity =
+                order.applyFill(
+                        2,
+                        2
+                );
+
+        // then
+        assertThat(newlyFilledQuantity).isZero();
+        assertThat(order.getFilledQuantity()).isEqualTo(2);
+        assertThat(order.getRemainingQuantity()).isEqualTo(2);
+        assertThat(order.getStatus())
+                .isEqualTo(OrderStatus.PARTIALLY_FILLED);
+    }
+
+    @Test
+    @DisplayName("기존 누적 체결 수량보다 작은 값은 반영할 수 없다")
+    void applyFill_decreasedQuantity_fail() {
+        // given
+        Order order = createAcceptedOrder();
+
+        order.applyFill(
+                3,
+                1
+        );
+
+        // when & then
+        assertThatThrownBy(() ->
+                order.applyFill(
+                        2,
+                        2
+                )
+        )
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception ->
+                        assertThat(
+                                ((BusinessException) exception)
+                                        .getErrorCode()
+                        ).isEqualTo(
+                                TradingErrorCode.INVALID_ORDER
+                        )
+                );
+    }
+
+    @Test
+    @DisplayName("체결 수량이 주문 수량을 초과하면 반영할 수 없다")
+    void applyFill_exceedsOrderQuantity_fail() {
+        // given
+        Order order = createAcceptedOrder();
+
+        // when & then
+        assertThatThrownBy(() ->
+                order.applyFill(
+                        5,
+                        0
+                )
+        )
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception ->
+                        assertThat(
+                                ((BusinessException) exception)
+                                        .getErrorCode()
+                        ).isEqualTo(
+                                TradingErrorCode.INVALID_ORDER
+                        )
+                );
+    }
+
+    @Test
+    @DisplayName("일반 체결에서 체결 수량과 잔여 수량의 합이 주문 수량과 다르면 반영할 수 없다")
+    void applyFill_invalidRemainingQuantity_fail() {
+        // given
+        Order order = createAcceptedOrder();
+
+        // when & then
+        assertThatThrownBy(() ->
+                order.applyFill(
+                        2,
+                        1
+                )
+        )
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception ->
+                        assertThat(
+                                ((BusinessException) exception)
+                                        .getErrorCode()
+                        ).isEqualTo(
+                                TradingErrorCode.INVALID_ORDER
+                        )
+                );
+    }
+
+    @Test
+    @DisplayName("ACCEPTED 주문이 체결 없이 취소되면 CANCELED로 변경된다")
+    void cancel_withoutFill() {
+        // given
+        Order order = createAcceptedOrder();
+
+        // when
+        int newlyFilledQuantity =
+                order.cancel(
+                        0,
+                        0
+                );
+
+        // then
+        assertThat(newlyFilledQuantity).isZero();
+        assertThat(order.getFilledQuantity()).isZero();
+        assertThat(order.getRemainingQuantity()).isZero();
+        assertThat(order.getStatus())
+                .isEqualTo(OrderStatus.CANCELED);
+    }
+
+    @Test
+    @DisplayName("부분 체결된 주문의 잔여 수량이 취소되면 기존 체결 수량을 유지하고 CANCELED로 변경된다")
+    void cancel_afterPartialFill() {
+        // given
+        Order order = createAcceptedOrder();
+
+        order.applyFill(
+                2,
+                2
+        );
+
+        // when
+        int newlyFilledQuantity =
+                order.cancel(
+                        2,
+                        0
+                );
+
+        // then
+        assertThat(newlyFilledQuantity).isZero();
+        assertThat(order.getFilledQuantity()).isEqualTo(2);
+        assertThat(order.getRemainingQuantity()).isZero();
+        assertThat(order.getStatus())
+                .isEqualTo(OrderStatus.CANCELED);
+    }
+
+    @Test
+    @DisplayName("부분 체결 후 추가 체결과 함께 취소되면 추가 체결 수량을 반환한다")
+    void cancel_afterAdditionalFill() {
+        // given
+        Order order = createAcceptedOrder();
+
+        order.applyFill(
+                1,
+                3
+        );
+
+        // when
+        int newlyFilledQuantity =
+                order.cancel(
+                        2,
+                        0
+                );
+
+        // then
+        assertThat(newlyFilledQuantity).isEqualTo(1);
+        assertThat(order.getFilledQuantity()).isEqualTo(2);
+        assertThat(order.getRemainingQuantity()).isZero();
+        assertThat(order.getStatus())
+                .isEqualTo(OrderStatus.CANCELED);
+    }
+
+    private Order createAcceptedOrder() {
+        Order order = createOrder();
+        order.startProcessing();
+        order.accept("0001234567");
+        return order;
     }
 
     private Order createOrder() {
