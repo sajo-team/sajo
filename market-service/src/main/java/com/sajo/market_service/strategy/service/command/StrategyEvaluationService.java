@@ -12,8 +12,10 @@ import com.sajo.market_service.strategy.kafka.producer.TradingSignalProducer;
 import com.sajo.market_service.strategy.repository.query.StrategyQueryRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 
@@ -24,8 +26,26 @@ public class StrategyEvaluationService {
 
     private final StrategyQueryRepository strategyQueryRepository;
     private final TradingSignalProducer tradingSignalProducer;
+    private final StringRedisTemplate stringRedisTemplate;
+
+    private static final String PROCESSED_EVENT_KEY_PREFIX = "strategy:evaluation:processed:";
+    private static final Duration PROCESSED_EVENT_TTL = Duration.ofDays(1);
 
     public void evaluate(StrategyEvaluationRequest request) {
+        String eventKey = PROCESSED_EVENT_KEY_PREFIX + request.sourceEventId();
+        boolean firstProcessing = Boolean.TRUE.equals(
+                stringRedisTemplate.opsForValue().setIfAbsent(
+                        eventKey,
+                        "1",
+                        PROCESSED_EVENT_TTL
+                )
+        );
+
+        if (!firstProcessing) {
+            log.info("이미 처리된 전략 평가 이벤트입니다. sourceEventId={}", request.sourceEventId());
+            return;
+        }
+
         List<Strategy> strategies =
                 strategyQueryRepository.findAllByStockCodeAndStatusAndDeletedAtIsNull(
                         request.stockCode(),
@@ -40,6 +60,8 @@ public class StrategyEvaluationService {
                         strategy.getId(),
                         e.getErrorCode()
                 );
+            } catch (Exception e) {
+                log.error("전략 평가 중 예외가 발생했습니다. strategyId={}", strategy.getId(), e);
             }
         }
     }
