@@ -127,6 +127,7 @@ class StrategyQueryControllerTest {
                 new BigDecimal("5.0000"),
                 new BigDecimal("10.0000"),
                 3_000_000L,
+                100_000L,
                 new BigDecimal("15.0000"),
                 new BigDecimal("1.2000"),
                 new BigDecimal("10.0000"),
