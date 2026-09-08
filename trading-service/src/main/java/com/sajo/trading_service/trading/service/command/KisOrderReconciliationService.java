@@ -180,11 +180,25 @@ public class KisOrderReconciliationService {
                 );
 
         switch (matchResult.status()){
-            case MATCHED ->
+            case MATCHED -> {
+                KisOrderInquiryItem item = matchResult.item();
+
+                if (isBrokerOrderNoAlreadyUsed(orderId, item.orderNo())) {
+                    log.warn(
+                            "KIS 주문번호가 이미 다른 Order에 사용되어 상태를 보정하지 않습니다. orderId={}, brokerOrderNo={}",
+                            orderId,
+                            item.orderNo()
+                    );
+
+                    orderStatusCommandService.recordReconciliationFailure(orderId);
+                    return;
+                }
+
                 reconcileMatchedOrder(
                         orderId,
-                        matchResult.item()
+                        item
                 );
+            }
 
             case NOT_FOUND -> {
                 log.warn(
@@ -294,5 +308,18 @@ public class KisOrderReconciliationService {
         orderStatusCommandService.recordReconciliationFailure(orderId);
     }
 
+    private boolean isBrokerOrderNoAlreadyUsed(
+            UUID orderId,
+            String brokerOrderNo
+    ) {
+        if (brokerOrderNo == null || brokerOrderNo.isBlank()) {
+            return false;
+        }
 
+        return orderQueryRepository
+                .existsByBrokerOrderNoAndIdNotAndDeletedAtIsNull(
+                        brokerOrderNo,
+                        orderId
+                );
+    }
 }

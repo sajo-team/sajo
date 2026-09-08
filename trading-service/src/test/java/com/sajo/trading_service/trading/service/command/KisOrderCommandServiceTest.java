@@ -118,6 +118,81 @@ class KisOrderCommandServiceTest {
     }
 
     @Test
+    @DisplayName("KIS 주문 성공 후 ACCEPTED 저장에 실패하면 주문번호를 보존하여 TIMEOUT 처리한다")
+    void executeOrderAcceptSaveFailure_timeoutWithBrokerOrderNo() {
+        // given
+        Order order = createOrder(OrderType.BUY);
+
+        when(orderStatusCommandService.startProcessing(orderId))
+                .thenReturn(order);
+
+        givenCommonAccountResponses();
+
+        when(accountClient.getOrderableAmount(userId))
+                .thenReturn(
+                        new AccountOrderableAmountResponse(
+                                1_000_000L
+                        )
+                );
+
+        KisOrderResponse response =
+                new KisOrderResponse(
+                        "0",
+                        "SUCCESS",
+                        "주문 전송 완료",
+                        new KisOrderResponse.KisOrderOutput(
+                                "1234567890",
+                                "101530"
+                        )
+                );
+
+        when(kisOrderClient.placeOrder(
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                any(KisOrderRequest.class)
+        )).thenReturn(response);
+
+        /*
+         * KIS에서는 주문이 정상 접수되어 brokerOrderNo를 받았지만,
+         * ACCEPTED 상태 DB 저장 과정에서 오류가 발생한 상황을 재현한다.
+         */
+        doThrow(new RuntimeException("db error"))
+                .when(orderStatusCommandService)
+                .accept(
+                        orderId,
+                        "1234567890"
+                );
+
+        // when
+        kisOrderCommandService.executeOrder(orderId);
+
+        // then
+        verify(orderStatusCommandService)
+                .accept(
+                        orderId,
+                        "1234567890"
+                );
+
+        verify(orderStatusCommandService)
+                .timeoutWithBrokerOrderNo(
+                        orderId,
+                        "1234567890",
+                        "KIS_ACCEPT_SAVE_ERROR",
+                        "KIS 주문은 접수되었으나 주문 상태 저장에 실패했습니다."
+                );
+
+        verify(orderStatusCommandService, never())
+                .timeout(
+                        any(),
+                        any(),
+                        any()
+                );
+    }
+
+    @Test
     @DisplayName("BUY 주문 가능 금액이 부족하면 FAILED 처리하고 KIS를 호출하지 않는다")
     void executeBuyOrderNotEnoughAmount() {
         // given

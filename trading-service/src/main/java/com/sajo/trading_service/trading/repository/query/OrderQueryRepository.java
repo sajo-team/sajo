@@ -73,4 +73,9 @@ where o.status = com.sajo.trading_service.trading.domain.enums.OrderStatus.REQUE
     boolean existsActiveOrderByUserId(
             @Param("userId") UUID userId
     );
+
+    boolean existsByBrokerOrderNoAndIdNotAndDeletedAtIsNull(
+            String brokerOrderNo,
+            UUID orderId
+    );
 }

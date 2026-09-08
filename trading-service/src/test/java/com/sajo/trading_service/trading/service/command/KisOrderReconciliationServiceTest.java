@@ -674,6 +674,62 @@ class KisOrderReconciliationServiceTest {
         verifyNoInteractions(kisOrderMatcher);
     }
 
+    @Test
+    @DisplayName("매칭된 KIS 주문번호가 다른 Order에서 이미 사용 중이면 ACCEPTED로 보정하지 않는다")
+    void reconcile_brokerOrderNoAlreadyUsed_recordFailure() {
+        // given
+        UUID orderId = UUID.randomUUID();
+        Order order = createProcessingOrder();
+
+        when(orderQueryRepository.findByIdAndDeletedAtIsNull(orderId))
+                .thenReturn(Optional.of(order));
+
+        mockAccountResponses(order);
+
+        KisOrderInquiryItem item =
+                createItem(
+                        "0001234567",
+                        "7",
+                        "0"
+                );
+
+        KisOrderInquiryResponse response =
+                new KisOrderInquiryResponse(
+                        "0",
+                        "MCA00000",
+                        "정상 처리되었습니다.",
+                        "",
+                        "",
+                        List.of(item)
+                );
+
+        when(kisOrderClient.inquireDailyOrders(
+                anyString(), anyString(), anyString(), anyString(), anyString(),
+                anyString(), anyString(), anyString(), anyString(), anyString(),
+                anyString(), anyString(), anyString(), anyString(), anyString(),
+                anyString(), anyString(), anyString(), anyString(), anyString()
+        )).thenReturn(response);
+
+        when(kisOrderMatcher.match(order, response.output1()))
+                .thenReturn(MatchResult.matched(item));
+
+        when(orderQueryRepository
+                .existsByBrokerOrderNoAndIdNotAndDeletedAtIsNull(
+                        "0001234567",
+                        orderId
+                ))
+                .thenReturn(true);
+
+        // when
+        kisOrderReconciliationService.reconcile(orderId);
+
+        // then
+        verify(orderStatusCommandService)
+                .recordReconciliationFailure(orderId);
+
+        verify(orderStatusCommandService, never())
+                .accept(any(), any());
+    }
 
     private Order createOrder() {
         return Order.create(
