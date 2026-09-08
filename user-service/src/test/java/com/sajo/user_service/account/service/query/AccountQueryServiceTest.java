@@ -124,6 +124,26 @@ class AccountQueryServiceTest {
     }
 
     @Test
+    @DisplayName("계좌가 삭제 진행 중(PENDING_DELETION)이면 존재하지 않는 계좌와 동일하게 ACCOUNT_NOT_FOUND 예외를 던진다")
+    void getAccountByUserIdFailsWhenPendingDeletion() {
+        // given
+        UUID userId = UUID.randomUUID();
+        Account account = Account.createAccount(
+                userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
+        account.markPendingDeletion();
+        given(accountQueryRepository.findByUserIdAndDeletedAtIsNull(userId)).willReturn(Optional.of(account));
+
+        // when & then
+        assertThatThrownBy(() -> accountQueryService.getAccountByUserId(userId))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(AccountErrorCode.ACCOUNT_NOT_FOUND);
+                });
+    }
+
+    @Test
     @DisplayName("주문용 계좌 정보 조회에 성공하면 cano/accountProductCode/accountType을 반환한다")
     void getAccountOrderInfoReturnsResponse() {
         // given

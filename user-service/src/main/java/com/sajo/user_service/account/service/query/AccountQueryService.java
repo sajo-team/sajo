@@ -4,6 +4,7 @@ import com.sajo.common.exception.BusinessException;
 import com.sajo.user_service.account.controller.dto.response.AccountOrderInfoResponse;
 import com.sajo.user_service.account.crypto.HmacSha256Hasher;
 import com.sajo.user_service.account.domain.Account;
+import com.sajo.user_service.account.domain.AccountStatus;
 import com.sajo.user_service.account.exception.AccountErrorCode;
 import com.sajo.user_service.account.repository.query.AccountQueryRepository;
 import lombok.RequiredArgsConstructor;
@@ -32,10 +33,17 @@ public class AccountQueryService {
         }
     }
 
+    //계좌 삭제 진행 중(PENDING_DELETION)이면 존재하지 않는 계좌와 동일하게 취급해 거부한다.
     @Transactional(readOnly = true)
     public Account getAccountByUserId(UUID userId) {
-        return accountQueryRepository.findByUserIdAndDeletedAtIsNull(userId)
+        Account account = accountQueryRepository.findByUserIdAndDeletedAtIsNull(userId)
                 .orElseThrow(() -> new BusinessException(AccountErrorCode.ACCOUNT_NOT_FOUND));
+
+        if (account.getStatus() != AccountStatus.ACTIVE) {
+            throw new BusinessException(AccountErrorCode.ACCOUNT_NOT_FOUND);
+        }
+
+        return account;
     }
 
     @Transactional(readOnly = true)

@@ -65,6 +65,10 @@ public class Account extends BaseUpdatableEntity {
     @Column(name = "unique_column", nullable = false)
     private UUID uniqueColumn;
 
+    @Column(nullable = false)
+    @Enumerated(value = EnumType.STRING)
+    private AccountStatus status;
+
     private Account(
             UUID userId, String appKey, String secretKey, String accountNo, String accountNoHash,
             AccountType accountType
@@ -77,6 +81,7 @@ public class Account extends BaseUpdatableEntity {
         this.accountNoHash = accountNoHash;
         this.accountType = accountType;
         this.uniqueColumn = new UUID(0L, 0L);
+        this.status = AccountStatus.ACTIVE;
     }
 
     public static Account createAccount(
@@ -104,5 +109,18 @@ public class Account extends BaseUpdatableEntity {
     public void softDelete(UUID deletedBy) {
         super.softDelete(deletedBy);
         this.uniqueColumn = this.id;
+        this.status = AccountStatus.DELETED;
+    }
+
+    // 계좌 삭제 전 trading-service의 활성 자동매매/미체결 주문 여부를 확인하는 동안,
+    // 그 확인-삭제 사이의 짧은 창에 새 주문이 이 계좌 정보를 가져가지 못하도록 먼저
+    // PENDING_DELETION으로 표시한다 (AccountQueryService.getAccountByUserId에서 차단).
+    public void markPendingDeletion() {
+        this.status = AccountStatus.PENDING_DELETION;
+    }
+
+    // 활성 거래가 있어 삭제가 취소된 경우 원상복구
+    public void reactivate() {
+        this.status = AccountStatus.ACTIVE;
     }
 }

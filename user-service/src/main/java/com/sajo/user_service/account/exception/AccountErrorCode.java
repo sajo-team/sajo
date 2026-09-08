@@ -29,7 +29,9 @@ public enum AccountErrorCode implements ErrorCode {
 
     INVALID_CONTINUATION_CURSOR(HttpStatus.BAD_REQUEST, "ACCOUNT_0010", "ctxAreaFk100/ctxAreaNk100은 둘 다 있거나 둘 다 없어야 합니다"),
 
-    KIS_ORDERABLE_AMOUNT_INQUIRY_FAILED(HttpStatus.BAD_GATEWAY, "ACCOUNT_0011", "KIS 매수가능금액 조회에 실패했습니다");
+    KIS_ORDERABLE_AMOUNT_INQUIRY_FAILED(HttpStatus.BAD_GATEWAY, "ACCOUNT_0011", "KIS 매수가능금액 조회에 실패했습니다"),
+
+    ACTIVE_TRADING_EXISTS(HttpStatus.CONFLICT, "ACCOUNT_0012", "진행 중인 자동매매 또는 미체결 주문이 있어 계좌를 삭제할 수 없습니다");
 
     private final HttpStatus status;
     private final String errorCode;

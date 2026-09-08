@@ -3,6 +3,7 @@ package com.sajo.user_service.account.service.command;
 import com.sajo.common.exception.BusinessException;
 import com.sajo.user_service.account.crypto.HmacSha256Hasher;
 import com.sajo.user_service.account.domain.Account;
+import com.sajo.user_service.account.domain.AccountStatus;
 import com.sajo.user_service.account.domain.AccountType;
 import com.sajo.user_service.account.exception.AccountErrorCode;
 import com.sajo.user_service.account.repository.command.AccountCommandRepository;
@@ -165,6 +166,73 @@ class AccountCommandServiceTest {
 
         // when & then
         assertThatThrownBy(() -> accountCommandService.deleteAccount(userId))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(AccountErrorCode.ACCOUNT_NOT_FOUND);
+                });
+    }
+
+    @Test
+    @DisplayName("markPendingDeletion 호출 시 계좌 상태를 PENDING_DELETION으로 표시한다")
+    void markPendingDeletionMarksAccount() {
+        // given
+        UUID userId = UUID.randomUUID();
+        Account account = Account.createAccount(
+                userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
+        given(accountCommandRepository.findByUserIdAndDeletedAtIsNull(userId)).willReturn(Optional.of(account));
+
+        // when
+        accountCommandService.markPendingDeletion(userId);
+
+        // then
+        assertThat(account.getStatus()).isEqualTo(AccountStatus.PENDING_DELETION);
+    }
+
+    @Test
+    @DisplayName("표시할 계좌가 없으면 markPendingDeletion은 ACCOUNT_NOT_FOUND 예외를 던진다")
+    void markPendingDeletionNotFound() {
+        // given
+        UUID userId = UUID.randomUUID();
+        given(accountCommandRepository.findByUserIdAndDeletedAtIsNull(userId)).willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> accountCommandService.markPendingDeletion(userId))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(AccountErrorCode.ACCOUNT_NOT_FOUND);
+                });
+    }
+
+    @Test
+    @DisplayName("reactivate 호출 시 계좌 상태를 ACTIVE로 되돌린다")
+    void reactivateRestoresAccount() {
+        // given
+        UUID userId = UUID.randomUUID();
+        Account account = Account.createAccount(
+                userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
+        account.markPendingDeletion();
+        given(accountCommandRepository.findByUserIdAndDeletedAtIsNull(userId)).willReturn(Optional.of(account));
+
+        // when
+        accountCommandService.reactivate(userId);
+
+        // then
+        assertThat(account.getStatus()).isEqualTo(AccountStatus.ACTIVE);
+    }
+
+    @Test
+    @DisplayName("되돌릴 계좌가 없으면 reactivate는 ACCOUNT_NOT_FOUND 예외를 던진다")
+    void reactivateNotFound() {
+        // given
+        UUID userId = UUID.randomUUID();
+        given(accountCommandRepository.findByUserIdAndDeletedAtIsNull(userId)).willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() -> accountCommandService.reactivate(userId))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(exception -> {
                     BusinessException businessException = (BusinessException) exception;
