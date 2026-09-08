@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.UUID;
 
 @Service
@@ -132,5 +133,21 @@ public class OrderExecutionCommandService {
                 totalExecutionAmount,
                 remainingQuantity
         );
+    }
+
+    @Transactional
+    public void markExecutionChecked(
+            UUID orderId,
+            Instant checkedAt
+    ) {
+        Order order =
+                orderCommandRepository.findByIdForUpdate(orderId)
+                        .orElseThrow(() ->
+                                new BusinessException(
+                                        TradingErrorCode.ORDER_NOT_FOUND
+                                )
+                        );
+
+        order.markExecutionChecked(checkedAt);
     }
 }

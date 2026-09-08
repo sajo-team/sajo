@@ -7,6 +7,7 @@ import com.sajo.trading_service.trading.exception.TradingErrorCode;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -763,6 +764,21 @@ class OrderTest {
                                 TradingErrorCode.INVALID_ORDER
                         )
                 );
+    }
+
+    @Test
+    @DisplayName("체결 조회 시각을 갱신한다")
+    void markExecutionChecked_success() {
+        // given
+        Order order = createAcceptedOrder();
+        Instant checkedAt = Instant.now();
+
+        // when
+        order.markExecutionChecked(checkedAt);
+
+        // then
+        assertThat(order.getLastExecutionCheckedAt())
+                .isEqualTo(checkedAt);
     }
 
     private Order createAcceptedOrder() {

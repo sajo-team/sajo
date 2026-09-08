@@ -10,6 +10,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.time.Instant;
 import java.util.UUID;
 
 @Getter
@@ -73,6 +74,9 @@ public class Order extends BaseUpdatableEntity {
 
     @Column(name = "reconciliation_retry_count", nullable = false)
     private Integer reconciliationRetryCount;
+
+    @Column(name = "last_execution_checked_at")
+    private Instant lastExecutionCheckedAt;
 
     private Order(
             UUID userId,
@@ -364,5 +368,9 @@ public class Order extends BaseUpdatableEntity {
         this.status = OrderStatus.CANCELED;
 
         return newlyFilledQuantity;
+    }
+
+    public void markExecutionChecked(Instant checkedAt) {
+        this.lastExecutionCheckedAt = checkedAt;
     }
 }

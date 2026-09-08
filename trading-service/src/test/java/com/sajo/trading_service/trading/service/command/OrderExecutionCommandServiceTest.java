@@ -17,6 +17,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -363,6 +364,31 @@ class OrderExecutionCommandServiceTest {
                 );
 
         verifyNoInteractions(executionCommandRepository);
+    }
+
+    @Test
+    @DisplayName("체결 조회 시각을 갱신한다")
+    void markExecutionChecked_success() {
+        // given
+        UUID orderId = UUID.randomUUID();
+        Order order = createAcceptedOrder();
+        Instant checkedAt = Instant.now();
+
+        when(orderCommandRepository.findByIdForUpdate(orderId))
+                .thenReturn(Optional.of(order));
+
+        // when
+        orderExecutionCommandService.markExecutionChecked(
+                orderId,
+                checkedAt
+        );
+
+        // then
+        assertThat(order.getLastExecutionCheckedAt())
+                .isEqualTo(checkedAt);
+
+        verify(orderCommandRepository)
+                .findByIdForUpdate(orderId);
     }
 
     private Order createAcceptedOrder() {

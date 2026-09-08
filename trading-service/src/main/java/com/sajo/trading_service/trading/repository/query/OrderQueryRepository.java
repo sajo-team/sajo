@@ -62,9 +62,12 @@ where o.status = com.sajo.trading_service.trading.domain.enums.OrderStatus.REQUE
         com.sajo.trading_service.trading.domain.enums.OrderStatus.ACCEPTED,
         com.sajo.trading_service.trading.domain.enums.OrderStatus.PARTIALLY_FILLED
     )
-      and o.updatedAt < :cutoff
+      and (
+          o.lastExecutionCheckedAt is null
+          or o.lastExecutionCheckedAt < :cutoff
+      )
       and o.deletedAt is null
-""")
+    """)
     List<UUID> findExecutionTargetOrderIds(
             @Param("cutoff") Instant cutoff
     );

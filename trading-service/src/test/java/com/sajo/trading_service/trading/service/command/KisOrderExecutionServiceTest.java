@@ -298,7 +298,29 @@ class KisOrderExecutionServiceTest {
         kisOrderExecutionService.processExecution(orderId);
 
         // then
-        verifyNoInteractions(orderExecutionCommandService);
+        verify(orderExecutionCommandService)
+                .markExecutionChecked(
+                        eq(orderId),
+                        any(Instant.class)
+                );
+
+        verify(orderExecutionCommandService, never())
+                .applyExecution(
+                        any(),
+                        anyInt(),
+                        anyInt(),
+                        any(BigDecimal.class),
+                        anyLong()
+                );
+
+        verify(orderExecutionCommandService, never())
+                .applyCancellation(
+                        any(),
+                        anyInt(),
+                        anyInt(),
+                        any(BigDecimal.class),
+                        anyLong()
+                );
     }
 
     @Test
@@ -381,7 +403,29 @@ class KisOrderExecutionServiceTest {
         kisOrderExecutionService.processExecution(orderId);
 
         // then
-        verifyNoInteractions(orderExecutionCommandService);
+        verify(orderExecutionCommandService)
+                .markExecutionChecked(
+                        eq(orderId),
+                        any(Instant.class)
+                );
+
+        verify(orderExecutionCommandService, never())
+                .applyExecution(
+                        any(),
+                        anyInt(),
+                        anyInt(),
+                        any(BigDecimal.class),
+                        anyLong()
+                );
+
+        verify(orderExecutionCommandService, never())
+                .applyCancellation(
+                        any(),
+                        anyInt(),
+                        anyInt(),
+                        any(BigDecimal.class),
+                        anyLong()
+                );
     }
 
     @Test
@@ -417,7 +461,29 @@ class KisOrderExecutionServiceTest {
         kisOrderExecutionService.processExecution(orderId);
 
         // then
-        verifyNoInteractions(orderExecutionCommandService);
+        verify(orderExecutionCommandService)
+                .markExecutionChecked(
+                        eq(orderId),
+                        any(Instant.class)
+                );
+
+        verify(orderExecutionCommandService, never())
+                .applyExecution(
+                        any(),
+                        anyInt(),
+                        anyInt(),
+                        any(BigDecimal.class),
+                        anyLong()
+                );
+
+        verify(orderExecutionCommandService, never())
+                .applyCancellation(
+                        any(),
+                        anyInt(),
+                        anyInt(),
+                        any(BigDecimal.class),
+                        anyLong()
+                );
     }
 
     @Test
@@ -453,7 +519,29 @@ class KisOrderExecutionServiceTest {
         kisOrderExecutionService.processExecution(orderId);
 
         // then
-        verifyNoInteractions(orderExecutionCommandService);
+        verify(orderExecutionCommandService)
+                .markExecutionChecked(
+                        eq(orderId),
+                        any(Instant.class)
+                );
+
+        verify(orderExecutionCommandService, never())
+                .applyExecution(
+                        any(),
+                        anyInt(),
+                        anyInt(),
+                        any(BigDecimal.class),
+                        anyLong()
+                );
+
+        verify(orderExecutionCommandService, never())
+                .applyCancellation(
+                        any(),
+                        anyInt(),
+                        anyInt(),
+                        any(BigDecimal.class),
+                        anyLong()
+                );
     }
 
     private void mockAccountResponses(Order order) {
@@ -686,6 +774,28 @@ class KisOrderExecutionServiceTest {
         kisOrderExecutionService.processExecution(orderId);
 
         // then
-        verifyNoInteractions(orderExecutionCommandService);
+        verify(orderExecutionCommandService)
+                .markExecutionChecked(
+                        eq(orderId),
+                        any(Instant.class)
+                );
+
+        verify(orderExecutionCommandService, never())
+                .applyExecution(
+                        any(),
+                        anyInt(),
+                        anyInt(),
+                        any(BigDecimal.class),
+                        anyLong()
+                );
+
+        verify(orderExecutionCommandService, never())
+                .applyCancellation(
+                        any(),
+                        anyInt(),
+                        anyInt(),
+                        any(BigDecimal.class),
+                        anyLong()
+                );
     }
 }

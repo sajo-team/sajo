@@ -17,6 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -142,6 +143,11 @@ public class KisOrderExecutionService {
             );
             return;
         }
+
+        orderExecutionCommandService.markExecutionChecked(
+                orderId,
+                Instant.now()
+        );
 
         if (response == null || !"0".equals(response.rtCd())) {
             log.warn(
