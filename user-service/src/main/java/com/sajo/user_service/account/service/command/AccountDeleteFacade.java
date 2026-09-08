@@ -29,9 +29,15 @@ public class AccountDeleteFacade {
 
     public void deleteAccount(UUID userId) {
 
+        // trading-service에 활성 거래 여부를 확인하러 가기 전에 먼저 PENDING_DELETION으로
+        // 표시한다 - 이 확인과 실제 삭제 사이의 짧은 창에 새 주문이 끼어들어도
+        // AccountQueryService.getAccountByUserId가 이 계좌를 거부하게 된다.
+        accountCommandService.markPendingDeletion(userId);
+
         // 활성화 된 자동매매 또는 체결 확정 안된 주문 있는지 확인
         TradingActiveStatusResponse response = tradingClient.getActiveStatus(userId);
         if (response.hasActiveTrading()) {
+            accountCommandService.reactivate(userId);
             throw new BusinessException(AccountErrorCode.ACTIVE_TRADING_EXISTS);
         }
 

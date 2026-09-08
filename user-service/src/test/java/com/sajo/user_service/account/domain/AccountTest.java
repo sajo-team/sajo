@@ -23,6 +23,51 @@ class AccountTest {
         // then
         assertThat(account.getCano()).isEqualTo("12345678");
         assertThat(account.getAccountProductCode()).isEqualTo("01");
+        assertThat(account.getStatus()).isEqualTo(AccountStatus.ACTIVE);
+    }
+
+    @Test
+    @DisplayName("markPendingDeletion 호출 시 상태가 PENDING_DELETION으로 바뀐다")
+    void markPendingDeletionChangesStatus() {
+        // given
+        Account account = Account.createAccount(
+                UUID.randomUUID(), "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
+
+        // when
+        account.markPendingDeletion();
+
+        // then
+        assertThat(account.getStatus()).isEqualTo(AccountStatus.PENDING_DELETION);
+    }
+
+    @Test
+    @DisplayName("reactivate 호출 시 상태가 ACTIVE로 되돌아간다")
+    void reactivateRestoresActiveStatus() {
+        // given
+        Account account = Account.createAccount(
+                UUID.randomUUID(), "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
+        account.markPendingDeletion();
+
+        // when
+        account.reactivate();
+
+        // then
+        assertThat(account.getStatus()).isEqualTo(AccountStatus.ACTIVE);
+    }
+
+    @Test
+    @DisplayName("softDelete 호출 시 상태가 DELETED로 바뀐다")
+    void softDeleteChangesStatusToDeleted() {
+        // given
+        Account account = Account.createAccount(
+                UUID.randomUUID(), "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
+        account.markPendingDeletion();
+
+        // when
+        account.softDelete(account.getUserId());
+
+        // then
+        assertThat(account.getStatus()).isEqualTo(AccountStatus.DELETED);
     }
 
     @Test

@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 
 import java.util.UUID;
 
+//TODO: circuit breaker 적용
 @FeignClient(name = "trading-service")
 public interface TradingFeignClient {
 

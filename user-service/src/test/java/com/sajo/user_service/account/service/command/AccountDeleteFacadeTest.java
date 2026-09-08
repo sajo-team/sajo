@@ -26,6 +26,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -202,7 +203,10 @@ class AccountDeleteFacadeTest {
                             .isEqualTo(AccountErrorCode.ACTIVE_TRADING_EXISTS);
                 });
 
-        verifyNoInteractions(accountCommandService);
+        // 활성 거래 확인 전 PENDING_DELETION으로 표시했다가, 차단되면 다시 ACTIVE로 되돌린다
+        verify(accountCommandService).markPendingDeletion(userId);
+        verify(accountCommandService).reactivate(userId);
+        verify(accountCommandService, never()).deleteAccount(any());
         verifyNoInteractions(kisOAuthClient);
         verifyNoInteractions(cacheQueryService);
         verifyNoInteractions(cacheCommandService);

@@ -51,4 +51,21 @@ public class AccountCommandService {
         account.softDelete(userId);
         return account;
     }
+
+    // trading-service에 활성 거래 여부를 확인하러 가기 전에 먼저 표시해둔다 -
+    // 확인-삭제 사이의 짧은 창에서도 이 계좌 정보로는 새 주문이 실행되지 않도록 한다.
+    @Transactional
+    public void markPendingDeletion(UUID userId) {
+        Account account = accountCommandRepository.findByUserIdAndDeletedAtIsNull(userId)
+                .orElseThrow(() -> new BusinessException(AccountErrorCode.ACCOUNT_NOT_FOUND));
+        account.markPendingDeletion();
+    }
+
+    // 활성 거래가 있어 삭제가 취소된 경우 원상복구
+    @Transactional
+    public void reactivate(UUID userId) {
+        Account account = accountCommandRepository.findByUserIdAndDeletedAtIsNull(userId)
+                .orElseThrow(() -> new BusinessException(AccountErrorCode.ACCOUNT_NOT_FOUND));
+        account.reactivate();
+    }
 }
