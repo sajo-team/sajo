@@ -1,6 +1,7 @@
 package com.sajo.trading_service.trading.service.command;
 
 import com.sajo.common.exception.BusinessException;
+import com.sajo.common.feign.FeignApiException;
 import com.sajo.trading_service.trading.client.StrategyClient;
 import com.sajo.trading_service.trading.client.dto.response.StrategyClientResponse;
 import com.sajo.trading_service.trading.controller.dto.request.AutoTradingCreateRequest;
@@ -11,22 +12,18 @@ import com.sajo.trading_service.trading.domain.AutoTrading;
 import com.sajo.trading_service.trading.exception.TradingErrorCode;
 import com.sajo.trading_service.trading.repository.command.AutoTradingCommandRepository;
 import com.sajo.trading_service.trading.repository.command.TradingLimitCommandRepository;
-import feign.FeignException;
-import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.dao.DataIntegrityViolationException;
 
 import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -43,11 +40,14 @@ class AutoTradingCommandServiceTest {
     @Mock
     private StrategyClient strategyClient;
 
+    @Mock
+    private AutoTradingCreateTransactionService autoTradingCreateTransactionService;
+
     @InjectMocks
     private AutoTradingCommandService autoTradingCommandService;
 
     @Test
-    @DisplayName("자동매매 설정을 생성하면 enabled는 true이다")
+    @DisplayName("전략 검증에 성공하면 자동매매 생성 트랜잭션을 실행한다")
     void createAutoTrading() {
         // given
         UUID userId = UUID.randomUUID();
@@ -56,25 +56,24 @@ class AutoTradingCommandServiceTest {
         AutoTradingCreateRequest request =
                 new AutoTradingCreateRequest(strategyId);
 
-        given(tradingLimitCommandRepository.existsByUserId(userId))
-                .willReturn(true);
+        AutoTrading autoTrading =
+                AutoTrading.create(userId, strategyId);
+
+        AutoTradingCreateResponse expectedResponse =
+                AutoTradingCreateResponse.from(autoTrading);
 
         given(strategyClient.getStrategy(strategyId))
-                .willReturn(new StrategyClientResponse(
-                        strategyId,
-                        userId
-                ));
+                .willReturn(
+                        new StrategyClientResponse(
+                                strategyId,
+                                userId
+                        )
+                );
 
-        given(autoTradingCommandRepository
-                .existsByUserIdAndStrategyIdAndDeletedAtIsNull(
-                        userId,
-                        strategyId
-                ))
-                .willReturn(false);
-
-        given(autoTradingCommandRepository
-                .saveAndFlush(any(AutoTrading.class)))
-                .willAnswer(invocation -> invocation.getArgument(0));
+        given(autoTradingCreateTransactionService.create(
+                userId,
+                request
+        )).willReturn(expectedResponse);
 
         // when
         AutoTradingCreateResponse response =
@@ -90,13 +89,13 @@ class AutoTradingCommandServiceTest {
         assertThat(response.enabled())
                 .isTrue();
 
-        verify(autoTradingCommandRepository)
-                .saveAndFlush(any(AutoTrading.class));
+        verify(autoTradingCreateTransactionService)
+                .create(userId, request);
     }
 
     @Test
-    @DisplayName("자동매매 공통 한도가 없으면 자동매매 설정을 생성할 수 없다")
-    void createAutoTradingWithoutTradingLimit() {
+    @DisplayName("존재하지 않는 전략이면 자동매매 설정을 생성할 수 없다")
+    void createAutoTradingStrategyNotFound() {
         // given
         UUID userId = UUID.randomUUID();
         UUID strategyId = UUID.randomUUID();
@@ -104,12 +103,21 @@ class AutoTradingCommandServiceTest {
         AutoTradingCreateRequest request =
                 new AutoTradingCreateRequest(strategyId);
 
-        given(tradingLimitCommandRepository.existsByUserId(userId))
-                .willReturn(false);
+        given(strategyClient.getStrategy(strategyId))
+                .willThrow(
+                        new FeignApiException(
+                                "STRATEGY_0002",
+                                "전략을 찾을 수 없습니다.",
+                                404
+                        )
+                );
 
         // when & then
         assertThatThrownBy(() ->
-                autoTradingCommandService.createAutoTrading(userId, request)
+                autoTradingCommandService.createAutoTrading(
+                        userId,
+                        request
+                )
         )
                 .isInstanceOf(BusinessException.class)
                 .satisfies(exception -> {
@@ -118,55 +126,86 @@ class AutoTradingCommandServiceTest {
 
                     assertThat(businessException.getErrorCode())
                             .isEqualTo(
-                                    TradingErrorCode.TRADING_LIMIT_REQUIRED
+                                    TradingErrorCode.STRATEGY_NOT_FOUND
                             );
                 });
 
-        verify(autoTradingCommandRepository, never())
-                .save(any(AutoTrading.class));
+        verify(autoTradingCreateTransactionService, never())
+                .create(userId, request);
     }
 
     @Test
-    @DisplayName("동일 전략의 자동매매 설정이 이미 존재하면 생성할 수 없다")
-    void createAutoTradingAlreadyExists() {
+    @DisplayName("다른 사용자의 전략으로 자동매매 설정을 생성할 수 없다")
+    void createAutoTradingWithOtherUserStrategy() {
+        // given
+        UUID userId = UUID.randomUUID();
+        UUID otherUserId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+
+        AutoTradingCreateRequest request =
+                new AutoTradingCreateRequest(strategyId);
+
+        given(strategyClient.getStrategy(strategyId))
+                .willReturn(
+                        new StrategyClientResponse(
+                                strategyId,
+                                otherUserId
+                        )
+                );
+
+        // when & then
+        assertThatThrownBy(() ->
+                autoTradingCommandService.createAutoTrading(
+                        userId,
+                        request
+                )
+        )
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException =
+                            (BusinessException) exception;
+
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(
+                                    TradingErrorCode.STRATEGY_NOT_FOUND
+                            );
+                });
+
+        verify(autoTradingCreateTransactionService, never())
+                .create(userId, request);
+    }
+
+    @Test
+    @DisplayName("Strategy 조회 중 다른 FeignApiException은 그대로 전파한다")
+    void createAutoTradingOtherFeignApiException() {
+        // given
         UUID userId = UUID.randomUUID();
         UUID strategyId = UUID.randomUUID();
 
         AutoTradingCreateRequest request =
                 new AutoTradingCreateRequest(strategyId);
 
-        given(tradingLimitCommandRepository.existsByUserId(userId))
-                .willReturn(true);
+        FeignApiException exception =
+                new FeignApiException(
+                        "STRATEGY_9999",
+                        "Market Service 오류",
+                        500
+                );
 
         given(strategyClient.getStrategy(strategyId))
-                .willReturn(new StrategyClientResponse(
-                        strategyId,
-                        userId
-                ));
+                .willThrow(exception);
 
-        given(autoTradingCommandRepository
-                .existsByUserIdAndStrategyIdAndDeletedAtIsNull(
-                        userId,
-                        strategyId
-                ))
-                .willReturn(true);
-
+        // when & then
         assertThatThrownBy(() ->
-                autoTradingCommandService.createAutoTrading(userId, request)
+                autoTradingCommandService.createAutoTrading(
+                        userId,
+                        request
+                )
         )
-                .isInstanceOf(BusinessException.class)
-                .satisfies(exception -> {
-                    BusinessException businessException =
-                            (BusinessException) exception;
+                .isSameAs(exception);
 
-                    assertThat(businessException.getErrorCode())
-                            .isEqualTo(
-                                    TradingErrorCode.AUTO_TRADING_ALREADY_EXISTS
-                            );
-                });
-
-        verify(autoTradingCommandRepository, never())
-                .saveAndFlush(any(AutoTrading.class));
+        verify(autoTradingCreateTransactionService, never())
+                .create(userId, request);
     }
 
     @Test
@@ -273,139 +312,6 @@ class AutoTradingCommandServiceTest {
                     assertThat(businessException.getErrorCode())
                             .isEqualTo(
                                     TradingErrorCode.TRADING_LIMIT_REQUIRED
-                            );
-                });
-    }
-
-    @Test
-    @DisplayName("존재하지 않는 전략이면 자동매매 설정을 생성할 수 없다")
-    void createAutoTradingStrategyNotFound() {
-        // given
-        UUID userId = UUID.randomUUID();
-        UUID strategyId = UUID.randomUUID();
-
-        AutoTradingCreateRequest request =
-                new AutoTradingCreateRequest(strategyId);
-
-        given(tradingLimitCommandRepository.existsByUserId(userId))
-                .willReturn(true);
-
-        given(strategyClient.getStrategy(strategyId))
-                .willThrow(FeignException.NotFound.class);
-
-        // when & then
-        assertThatThrownBy(() ->
-                autoTradingCommandService.createAutoTrading(userId, request)
-        )
-                .isInstanceOf(BusinessException.class)
-                .satisfies(exception -> {
-                    BusinessException businessException =
-                            (BusinessException) exception;
-
-                    assertThat(businessException.getErrorCode())
-                            .isEqualTo(
-                                    TradingErrorCode.STRATEGY_NOT_FOUND
-                            );
-                });
-
-        verify(autoTradingCommandRepository, never())
-                .saveAndFlush(any(AutoTrading.class));
-    }
-
-    @Test
-    @DisplayName("다른 사용자의 전략으로 자동매매 설정을 생성할 수 없다")
-    void createAutoTradingWithOtherUserStrategy() {
-        // given
-        UUID userId = UUID.randomUUID();
-        UUID otherUserId = UUID.randomUUID();
-        UUID strategyId = UUID.randomUUID();
-
-        AutoTradingCreateRequest request =
-                new AutoTradingCreateRequest(strategyId);
-
-        given(tradingLimitCommandRepository.existsByUserId(userId))
-                .willReturn(true);
-
-        given(strategyClient.getStrategy(strategyId))
-                .willReturn(new StrategyClientResponse(
-                        strategyId,
-                        otherUserId
-                ));
-
-        // when & then
-        assertThatThrownBy(() ->
-                autoTradingCommandService.createAutoTrading(userId, request)
-        )
-                .isInstanceOf(BusinessException.class)
-                .satisfies(exception -> {
-                    BusinessException businessException =
-                            (BusinessException) exception;
-
-                    assertThat(businessException.getErrorCode())
-                            .isEqualTo(
-                                    TradingErrorCode.STRATEGY_NOT_FOUND
-                            );
-                });
-
-        verify(autoTradingCommandRepository, never())
-                .saveAndFlush(any(AutoTrading.class));
-    }
-
-    @Test
-    @DisplayName("동시 생성으로 AutoTrading unique 제약이 위반되면 중복 생성 예외로 변환한다")
-    void createAutoTradingUniqueConstraintViolation() {
-        // given
-        UUID userId = UUID.randomUUID();
-        UUID strategyId = UUID.randomUUID();
-
-        AutoTradingCreateRequest request =
-                new AutoTradingCreateRequest(strategyId);
-
-        given(tradingLimitCommandRepository.existsByUserId(userId))
-                .willReturn(true);
-
-        given(strategyClient.getStrategy(strategyId))
-                .willReturn(new StrategyClientResponse(
-                        strategyId,
-                        userId
-                ));
-
-        given(autoTradingCommandRepository
-                .existsByUserIdAndStrategyIdAndDeletedAtIsNull(
-                        userId,
-                        strategyId
-                ))
-                .willReturn(false);
-
-        ConstraintViolationException constraintViolationException =
-                new ConstraintViolationException(
-                        "duplicate auto trading",
-                        null,
-                        "uq_auto_trading_active_user_strategy"
-                );
-
-        DataIntegrityViolationException dataIntegrityViolationException =
-                new DataIntegrityViolationException(
-                        "duplicate auto trading",
-                        constraintViolationException
-                );
-
-        given(autoTradingCommandRepository
-                .saveAndFlush(any(AutoTrading.class)))
-                .willThrow(dataIntegrityViolationException);
-
-        // when & then
-        assertThatThrownBy(() ->
-                autoTradingCommandService.createAutoTrading(userId, request)
-        )
-                .isInstanceOf(BusinessException.class)
-                .satisfies(exception -> {
-                    BusinessException businessException =
-                            (BusinessException) exception;
-
-                    assertThat(businessException.getErrorCode())
-                            .isEqualTo(
-                                    TradingErrorCode.AUTO_TRADING_ALREADY_EXISTS
                             );
                 });
     }
