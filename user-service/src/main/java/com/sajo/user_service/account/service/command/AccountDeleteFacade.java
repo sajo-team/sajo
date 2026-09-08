@@ -1,7 +1,11 @@
 package com.sajo.user_service.account.service.command;
 
+import com.sajo.common.exception.BusinessException;
 import com.sajo.user_service.account.client.KisOAuthClient;
+import com.sajo.user_service.account.client.feign.TradingFeignClient;
+import com.sajo.user_service.account.client.feign.dto.response.TradingActiveStatusResponse;
 import com.sajo.user_service.account.domain.Account;
+import com.sajo.user_service.account.exception.AccountErrorCode;
 import com.sajo.user_service.account.exception.KisBusinessException;
 import com.sajo.user_service.account.service.query.KisTokenCacheQueryService;
 import lombok.RequiredArgsConstructor;
@@ -21,8 +25,16 @@ public class AccountDeleteFacade {
     private final KisTokenCacheCommandService cacheCommandService;
     private final AccountCommandService accountCommandService;
     private final KisTokenLogCommandService kisTokenLogCommandService;
+    private final TradingFeignClient tradingClient;
 
     public void deleteAccount(UUID userId) {
+
+        // 활성화 된 자동매매 또는 체결 확정 안된 주문 있는지 확인
+        TradingActiveStatusResponse response = tradingClient.getActiveStatus(userId);
+        if (response.hasActiveTrading()) {
+            throw new BusinessException(AccountErrorCode.ACTIVE_TRADING_EXISTS);
+        }
+
         // 계좌 삭제 (필수) - 실패하면 아무 부작용 없이 여기서 끝
         Account account = accountCommandService.deleteAccount(userId);
 

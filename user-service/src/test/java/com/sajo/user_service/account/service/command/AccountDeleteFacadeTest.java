@@ -2,6 +2,8 @@ package com.sajo.user_service.account.service.command;
 
 import com.sajo.common.exception.BusinessException;
 import com.sajo.user_service.account.client.KisOAuthClient;
+import com.sajo.user_service.account.client.feign.TradingFeignClient;
+import com.sajo.user_service.account.client.feign.dto.response.TradingActiveStatusResponse;
 import com.sajo.user_service.account.domain.Account;
 import com.sajo.user_service.account.domain.AccountType;
 import com.sajo.user_service.account.exception.AccountErrorCode;
@@ -45,13 +47,20 @@ class AccountDeleteFacadeTest {
     @Mock
     private KisTokenLogCommandService kisTokenLogCommandService;
 
+    @Mock
+    private TradingFeignClient tradingFeignClient;
+
     private AccountDeleteFacade accountDeleteFacade;
 
     @BeforeEach
     void setUp() {
         accountDeleteFacade = new AccountDeleteFacade(
                 kisOAuthClient, cacheQueryService, cacheCommandService, accountCommandService,
-                kisTokenLogCommandService);
+                kisTokenLogCommandService, tradingFeignClient);
+    }
+
+    private void givenNoActiveTrading(UUID userId) {
+        given(tradingFeignClient.getActiveStatus(userId)).willReturn(new TradingActiveStatusResponse(false));
     }
 
     private Account account(UUID userId) {
@@ -64,6 +73,7 @@ class AccountDeleteFacadeTest {
     void deleteAccountRevokesCachedTokenAndEvictsCache() {
         // given
         UUID userId = UUID.randomUUID();
+        givenNoActiveTrading(userId);
         Account account = account(userId);
         given(accountCommandService.deleteAccount(userId)).willReturn(account);
         given(cacheQueryService.peekAccessToken(userId)).willReturn(Optional.of("cached-token"));
@@ -82,6 +92,7 @@ class AccountDeleteFacadeTest {
     void deleteAccountSkipsRevokeWhenNoCachedToken() {
         // given
         UUID userId = UUID.randomUUID();
+        givenNoActiveTrading(userId);
         Account account = account(userId);
         given(accountCommandService.deleteAccount(userId)).willReturn(account);
         given(cacheQueryService.peekAccessToken(userId)).willReturn(Optional.empty());
@@ -100,6 +111,7 @@ class AccountDeleteFacadeTest {
     void deleteAccountPropagatesFailureWithoutSideEffectsWhenDbDeleteFails() {
         // given
         UUID userId = UUID.randomUUID();
+        givenNoActiveTrading(userId);
         willThrow(new BusinessException(AccountErrorCode.ACCOUNT_NOT_FOUND))
                 .given(accountCommandService).deleteAccount(userId);
 
@@ -123,6 +135,7 @@ class AccountDeleteFacadeTest {
     void deleteAccountSucceedsEvenWhenRevokeFails() {
         // given
         UUID userId = UUID.randomUUID();
+        givenNoActiveTrading(userId);
         Account account = account(userId);
         given(accountCommandService.deleteAccount(userId)).willReturn(account);
         given(cacheQueryService.peekAccessToken(userId)).willReturn(Optional.of("cached-token"));
@@ -141,6 +154,7 @@ class AccountDeleteFacadeTest {
     void deleteAccountDoesNotRecordRevokeFailWhenPeekAccessTokenFails() {
         // given
         UUID userId = UUID.randomUUID();
+        givenNoActiveTrading(userId);
         Account account = account(userId);
         given(accountCommandService.deleteAccount(userId)).willReturn(account);
         willThrow(new RuntimeException("Redis 타임아웃"))
@@ -159,6 +173,7 @@ class AccountDeleteFacadeTest {
     void deleteAccountSucceedsEvenWhenCacheEvictFails() {
         // given
         UUID userId = UUID.randomUUID();
+        givenNoActiveTrading(userId);
         Account account = account(userId);
         given(accountCommandService.deleteAccount(userId)).willReturn(account);
         given(cacheQueryService.peekAccessToken(userId)).willReturn(Optional.empty());
@@ -169,5 +184,28 @@ class AccountDeleteFacadeTest {
         assertThatCode(() -> accountDeleteFacade.deleteAccount(userId)).doesNotThrowAnyException();
 
         verify(accountCommandService).deleteAccount(userId);
+    }
+
+    @Test
+    @DisplayName("진행 중인 자동매매 또는 미체결 주문이 있으면 계좌 삭제를 시도하지 않고 예외를 던진다")
+    void deleteAccountThrowsWhenActiveTradingExists() {
+        // given
+        UUID userId = UUID.randomUUID();
+        given(tradingFeignClient.getActiveStatus(userId)).willReturn(new TradingActiveStatusResponse(true));
+
+        // when & then
+        assertThatThrownBy(() -> accountDeleteFacade.deleteAccount(userId))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(AccountErrorCode.ACTIVE_TRADING_EXISTS);
+                });
+
+        verifyNoInteractions(accountCommandService);
+        verifyNoInteractions(kisOAuthClient);
+        verifyNoInteractions(cacheQueryService);
+        verifyNoInteractions(cacheCommandService);
+        verifyNoInteractions(kisTokenLogCommandService);
     }
 }
