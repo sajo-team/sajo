@@ -101,4 +101,22 @@ public class Backtest extends BaseUpdatableEntity {
         }
         return new Backtest(strategy, startDate, endDate, initialCash);
     }
+
+    public void start() {
+        if (this.status != BacktestStatus.REQUESTED) {
+            throw new BusinessException(StrategyErrorCode.INVALID_STRATEGY, "요청 상태의 백테스트만 실행할 수 있습니다.");
+        }
+
+        this.status = BacktestStatus.RUNNING;
+    }
+
+    public void complete(BigDecimal totalReturnRate, Integer tradeCount) {
+        this.totalReturnRate = totalReturnRate;
+        this.tradeCount = tradeCount;
+        this.status = BacktestStatus.COMPLETED;
+    }
+
+    public void fail() {
+        this.status = BacktestStatus.FAILED;
+    }
 }
