@@ -54,6 +54,7 @@ services:
       start_period: 10s
 
   kafka:
+    platform: linux/amd64
     image: apache/kafka:3.9.0
     container_name: sajo-kafka
     ports:
