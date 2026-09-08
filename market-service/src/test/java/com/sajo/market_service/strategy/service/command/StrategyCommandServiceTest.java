@@ -1,6 +1,8 @@
 package com.sajo.market_service.strategy.service.command;
 
 import com.sajo.common.exception.BusinessException;
+import com.sajo.market_service.market.controller.dto.response.InternalStockQuoteResponse;
+import com.sajo.market_service.market.service.query.MarketInternalQueryService;
 import com.sajo.market_service.strategy.controller.dto.request.StrategyActivationRequest;
 import com.sajo.market_service.strategy.controller.dto.request.StrategyCreateRequest;
 import com.sajo.market_service.strategy.controller.dto.request.StrategyUpdateRequest;
@@ -20,6 +22,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -36,11 +40,21 @@ class StrategyCommandServiceTest {
     @Mock
     private StrategyCommandRepository strategyCommandRepository;
 
+    @Mock
+    private MarketInternalQueryService marketInternalQueryService;
+
+    @Mock
+    private StrategyActivationCommandService strategyActivationCommandService;
+
     private StrategyCommandService strategyCommandService;
 
     @BeforeEach
     void setUp() {
-        strategyCommandService = new StrategyCommandService(strategyCommandRepository);
+        strategyCommandService = new StrategyCommandService(
+                strategyCommandRepository,
+                marketInternalQueryService,
+                strategyActivationCommandService
+        );
     }
 
     @Test
@@ -383,14 +397,38 @@ class StrategyCommandServiceTest {
         given(strategyCommandRepository.findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId))
                 .willReturn(Optional.of(strategy));
 
+        StrategyActivationResponse expectedResponse = new StrategyActivationResponse(
+                strategyId,
+                StrategyStatus.ACTIVE,
+                Instant.now()
+        );
+
+        given(strategyActivationCommandService.changeActivation(
+                userId,
+                strategyId,
+                true,
+                StrategyActivationSnapshot.from(strategy)
+        )).willReturn(expectedResponse);
+
+        given(marketInternalQueryService.getQuote(userId, "005930"))
+                .willReturn(new InternalStockQuoteResponse(
+                        "005930",
+                        70_000L,
+                        OffsetDateTime.parse("2026-09-07T09:00:00+09:00")
+                ));
+
         // when
         StrategyActivationResponse response = strategyCommandService.updateActivation(userId, strategyId, request);
 
         // then
+        verify(marketInternalQueryService).getQuote(userId, "005930");
+
         assertThat(response.status()).isEqualTo(StrategyStatus.ACTIVE);
         assertThat(response.activatedAt()).isNotNull();
-        assertThat(strategy.getStatus()).isEqualTo(StrategyStatus.ACTIVE);
-        assertThat(strategy.getActivatedAt()).isNotNull();
+        assertThat(response).isEqualTo(expectedResponse);
+
+        verify(strategyActivationCommandService)
+                .changeActivation(userId, strategyId, true, StrategyActivationSnapshot.from(strategy));
     }
 
     @Test
@@ -420,14 +458,23 @@ class StrategyCommandServiceTest {
         given(strategyCommandRepository.findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId))
                 .willReturn(Optional.of(strategy));
 
+        StrategyActivationResponse expectedResponse =
+                new StrategyActivationResponse(strategyId, StrategyStatus.INACTIVE, null);
+        given(strategyActivationCommandService.changeActivation(
+                userId,
+                strategyId,
+                false,
+                StrategyActivationSnapshot.from(strategy)
+        ))
+                .willReturn(expectedResponse);
+
         // when
         StrategyActivationResponse response = strategyCommandService.updateActivation(userId, strategyId, request);
 
         // then
-        assertThat(response.status()).isEqualTo(StrategyStatus.INACTIVE);
-        assertThat(response.activatedAt()).isNull();
-        assertThat(strategy.getStatus()).isEqualTo(StrategyStatus.INACTIVE);
-        assertThat(strategy.getActivatedAt()).isNull();
+        assertThat(response).isEqualTo(expectedResponse);
+        verify(strategyActivationCommandService)
+                .changeActivation(userId, strategyId, false, StrategyActivationSnapshot.from(strategy));
     }
 
     @Test
