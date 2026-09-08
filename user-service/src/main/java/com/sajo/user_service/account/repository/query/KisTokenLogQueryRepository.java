@@ -12,6 +12,7 @@ public interface KisTokenLogQueryRepository extends JpaRepository<KisTokenLog, U
 
     // 사용자+토큰타입 조합별 최신 이벤트 1건만 (관리자용 목록 조회)
     // createdAt 동시각 tie 시 중복 반환을 막기 위해 id를 2차 정렬 기준으로 사용
+    // TODO: (userId, tokenType, createdAt) 인덱스 없음 - 테이블 커지면 느려질 수 있음 추후 검토
     @Query("""
             SELECT e FROM KisTokenLog e
             WHERE NOT EXISTS (

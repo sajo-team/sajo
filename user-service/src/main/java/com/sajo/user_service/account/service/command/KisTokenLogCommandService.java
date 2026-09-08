@@ -7,6 +7,7 @@ import com.sajo.user_service.account.repository.command.KisTokenLogCommandReposi
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.interceptor.TransactionAspectSupport;
 
@@ -18,25 +19,29 @@ import java.util.UUID;
 public class KisTokenLogCommandService {
     private final KisTokenLogCommandRepository kisTokenLogCommandRepository;
 
-    @Transactional
+    // 이력 기록은 best-effort이며 호출자의 핵심 흐름(토큰 발급/폐기)에 영향을 주면 안 된다.
+    // REQUIRES_NEW로 항상 독립된 트랜잭션에서만 동작하도록 강제해, 나중에 호출부가
+    // 이미 트랜잭션이 걸린 다른 Command 서비스 안으로 옮겨져도 setRollbackOnly()가
+    // 호출자의 트랜잭션까지 롤백 전용으로 만드는 일이 없도록 한다.
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordSuccess(UUID accountId, UUID userId, KisTokenType tokenType) {
         save(KisTokenLog.createTokenLog(accountId, userId, EventType.TOKEN_ISSUE_SUCCESS, tokenType, null, null));
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordFail(UUID accountId, UUID userId, KisTokenType tokenType, String errorCode, String errorMessage) {
         save(KisTokenLog.createTokenLog(
                 accountId, userId, EventType.TOKEN_ISSUE_FAILED, tokenType, errorCode, errorMessage));
     }
 
     // 폐기는 access token 전용 - KIS에 접속키(웹소켓) 폐기 API가 없음
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordRevokeSuccess(UUID accountId, UUID userId) {
         save(KisTokenLog.createTokenLog(
                 accountId, userId, EventType.TOKEN_REVOKE_SUCCESS, KisTokenType.ACCESS_TOKEN, null, null));
     }
 
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void recordRevokeFail(UUID accountId, UUID userId, String errorCode, String errorMessage) {
         save(KisTokenLog.createTokenLog(
                 accountId, userId, EventType.TOKEN_REVOKE_FAILED, KisTokenType.ACCESS_TOKEN, errorCode, errorMessage));
