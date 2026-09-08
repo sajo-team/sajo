@@ -19,6 +19,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -60,7 +61,7 @@ class ExecutionControllerTest {
                         executionId,
                         orderId,
                         2,
-                        69_800L,
+                        new BigDecimal("69800"),
                         139_600L,
                         2,
                         now,
@@ -161,7 +162,7 @@ class ExecutionControllerTest {
                         executionId,
                         orderId,
                         4,
-                        70_000L,
+                        new BigDecimal("70000"),
                         280_000L,
                         0,
                         now,

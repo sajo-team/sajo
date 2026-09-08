@@ -20,6 +20,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -112,7 +113,7 @@ class KisOrderExecutionServiceTest {
                         orderId,
                         2,
                         2,
-                        69_800L,
+                        new BigDecimal("69800"),
                         139_600L
                 );
 
@@ -121,7 +122,7 @@ class KisOrderExecutionServiceTest {
                         any(),
                         anyInt(),
                         anyInt(),
-                        anyLong(),
+                        any(BigDecimal.class),
                         anyLong()
                 );
     }
@@ -164,7 +165,7 @@ class KisOrderExecutionServiceTest {
                         orderId,
                         4,
                         0,
-                        70_000L,
+                        new BigDecimal("70000"),
                         280_000L
                 );
     }
@@ -207,7 +208,7 @@ class KisOrderExecutionServiceTest {
                         orderId,
                         0,
                         0,
-                        0L,
+                        new BigDecimal("0"),
                         0L
                 );
 
@@ -216,7 +217,7 @@ class KisOrderExecutionServiceTest {
                         any(),
                         anyInt(),
                         anyInt(),
-                        anyLong(),
+                        any(BigDecimal.class),
                         anyLong()
                 );
     }
@@ -259,7 +260,7 @@ class KisOrderExecutionServiceTest {
                         orderId,
                         2,
                         0,
-                        69_800L,
+                        new BigDecimal("69800"),
                         139_600L
                 );
     }
@@ -579,7 +580,7 @@ class KisOrderExecutionServiceTest {
                         orderId,
                         2,
                         1,
-                        69_800L,
+                        new BigDecimal("69800"),
                         139_600L
                 );
 
@@ -592,8 +593,53 @@ class KisOrderExecutionServiceTest {
                         orderId,
                         2,
                         1,
-                        69_800L,
+                        new BigDecimal("69800"),
                         139_600L
+                );
+    }
+
+    @Test
+    @DisplayName("평균 체결가가 소수여도 정상적으로 체결 결과를 반영한다")
+    void processExecution_decimalAveragePrice() {
+        // given
+        UUID orderId = UUID.randomUUID();
+        Order order = createAcceptedOrder();
+
+        when(orderQueryRepository.findByIdAndDeletedAtIsNull(orderId))
+                .thenReturn(Optional.of(order));
+
+        mockAccountResponses(order);
+
+        KisOrderInquiryItem item =
+                createInquiryItem(
+                        order.getBrokerOrderNo(),
+                        "3",
+                        "1",
+                        "69816.6667",
+                        "209450",
+                        "N"
+                );
+
+        when(kisOrderClient.inquireDailyOrders(
+                any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any()
+        )).thenReturn(
+                successResponse(List.of(item))
+        );
+
+        // when
+        kisOrderExecutionService.processExecution(orderId);
+
+        // then
+        verify(orderExecutionCommandService)
+                .applyExecution(
+                        orderId,
+                        3,
+                        1,
+                        new BigDecimal("69816.6667"),
+                        209_450L
                 );
     }
 }

@@ -16,6 +16,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.math.BigDecimal;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -62,7 +63,7 @@ class OrderExecutionCommandServiceTest {
                 orderId,
                 2,
                 2,
-                69_800L,
+                new BigDecimal("69800"),
                 139_600L
         );
 
@@ -84,7 +85,7 @@ class OrderExecutionCommandServiceTest {
         assertThat(savedExecution.getExecutedQuantity()).isEqualTo(2);
         assertThat(savedExecution.getRemainingQuantity()).isEqualTo(2);
         assertThat(savedExecution.getAverageExecutionPrice())
-                .isEqualTo(69_800L);
+                .isEqualByComparingTo(new BigDecimal("69800"));
         assertThat(savedExecution.getTotalExecutionAmount())
                 .isEqualTo(139_600L);
     }
@@ -105,7 +106,7 @@ class OrderExecutionCommandServiceTest {
                 Execution.create(
                         orderId,
                         1,
-                        69_800L,
+                        new BigDecimal("69800"),
                         69_800L,
                         3
                 );
@@ -121,7 +122,7 @@ class OrderExecutionCommandServiceTest {
                 orderId,
                 3,
                 1,
-                69_900L,
+                new BigDecimal("69800"),
                 209_700L
         );
 
@@ -134,7 +135,7 @@ class OrderExecutionCommandServiceTest {
         assertThat(execution.getExecutedQuantity()).isEqualTo(3);
         assertThat(execution.getRemainingQuantity()).isEqualTo(1);
         assertThat(execution.getAverageExecutionPrice())
-                .isEqualTo(69_900L);
+                .isEqualByComparingTo(new BigDecimal("69800"));
         assertThat(execution.getTotalExecutionAmount())
                 .isEqualTo(209_700L);
 
@@ -160,7 +161,7 @@ class OrderExecutionCommandServiceTest {
                 orderId,
                 4,
                 0,
-                70_000L,
+                new BigDecimal("70000"),
                 280_000L
         );
 
@@ -194,7 +195,7 @@ class OrderExecutionCommandServiceTest {
                 orderId,
                 2,
                 2,
-                69_800L,
+                new BigDecimal("69800"),
                 139_600L
         );
 
@@ -226,7 +227,7 @@ class OrderExecutionCommandServiceTest {
                 orderId,
                 0,
                 0,
-                0L,
+                new BigDecimal("0"),
                 0L
         );
 
@@ -259,7 +260,7 @@ class OrderExecutionCommandServiceTest {
                 Execution.create(
                         orderId,
                         2,
-                        69_800L,
+                        new BigDecimal("69800"),
                         139_600L,
                         2
                 );
@@ -275,7 +276,7 @@ class OrderExecutionCommandServiceTest {
                 orderId,
                 2,
                 0,
-                69_800L,
+                new BigDecimal("69800"),
                 139_600L
         );
 
@@ -310,7 +311,7 @@ class OrderExecutionCommandServiceTest {
                 orderId,
                 2,
                 0,
-                69_800L,
+                new BigDecimal("69800"),
                 139_600L
         );
 
@@ -347,7 +348,7 @@ class OrderExecutionCommandServiceTest {
                         orderId,
                         2,
                         2,
-                        69_800L,
+                        new BigDecimal("69800"),
                         139_600L
                 )
         )

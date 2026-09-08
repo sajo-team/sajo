@@ -93,7 +93,7 @@ public record KisOrderInquiryItem(
         @JsonProperty("avg_prvs")
         String averageExecutionPrice,
 
-/**
+        /**
          * 총 체결 금액.
          *
          * 현재까지 누적된 체결 금액.

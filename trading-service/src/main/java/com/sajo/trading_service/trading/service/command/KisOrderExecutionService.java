@@ -202,7 +202,7 @@ public class KisOrderExecutionService {
     ) {
         int totalFilledQuantity;
         int remainingQuantity;
-        long averageExecutionPrice;
+        BigDecimal averageExecutionPrice;
         long totalExecutionAmount;
 
         try {
@@ -213,7 +213,7 @@ public class KisOrderExecutionService {
                     parseInteger(item.remainingQuantity());
 
             averageExecutionPrice =
-                    parseLong(item.averageExecutionPrice());
+                    parseDecimal(item.averageExecutionPrice());
 
             totalExecutionAmount =
                     parseLong(item.totalExecutionAmount());
@@ -298,5 +298,9 @@ public class KisOrderExecutionService {
     private long parseLong(String value) {
         return new BigDecimal(value)
                 .longValueExact();
+    }
+
+    private BigDecimal parseDecimal(String value) {
+        return new BigDecimal(value);
     }
 }

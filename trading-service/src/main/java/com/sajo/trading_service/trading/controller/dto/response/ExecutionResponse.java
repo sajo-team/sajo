@@ -2,6 +2,7 @@ package com.sajo.trading_service.trading.controller.dto.response;
 
 import com.sajo.trading_service.trading.domain.Execution;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -9,7 +10,7 @@ public record ExecutionResponse(
         UUID executionId,
         UUID orderId,
         Integer executedQuantity,
-        Long averageExecutionPrice,
+        BigDecimal averageExecutionPrice,
         Long totalExecutionAmount,
         Integer remainingQuantity,
         Instant createdAt,

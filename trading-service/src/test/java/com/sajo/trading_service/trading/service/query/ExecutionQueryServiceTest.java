@@ -16,6 +16,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -23,7 +24,8 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class ExecutionQueryServiceTest {
@@ -82,7 +84,7 @@ class ExecutionQueryServiceTest {
         assertThat(response.orderId()).isEqualTo(orderId);
         assertThat(response.executedQuantity()).isEqualTo(2);
         assertThat(response.averageExecutionPrice())
-                .isEqualTo(69_800L);
+                .isEqualByComparingTo(new BigDecimal("69800"));
         assertThat(response.totalExecutionAmount())
                 .isEqualTo(139_600L);
         assertThat(response.remainingQuantity()).isEqualTo(2);
@@ -132,6 +134,8 @@ class ExecutionQueryServiceTest {
                 .isEqualTo(2);
         assertThat(response.remainingQuantity())
                 .isEqualTo(2);
+        assertThat(response.averageExecutionPrice())
+                .isEqualByComparingTo(new BigDecimal("69800"));
     }
 
     @Test
@@ -169,7 +173,7 @@ class ExecutionQueryServiceTest {
                 Execution.create(
                         orderId,
                         2,
-                        69_800L,
+                        new BigDecimal("69800"),
                         139_600L,
                         2
                 );

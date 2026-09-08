@@ -8,6 +8,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 @Getter
@@ -26,8 +27,13 @@ public class Execution extends BaseUpdatableEntity {
     @Column(name = "executed_quantity", nullable = false)
     private Integer executedQuantity;
 
-    @Column(name = "average_execution_price", nullable = false)
-    private Long averageExecutionPrice;
+    @Column(
+            name = "average_execution_price",
+            nullable = false,
+            precision = 19,
+            scale = 4
+    )
+    private BigDecimal averageExecutionPrice;
 
     @Column(name = "total_execution_amount", nullable = false)
     private Long totalExecutionAmount;
@@ -38,7 +44,7 @@ public class Execution extends BaseUpdatableEntity {
     private Execution(
             UUID orderId,
             Integer executedQuantity,
-            Long averageExecutionPrice,
+            BigDecimal averageExecutionPrice,
             Long totalExecutionAmount,
             Integer remainingQuantity
     ) {
@@ -52,7 +58,7 @@ public class Execution extends BaseUpdatableEntity {
     public static Execution create(
             UUID orderId,
             Integer executedQuantity,
-            Long averageExecutionPrice,
+            BigDecimal averageExecutionPrice,
             Long totalExecutionAmount,
             Integer remainingQuantity
     ) {
@@ -60,7 +66,7 @@ public class Execution extends BaseUpdatableEntity {
                 || executedQuantity == null
                 || executedQuantity < 0
                 || averageExecutionPrice == null
-                || averageExecutionPrice < 0
+                || averageExecutionPrice.compareTo(BigDecimal.ZERO) < 0
                 || totalExecutionAmount == null
                 || totalExecutionAmount < 0
                 || remainingQuantity == null
@@ -81,14 +87,14 @@ public class Execution extends BaseUpdatableEntity {
 
     public void update(
             Integer executedQuantity,
-            Long averageExecutionPrice,
+            BigDecimal averageExecutionPrice,
             Long totalExecutionAmount,
             Integer remainingQuantity
     ) {
         if (executedQuantity == null
                 || executedQuantity < 0
                 || averageExecutionPrice == null
-                || averageExecutionPrice < 0
+                || averageExecutionPrice.compareTo(BigDecimal.ZERO) < 0
                 || totalExecutionAmount == null
                 || totalExecutionAmount < 0
                 || remainingQuantity == null
