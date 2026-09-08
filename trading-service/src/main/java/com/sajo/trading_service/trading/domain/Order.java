@@ -373,4 +373,69 @@ public class Order extends BaseUpdatableEntity {
     public void markExecutionChecked(Instant checkedAt) {
         this.lastExecutionCheckedAt = checkedAt;
     }
+
+    public int rejectRemaining(
+            int totalFilledQuantity,
+            int remainingQuantity,
+            int rejectedQuantity
+    ) {
+        if (this.status != OrderStatus.ACCEPTED
+                && this.status != OrderStatus.PARTIALLY_FILLED) {
+            throw new BusinessException(
+                    TradingErrorCode.ORDER_STATUS_CHANGE_NOT_ALLOWED
+            );
+        }
+
+        if (totalFilledQuantity < 0
+                || remainingQuantity < 0
+                || rejectedQuantity <= 0
+                || totalFilledQuantity > this.orderQuantity) {
+            throw new BusinessException(
+                    TradingErrorCode.INVALID_ORDER
+            );
+        }
+
+        if (totalFilledQuantity < this.filledQuantity) {
+            throw new BusinessException(
+                    TradingErrorCode.INVALID_ORDER
+            );
+        }
+
+        if (totalFilledQuantity
+                + remainingQuantity
+                + rejectedQuantity
+                != this.orderQuantity) {
+            throw new BusinessException(
+                    TradingErrorCode.INVALID_ORDER
+            );
+        }
+
+        /*
+         * 부분 거절이 확정된 종료 주문은
+         * 더 이상 체결 대기 수량이 없어야 한다.
+         */
+        if (remainingQuantity != 0) {
+            throw new BusinessException(
+                    TradingErrorCode.INVALID_ORDER
+            );
+        }
+
+        int newlyFilledQuantity =
+                totalFilledQuantity - this.filledQuantity;
+
+        this.filledQuantity = totalFilledQuantity;
+        this.remainingQuantity = 0;
+
+        /*
+         * 일부 체결 후 나머지가 거절된 경우
+         */
+        if (totalFilledQuantity > 0) {
+            this.status =
+                    OrderStatus.PARTIALLY_FILLED_REJECTED;
+        } else {
+            this.status = OrderStatus.FAILED;
+        }
+
+        return newlyFilledQuantity;
+    }
 }

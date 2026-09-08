@@ -391,6 +391,85 @@ class OrderExecutionCommandServiceTest {
                 .findByIdForUpdate(orderId);
     }
 
+    @Test
+    @DisplayName("부분 체결 후 나머지가 거절되면 주문을 종결하고 Execution을 생성한다")
+    void applyRejection_partialFill_createExecution() {
+        // given
+        UUID orderId = UUID.randomUUID();
+        Order order = createAcceptedOrder();
+
+        when(orderCommandRepository.findByIdForUpdate(orderId))
+                .thenReturn(Optional.of(order));
+
+        when(executionCommandRepository.findByOrderId(orderId))
+                .thenReturn(Optional.empty());
+
+        // when
+        orderExecutionCommandService.applyRejection(
+                orderId,
+                2,
+                0,
+                2,
+                new BigDecimal("69800"),
+                139_600L
+        );
+
+        // then
+        assertThat(order.getStatus())
+                .isEqualTo(OrderStatus.PARTIALLY_FILLED_REJECTED);
+        assertThat(order.getFilledQuantity()).isEqualTo(2);
+        assertThat(order.getRemainingQuantity()).isZero();
+
+        ArgumentCaptor<Execution> executionCaptor =
+                ArgumentCaptor.forClass(Execution.class);
+
+        verify(executionCommandRepository)
+                .save(executionCaptor.capture());
+
+        Execution savedExecution = executionCaptor.getValue();
+
+        assertThat(savedExecution.getOrderId()).isEqualTo(orderId);
+        assertThat(savedExecution.getExecutedQuantity()).isEqualTo(2);
+        assertThat(savedExecution.getRemainingQuantity()).isZero();
+        assertThat(savedExecution.getAverageExecutionPrice())
+                .isEqualByComparingTo(new BigDecimal("69800"));
+        assertThat(savedExecution.getTotalExecutionAmount())
+                .isEqualTo(139_600L);
+    }
+
+    @Test
+    @DisplayName("체결 없이 전량 거절되면 FAILED로 종결하고 Execution을 생성하지 않는다")
+    void applyRejection_fullReject_withoutExecution() {
+        // given
+        UUID orderId = UUID.randomUUID();
+        Order order = createAcceptedOrder();
+
+        when(orderCommandRepository.findByIdForUpdate(orderId))
+                .thenReturn(Optional.of(order));
+
+        // when
+        orderExecutionCommandService.applyRejection(
+                orderId,
+                0,
+                0,
+                4,
+                new BigDecimal("0"),
+                0L
+        );
+
+        // then
+        assertThat(order.getStatus())
+                .isEqualTo(OrderStatus.FAILED);
+        assertThat(order.getFilledQuantity()).isZero();
+        assertThat(order.getRemainingQuantity()).isZero();
+
+        verify(executionCommandRepository, never())
+                .findByOrderId(any(UUID.class));
+
+        verify(executionCommandRepository, never())
+                .save(any(Execution.class));
+    }
+
     private Order createAcceptedOrder() {
         Order order =
                 Order.create(

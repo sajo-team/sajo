@@ -781,6 +781,50 @@ class OrderTest {
                 .isEqualTo(checkedAt);
     }
 
+    @Test
+    @DisplayName("일부 체결 후 나머지가 거절되면 PARTIALLY_FILLED_REJECTED로 변경된다")
+    void rejectRemaining_afterPartialFill() {
+        // given
+        Order order = createAcceptedOrder();
+
+        // when
+        int newlyFilledQuantity =
+                order.rejectRemaining(
+                        2,
+                        0,
+                        2
+                );
+
+        // then
+        assertThat(newlyFilledQuantity).isEqualTo(2);
+        assertThat(order.getFilledQuantity()).isEqualTo(2);
+        assertThat(order.getRemainingQuantity()).isZero();
+        assertThat(order.getStatus())
+                .isEqualTo(
+                        OrderStatus.PARTIALLY_FILLED_REJECTED
+                );
+    }
+
+    @Test
+    @DisplayName("체결 없이 전량 거절되면 FAILED로 변경된다")
+    void rejectRemaining_fullReject() {
+        // given
+        Order order = createAcceptedOrder();
+
+        // when
+        order.rejectRemaining(
+                0,
+                0,
+                4
+        );
+
+        // then
+        assertThat(order.getFilledQuantity()).isZero();
+        assertThat(order.getRemainingQuantity()).isZero();
+        assertThat(order.getStatus())
+                .isEqualTo(OrderStatus.FAILED);
+    }
+
     private Order createAcceptedOrder() {
         Order order = createOrder();
         order.startProcessing();

@@ -732,7 +732,7 @@ class KisOrderExecutionServiceTest {
     }
 
     @Test
-    @DisplayName("거절 수량이 존재하면 체결 결과를 자동 반영하지 않는다")
+    @DisplayName("부분 체결 후 거절 수량이 존재하면 거절 결과를 반영한다")
     void processExecution_rejectedQuantity() {
         // given
         UUID orderId = UUID.randomUUID();
@@ -778,6 +778,16 @@ class KisOrderExecutionServiceTest {
                 .markExecutionChecked(
                         eq(orderId),
                         any(Instant.class)
+                );
+
+        verify(orderExecutionCommandService)
+                .applyRejection(
+                        orderId,
+                        2,
+                        0,
+                        2,
+                        new BigDecimal("69800"),
+                        139_600L
                 );
 
         verify(orderExecutionCommandService, never())

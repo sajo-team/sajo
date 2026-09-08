@@ -150,4 +150,59 @@ public class OrderExecutionCommandService {
 
         order.markExecutionChecked(checkedAt);
     }
+
+    @Transactional
+    public void applyRejection(
+            UUID orderId,
+            int totalFilledQuantity,
+            int remainingQuantity,
+            int rejectedQuantity,
+            BigDecimal averageExecutionPrice,
+            long totalExecutionAmount
+    ) {
+        Order order =
+                orderCommandRepository.findByIdForUpdate(orderId)
+                        .orElseThrow(() ->
+                                new BusinessException(
+                                        TradingErrorCode.ORDER_NOT_FOUND
+                                )
+                        );
+
+        order.rejectRemaining(
+                totalFilledQuantity,
+                remainingQuantity,
+                rejectedQuantity
+        );
+
+        /*
+         * 체결 없이 전체 거절이면 Execution은 생성하지 않는다.
+         */
+        if (totalFilledQuantity == 0) {
+            return;
+        }
+
+        Execution execution =
+                executionCommandRepository.findByOrderId(orderId)
+                        .orElse(null);
+
+        if (execution == null) {
+            executionCommandRepository.save(
+                    Execution.create(
+                            orderId,
+                            totalFilledQuantity,
+                            averageExecutionPrice,
+                            totalExecutionAmount,
+                            0
+                    )
+            );
+            return;
+        }
+
+        execution.update(
+                totalFilledQuantity,
+                averageExecutionPrice,
+                totalExecutionAmount,
+                0
+        );
+    }
 }

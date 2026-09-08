@@ -8,5 +8,6 @@ public enum OrderStatus {
     FILLED,
     CANCELED,
     FAILED,
-    TIMEOUT
+    TIMEOUT,
+    PARTIALLY_FILLED_REJECTED
 }

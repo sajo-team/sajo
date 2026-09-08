@@ -272,12 +272,32 @@ public class KisOrderExecutionService {
         }
 
         if (rejectedQuantity > 0) {
-            log.warn(
-                    "KIS 주문에 거절 수량이 포함되어 있어 체결 반영을 보류합니다. orderId={}, orderNo={}, rejectedQuantity={}",
-                    orderId,
-                    item.orderNo(),
-                    rejectedQuantity
-            );
+            try {
+                orderExecutionCommandService.applyRejection(
+                        orderId,
+                        totalFilledQuantity,
+                        remainingQuantity,
+                        rejectedQuantity,
+                        averageExecutionPrice,
+                        totalExecutionAmount
+                );
+
+                log.info(
+                        "KIS 주문 거절 결과를 반영했습니다. orderId={}, orderNo={}, filledQuantity={}, rejectedQuantity={}",
+                        orderId,
+                        item.orderNo(),
+                        totalFilledQuantity,
+                        rejectedQuantity
+                );
+            } catch (BusinessException e) {
+                log.warn(
+                        "KIS 거절 결과를 Order에 반영할 수 없습니다. orderId={}, orderNo={}",
+                        orderId,
+                        item.orderNo(),
+                        e
+                );
+            }
+
             return;
         }
 
