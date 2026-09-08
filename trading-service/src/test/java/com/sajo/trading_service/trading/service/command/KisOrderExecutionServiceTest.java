@@ -808,4 +808,73 @@ class KisOrderExecutionServiceTest {
                         anyLong()
                 );
     }
+
+    @Test
+    @DisplayName("거절 수량과 미체결 잔여 수량이 함께 존재하면 주문을 종결하지 않는다")
+    void processExecution_rejectedWithRemainingQuantity() {
+        // given
+        UUID orderId = UUID.randomUUID();
+        Order order = createAcceptedOrder();
+
+        when(orderQueryRepository.findByIdAndDeletedAtIsNull(orderId))
+                .thenReturn(Optional.of(order));
+
+        mockAccountResponses(order);
+
+        KisOrderInquiryItem item =
+                new KisOrderInquiryItem(
+                        "20260908",
+                        "00000",
+                        order.getBrokerOrderNo(),
+                        "02",
+                        "005930",
+                        "4",
+                        "70000",
+                        "100000",
+                        "1",
+                        "69800",
+                        "69800",
+                        "2",
+                        "1",
+                        "N"
+                );
+
+        when(kisOrderClient.inquireDailyOrders(
+                any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any(),
+                any(), any(), any(), any(), any()
+        )).thenReturn(
+                successResponse(List.of(item))
+        );
+
+        // when
+        kisOrderExecutionService.processExecution(orderId);
+
+        // then
+        verify(orderExecutionCommandService)
+                .markExecutionChecked(
+                        eq(orderId),
+                        any(Instant.class)
+                );
+
+        verify(orderExecutionCommandService, never())
+                .applyRejection(
+                        any(),
+                        anyInt(),
+                        anyInt(),
+                        anyInt(),
+                        any(BigDecimal.class),
+                        anyLong()
+                );
+
+        verify(orderExecutionCommandService, never())
+                .applyExecution(
+                        any(),
+                        anyInt(),
+                        anyInt(),
+                        any(BigDecimal.class),
+                        anyLong()
+                );
+    }
 }

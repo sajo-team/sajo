@@ -272,6 +272,20 @@ public class KisOrderExecutionService {
         }
 
         if (rejectedQuantity > 0) {
+
+            if (remainingQuantity > 0) {
+                log.warn(
+                        "KIS 주문에 거절 수량과 미체결 잔여 수량이 함께 존재합니다. "
+                                + "주문을 종결하지 않고 다음 조회까지 유지합니다. "
+                                + "orderId={}, orderNo={}, rejectedQuantity={}, remainingQuantity={}",
+                        orderId,
+                        item.orderNo(),
+                        rejectedQuantity,
+                        remainingQuantity
+                );
+                return;
+            }
+
             try {
                 orderExecutionCommandService.applyRejection(
                         orderId,
@@ -283,7 +297,8 @@ public class KisOrderExecutionService {
                 );
 
                 log.info(
-                        "KIS 주문 거절 결과를 반영했습니다. orderId={}, orderNo={}, filledQuantity={}, rejectedQuantity={}",
+                        "KIS 주문 거절 결과를 반영했습니다. "
+                                + "orderId={}, orderNo={}, filledQuantity={}, rejectedQuantity={}",
                         orderId,
                         item.orderNo(),
                         totalFilledQuantity,
