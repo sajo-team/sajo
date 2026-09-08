@@ -7,6 +7,7 @@ import com.sajo.user_service.account.controller.dto.response.TokenStatusResponse
 import com.sajo.user_service.account.domain.EventType;
 import com.sajo.user_service.account.domain.KisTokenType;
 import com.sajo.user_service.account.service.query.KisTokenLogQueryService;
+import com.sajo.user_service.config.MethodSecurityConfig;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,6 +15,8 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.security.test.context.support.WithAnonymousUser;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -30,7 +33,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest(AccountAdminController.class)
 @Import({
         GlobalExceptionHandler.class,
-        CommonPageableAutoConfiguration.class
+        CommonPageableAutoConfiguration.class,
+        MethodSecurityConfig.class
 })
 class AccountAdminControllerTest {
 
@@ -42,6 +46,7 @@ class AccountAdminControllerTest {
 
     @Test
     @DisplayName("ADMIN 권한이면 토큰 발급 상태 목록 조회에 성공한다")
+    @WithMockUser(roles = "ADMIN")
     void getTokenStatuses_asAdmin_success() throws Exception {
         // given
         TokenStatusResponse item = new TokenStatusResponse(
@@ -51,10 +56,7 @@ class AccountAdminControllerTest {
         given(kisTokenLogQueryService.getTokenStatuses(any())).willReturn(page);
 
         // when & then
-        mockMvc.perform(
-                        get("/api/v1/admin/accounts/token-status")
-                                .header("X-User-Role", "ADMIN")
-                )
+        mockMvc.perform(get("/api/v1/admin/accounts/token-status"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.content[0].tokenType").value("ACCESS_TOKEN"));
@@ -62,25 +64,25 @@ class AccountAdminControllerTest {
 
     @Test
     @DisplayName("ADMIN이 아니면 토큰 발급 상태 목록 조회 시 403을 반환한다")
+    @WithMockUser(roles = "USER")
     void getTokenStatuses_asNonAdmin_forbidden() throws Exception {
-        mockMvc.perform(
-                        get("/api/v1/admin/accounts/token-status")
-                                .header("X-User-Role", "USER")
-                )
+        mockMvc.perform(get("/api/v1/admin/accounts/token-status"))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.success").value(false));
     }
 
     @Test
-    @DisplayName("X-User-Role 헤더 없이 요청하면 400을 반환한다 (Gateway를 거치지 않은 요청)")
-    void getTokenStatuses_withoutRoleHeader_badRequest() throws Exception {
+    @DisplayName("인증 정보 없이 요청하면 토큰 발급 상태 목록 조회 시 403을 반환한다 (Gateway를 거치지 않은 요청)")
+    @WithAnonymousUser
+    void getTokenStatuses_withoutAuthentication_forbidden() throws Exception {
         mockMvc.perform(get("/api/v1/admin/accounts/token-status"))
-                .andExpect(status().isBadRequest())
+                .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.success").value(false));
     }
 
     @Test
     @DisplayName("ADMIN 권한이면 특정 사용자 토큰 이력 조회에 성공한다")
+    @WithMockUser(roles = "ADMIN")
     void getTokenEventHistory_asAdmin_success() throws Exception {
         // given
         UUID userId = UUID.randomUUID();
@@ -90,10 +92,7 @@ class AccountAdminControllerTest {
         given(kisTokenLogQueryService.getTokenEventHistory(any(), any())).willReturn(page);
 
         // when & then
-        mockMvc.perform(
-                        get("/api/v1/admin/accounts/{userId}/token-status/history", userId)
-                                .header("X-User-Role", "ADMIN")
-                )
+        mockMvc.perform(get("/api/v1/admin/accounts/{userId}/token-status/history", userId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.content[0].errorCode").value("EGW00133"));
@@ -101,24 +100,23 @@ class AccountAdminControllerTest {
 
     @Test
     @DisplayName("ADMIN이 아니면 특정 사용자 토큰 이력 조회 시 403을 반환한다")
+    @WithMockUser(roles = "USER")
     void getTokenEventHistory_asNonAdmin_forbidden() throws Exception {
         UUID userId = UUID.randomUUID();
 
-        mockMvc.perform(
-                        get("/api/v1/admin/accounts/{userId}/token-status/history", userId)
-                                .header("X-User-Role", "USER")
-                )
+        mockMvc.perform(get("/api/v1/admin/accounts/{userId}/token-status/history", userId))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.success").value(false));
     }
 
     @Test
-    @DisplayName("X-User-Role 헤더 없이 특정 사용자 토큰 이력을 조회하면 400을 반환한다")
-    void getTokenEventHistory_withoutRoleHeader_badRequest() throws Exception {
+    @DisplayName("인증 정보 없이 요청하면 특정 사용자 토큰 이력 조회 시 403을 반환한다")
+    @WithAnonymousUser
+    void getTokenEventHistory_withoutAuthentication_forbidden() throws Exception {
         UUID userId = UUID.randomUUID();
 
         mockMvc.perform(get("/api/v1/admin/accounts/{userId}/token-status/history", userId))
-                .andExpect(status().isBadRequest())
+                .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.success").value(false));
     }
 }
