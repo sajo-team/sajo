@@ -125,4 +125,24 @@ public class OrderStatusCommandService {
                 failureMessage
         );
     }
+
+    @Transactional
+    public int applyFill(
+            UUID orderId,
+            int totalFilledQuantity,
+            int remainingQuantity
+    ) {
+        Order order =
+                orderCommandRepository.findByIdForUpdate(orderId)
+                        .orElseThrow(() ->
+                                new BusinessException(
+                                        TradingErrorCode.ORDER_NOT_FOUND
+                                )
+                        );
+
+        return order.applyFill(
+                totalFilledQuantity,
+                remainingQuantity
+        );
+    }
 }

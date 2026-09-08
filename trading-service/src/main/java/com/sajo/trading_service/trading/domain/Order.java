@@ -46,6 +46,12 @@ public class Order extends BaseUpdatableEntity {
     @Column(name = "order_quantity", nullable = false)
     private Integer orderQuantity;
 
+    @Column(name = "filled_quantity", nullable = false)
+    private Integer filledQuantity;
+
+    @Column(name = "remaining_quantity", nullable = false)
+    private Integer remainingQuantity;
+
     @Column(name = "estimated_order_amount", nullable = false)
     private Long estimatedOrderAmount;
 
@@ -86,6 +92,8 @@ public class Order extends BaseUpdatableEntity {
         this.orderType = orderType;
         this.signalPrice = signalPrice;
         this.orderQuantity = orderQuantity;
+        this.filledQuantity = 0;
+        this.remainingQuantity = orderQuantity;
         this.estimatedOrderAmount =
                 signalPrice * orderQuantity.longValue();
         this.status = OrderStatus.REQUESTED;
@@ -255,5 +263,69 @@ public class Order extends BaseUpdatableEntity {
         this.brokerOrderNo = brokerOrderNo;
         this.failureCode = failureCode;
         this.failureMessage = failureMessage;
+    }
+
+    public int applyFill(
+            int totalFilledQuantity,
+            int remainingQuantity
+    ) {
+        if (this.status != OrderStatus.ACCEPTED
+                && this.status != OrderStatus.PARTIALLY_FILLED) {
+            throw new BusinessException(
+                    TradingErrorCode.ORDER_STATUS_CHANGE_NOT_ALLOWED
+            );
+        }
+
+        if (totalFilledQuantity < 0
+                || remainingQuantity < 0
+                || totalFilledQuantity > this.orderQuantity) {
+            throw new BusinessException(
+                    TradingErrorCode.INVALID_ORDER
+            );
+        }
+
+        /*
+         * 이미 확인한 누적 체결 수량보다 작은 값으로 되돌아가는 것을 방지한다.
+         */
+        if (totalFilledQuantity < this.filledQuantity) {
+            throw new BusinessException(
+                    TradingErrorCode.INVALID_ORDER
+            );
+        }
+
+        /*
+         * 취소되지 않은 일반 주문 기준으로
+         * 체결 수량 + 미체결 수량은 주문 수량과 일치해야 한다.
+         *
+         * 취소/부분체결 후 취소는 별도 정책으로 처리한다.
+         */
+        if (totalFilledQuantity + remainingQuantity
+                != this.orderQuantity) {
+            throw new BusinessException(
+                    TradingErrorCode.INVALID_ORDER
+            );
+        }
+
+        int newlyFilledQuantity =
+                totalFilledQuantity - this.filledQuantity;
+
+        /*
+         * 동일한 누적 체결 결과를 다시 조회한 경우
+         * 상태나 수량을 중복 변경하지 않는다.
+         */
+        if (newlyFilledQuantity == 0) {
+            return 0;
+        }
+
+        this.filledQuantity = totalFilledQuantity;
+        this.remainingQuantity = remainingQuantity;
+
+        if (totalFilledQuantity == this.orderQuantity) {
+            this.status = OrderStatus.FILLED;
+        } else {
+            this.status = OrderStatus.PARTIALLY_FILLED;
+        }
+
+        return newlyFilledQuantity;
     }
 }
