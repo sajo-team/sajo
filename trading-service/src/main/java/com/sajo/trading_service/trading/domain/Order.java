@@ -328,4 +328,39 @@ public class Order extends BaseUpdatableEntity {
 
         return newlyFilledQuantity;
     }
+
+    public int cancel(
+            int totalFilledQuantity,
+            int remainingQuantity
+    ) {
+        if (this.status != OrderStatus.ACCEPTED
+                && this.status != OrderStatus.PARTIALLY_FILLED) {
+            throw new BusinessException(
+                    TradingErrorCode.ORDER_STATUS_CHANGE_NOT_ALLOWED
+            );
+        }
+
+        if (totalFilledQuantity < 0
+                || remainingQuantity < 0
+                || totalFilledQuantity > this.orderQuantity) {
+            throw new BusinessException(
+                    TradingErrorCode.INVALID_ORDER
+            );
+        }
+
+        if (totalFilledQuantity < this.filledQuantity) {
+            throw new BusinessException(
+                    TradingErrorCode.INVALID_ORDER
+            );
+        }
+
+        int newlyFilledQuantity =
+                totalFilledQuantity - this.filledQuantity;
+
+        this.filledQuantity = totalFilledQuantity;
+        this.remainingQuantity = remainingQuantity;
+        this.status = OrderStatus.CANCELED;
+
+        return newlyFilledQuantity;
+    }
 }
