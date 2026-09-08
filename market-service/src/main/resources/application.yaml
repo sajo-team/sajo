@@ -11,6 +11,8 @@ spring:
       retry:
         max-attempts: 10
         initial-interval: 2000
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
 
 management:
   endpoints:
@@ -33,6 +35,11 @@ sajo:
     indicator-enabled: ${MARKET_INDICATOR_SCHEDULER_ENABLED:false}
     indicator-cron: "${MARKET_INDICATOR_SCHEDULER_CRON:0 20 16 * * MON-FRI}"
     kis-request-interval: ${MARKET_SCHEDULER_KIS_REQUEST_INTERVAL:500ms}
+
+  kafka:
+    type-mappings:
+      trading.signal.generated: com.sajo.market_service.strategy.kafka.dto.TradingSignalGeneratedEvent
+
 
 ---
 spring:
