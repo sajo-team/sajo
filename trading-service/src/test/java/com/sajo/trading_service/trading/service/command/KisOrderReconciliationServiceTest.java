@@ -465,8 +465,8 @@ class KisOrderReconciliationServiceTest {
         kisOrderReconciliationService.reconcile(orderId);
 
         // then
-        verify(orderStatusCommandService)
-                .recordReconciliationFailure(orderId);
+        verify(orderStatusCommandService, never())
+                .recordReconciliationFailure(any());
 
         verifyNoInteractions(kisOrderMatcher);
 
@@ -601,8 +601,8 @@ class KisOrderReconciliationServiceTest {
         // then
         verifyNoInteractions(kisOrderMatcher);
 
-        verify(orderStatusCommandService)
-                .recordReconciliationFailure(orderId);
+        verify(orderStatusCommandService, never())
+                .recordReconciliationFailure(any());
 
         verify(orderStatusCommandService, never())
                 .accept(any(), any());
@@ -640,8 +640,8 @@ class KisOrderReconciliationServiceTest {
         );
 
         // then
-        verify(orderStatusCommandService)
-                .recordReconciliationFailure(orderId);
+        verify(orderStatusCommandService, never())
+                .recordReconciliationFailure(any());
 
         verify(orderStatusCommandService, never())
                 .accept(any(), any());
@@ -651,8 +651,8 @@ class KisOrderReconciliationServiceTest {
     }
 
     @Test
-    @DisplayName("계좌 정보 조회 중 오류가 발생하면 주문 보정 실패 횟수를 기록한다")
-    void reconcile_accountError_recordFailure() {
+    @DisplayName("계좌 정보 조회 중 오류가 발생하면 기존 상태를 유지한다")
+    void reconcile_accountError_keepStatus() {
         // given
         UUID orderId = UUID.randomUUID();
         Order order = createProcessingOrder();
@@ -667,8 +667,8 @@ class KisOrderReconciliationServiceTest {
         kisOrderReconciliationService.reconcile(orderId);
 
         // then
-        verify(orderStatusCommandService)
-                .recordReconciliationFailure(orderId);
+        verify(orderStatusCommandService, never())
+                .recordReconciliationFailure(any());
 
         verifyNoInteractions(kisOrderClient);
         verifyNoInteractions(kisOrderMatcher);

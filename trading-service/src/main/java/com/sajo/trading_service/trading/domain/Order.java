@@ -246,7 +246,9 @@ public class Order extends BaseUpdatableEntity {
         }
 
         if (brokerOrderNo == null || brokerOrderNo.isBlank()) {
-            throw new IllegalArgumentException("brokerOrderNo는 필수입니다.");
+            throw new BusinessException(
+                    TradingErrorCode.INVALID_ORDER
+            );
         }
 
         this.status = OrderStatus.TIMEOUT;
