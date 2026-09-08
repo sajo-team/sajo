@@ -633,6 +633,31 @@ class KisOrderReconciliationServiceTest {
                 .fail(any(), any(), any());
     }
 
+    @Test
+    @DisplayName("계좌 정보 조회 중 오류가 발생하면 주문 보정 실패 횟수를 기록한다")
+    void reconcile_accountError_recordFailure() {
+        // given
+        UUID orderId = UUID.randomUUID();
+        Order order = createProcessingOrder();
+
+        when(orderQueryRepository.findByIdAndDeletedAtIsNull(orderId))
+                .thenReturn(Optional.of(order));
+
+        when(accountClient.getAccessToken(order.getUserId()))
+                .thenThrow(new RuntimeException("Account 조회 오류"));
+
+        // when
+        kisOrderReconciliationService.reconcile(orderId);
+
+        // then
+        verify(orderStatusCommandService)
+                .recordReconciliationFailure(orderId);
+
+        verifyNoInteractions(kisOrderClient);
+        verifyNoInteractions(kisOrderMatcher);
+    }
+
+
     private Order createOrder() {
         return Order.create(
                 UUID.randomUUID(),

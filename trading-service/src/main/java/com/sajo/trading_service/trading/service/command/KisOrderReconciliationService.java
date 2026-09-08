@@ -70,11 +70,26 @@ public class KisOrderReconciliationService {
         /*
          * KIS 조회에 필요한 인증/계좌 정보 조회.
          */
-        AccountTokenResponse tokenResponse =
-                accountClient.getAccessToken(order.getUserId());
+        AccountTokenResponse tokenResponse;
+        AccountOrderInfoResponse infoResponse;
 
-        AccountOrderInfoResponse infoResponse =
-                accountClient.getOrderInfo(order.getUserId());
+        try {
+            tokenResponse =
+                    accountClient.getAccessToken(order.getUserId());
+
+            infoResponse =
+                    accountClient.getOrderInfo(order.getUserId());
+
+        } catch (RuntimeException e) {
+            log.warn(
+                    "KIS 주문 보정을 위한 계좌 정보 조회 중 오류가 발생했습니다. orderId={}",
+                    orderId,
+                    e
+            );
+
+            orderStatusCommandService.recordReconciliationFailure(orderId);
+            return;
+        }
 
         /*
          * KIS 일별주문체결조회는 날짜 기준으로 조회한다.
@@ -94,6 +109,15 @@ public class KisOrderReconciliationService {
                 ? "02"
                 : "01";
 
+        /*
+         * brokerOrderNo가 없는 미확정 주문은 ODNO를 빈 문자열로 전달한다.
+         *
+         * KIS 모의투자 환경에서 ODNO="" 요청 시
+         * 주문번호 필터 없이 조회되는지 실제 응답 검증이 필요하다.
+         *
+         * 검증 전까지 NOT_FOUND 결과만으로 즉시 실패시키지 않고
+         * reconciliation 재시도 정책을 통해 제한적으로 재확인한다.
+         */
         String orderNo =
                 order.getBrokerOrderNo() == null
                 ? ""

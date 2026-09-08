@@ -100,4 +100,22 @@ class OrderRecoveryCommandServiceTest {
         verify(kisOrderReconciliationService)
                 .reconcile(orderId2);
     }
+
+    @Test
+    @DisplayName("오래된 TIMEOUT 주문을 KIS 주문 보정 대상으로 전달한다")
+    void recoverTimeoutOrders_reconcile() {
+        // given
+        UUID orderId1 = UUID.randomUUID();
+        UUID orderId2 = UUID.randomUUID();
+
+        when(orderQueryRepository.findStaleTimeoutOrderIds(any()))
+                .thenReturn(List.of(orderId1, orderId2));
+
+        // when
+        orderRecoveryCommandService.recoverTimeoutOrders();
+
+        // then
+        verify(kisOrderReconciliationService).reconcile(orderId1);
+        verify(kisOrderReconciliationService).reconcile(orderId2);
+    }
 }

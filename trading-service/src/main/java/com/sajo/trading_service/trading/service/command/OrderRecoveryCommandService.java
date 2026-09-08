@@ -17,6 +17,9 @@ public class OrderRecoveryCommandService {
 
     private static final long REQUESTED_STALE_MINUTES = 5L;
     private static final long ACCOUNT_RETRY_STALE_SECONDS = 30L;
+
+    // KIS 주문 요청 후 응답 지연이나 상태 반영 실패로 PROCESSING 상태가 장시간 유지되는 경우,
+    // 5분 이후 주문 조회 기반 reconciliation 대상으로 처리한다.
     private static final long PROCESSING_STALE_MINUTES = 5L;
     private static final long TIMEOUT_RECONCILIATION_MINUTES = 1L;
 
