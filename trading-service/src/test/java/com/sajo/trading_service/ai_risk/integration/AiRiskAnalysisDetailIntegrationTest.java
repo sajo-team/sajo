@@ -24,7 +24,7 @@ import java.util.List;
 import java.util.UUID;
 
 @Tag("integration")
-@Tag("unit")
+@Tag("ai-risk")
 @Testcontainers
 @SpringBootTest
 @AutoConfigureMockMvc
