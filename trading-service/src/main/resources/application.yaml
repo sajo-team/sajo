@@ -67,6 +67,8 @@ spring:
         default_schema: trading
     hibernate:
       ddl-auto: validate
+  # MONGO_PASSWORD가 URI에 그대로 삽입됨 - URI 예약문자(@ : / ? # %) 포함 시 파싱이 깨질 수 있으니
+  # .env.example의 제약(영숫자 권장)을 반드시 지킬 것
   mongodb:
     uri: mongodb://root:${MONGO_PASSWORD}@mongo-ai-risk:27017/ai_risk_db?authSource=admin
     auto-index-creation: true
