@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -154,29 +155,15 @@ class AiRiskAnalysisConcurrencyTest {
 
         List<AiRiskAnalysis> analyses = repository.findAll();
 
-        analyses.forEach(analysis ->
-                System.out.println(
-                        "id=" + analysis.getId()
-                                + ", status=" + analysis.getStatus()
-                )
-        );
-
-        exceptions.forEach(exception ->
-                System.out.println(
-                        "exception="
-                                + exception.getClass().getSimpleName()
-                                + ": "
-                                + exception.getMessage()
-                )
-        );
-
         long pendingCount = analyses.stream()
                 .filter(analysis ->
                         analysis.getStatus() == AiAnalysisStatus.PENDING)
                 .count();
 
         assertThat(pendingCount).isEqualTo(1);
-
         assertThat(analyses).hasSize(1);
+
+        assertThat(exceptions).hasSize(1);
+        assertThat(exceptions.getFirst()).isInstanceOf(DataIntegrityViolationException.class);
     }
 }

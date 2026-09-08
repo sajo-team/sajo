@@ -118,12 +118,6 @@ public class AiRiskAnalysisHistoryIntegrationTest {
 
         UUID userId = UUID.randomUUID();
 
-        AiRiskAnalysis analysis1 = AiRiskAnalysis.create(
-                userId,
-                UUID.randomUUID(),
-                UUID.randomUUID()
-        );
-
         for(int i = 0; i<11; i++){
             AiRiskAnalysis analysis = AiRiskAnalysis.create(
                     userId,
