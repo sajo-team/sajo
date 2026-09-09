@@ -19,17 +19,16 @@ import java.util.UUID;
  */
 @FeignClient(
         name = "market-service",
-        contextId = "strategyMarketStockFeignClient",
-        path = "/internal/v1/stocks"
+        contextId = "strategyMarketStockFeignClient"
 )
 public interface MarketStockFeignClient {
 
-    @GetMapping("/{stockCode}/indicator")
+    @GetMapping("/internal/v1/stocks/{stockCode}/indicator")
     MarketStockIndicatorResponse getMarketStockIndicator(
             @PathVariable("stockCode") String stockCode
     );
 
-    @GetMapping("/{stockCode}/quote")
+    @GetMapping("/internal/v1/stocks/{stockCode}/quote")
     MarketStockQuoteResponse getMarketStockQuote(
             @RequestHeader("X-User-Id") UUID userId,
             @PathVariable("stockCode") String stockCode
