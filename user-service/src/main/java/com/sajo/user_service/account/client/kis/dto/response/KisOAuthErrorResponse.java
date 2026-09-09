@@ -1,4 +1,4 @@
-package com.sajo.user_service.account.client.dto.response;
+package com.sajo.user_service.account.client.kis.dto.response;
 
 // kis oauth(토큰 발급/승인키/폐기) 에러 응답
 public record KisOAuthErrorResponse(

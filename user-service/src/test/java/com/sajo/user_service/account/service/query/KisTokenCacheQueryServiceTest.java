@@ -1,9 +1,9 @@
 package com.sajo.user_service.account.service.query;
 
 import com.sajo.common.exception.BusinessException;
-import com.sajo.user_service.account.client.KisOAuthClient;
-import com.sajo.user_service.account.client.dto.response.KisAccessTokenResponse;
-import com.sajo.user_service.account.client.dto.response.KisApprovalKeyResponse;
+import com.sajo.user_service.account.client.kis.KisOAuthClient;
+import com.sajo.user_service.account.client.kis.dto.response.KisAccessTokenResponse;
+import com.sajo.user_service.account.client.kis.dto.response.KisApprovalKeyResponse;
 import com.sajo.user_service.account.domain.AccountType;
 import com.sajo.user_service.account.exception.AccountErrorCode;
 import com.sajo.user_service.account.service.command.KisTokenLogCommandService;

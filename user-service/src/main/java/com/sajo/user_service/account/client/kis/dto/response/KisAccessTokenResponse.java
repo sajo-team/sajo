@@ -1,4 +1,4 @@
-package com.sajo.user_service.account.client.dto.response;
+package com.sajo.user_service.account.client.kis.dto.response;
 
 public record KisAccessTokenResponse(
         String access_token,

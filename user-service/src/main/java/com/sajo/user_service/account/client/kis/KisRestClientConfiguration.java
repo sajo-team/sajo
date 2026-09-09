@@ -1,4 +1,4 @@
-package com.sajo.user_service.account.client;
+package com.sajo.user_service.account.client.kis;
 
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -10,7 +10,7 @@ import java.time.Duration;
 
 @Configuration
 @EnableConfigurationProperties(KisApiProperties.class)
-public class AccountClientConfiguration {
+public class KisRestClientConfiguration {
 
     @Bean
     RestClient.Builder kisRestClientBuilder() {

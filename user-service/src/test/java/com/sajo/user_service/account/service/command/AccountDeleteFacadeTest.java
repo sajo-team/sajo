@@ -1,7 +1,7 @@
 package com.sajo.user_service.account.service.command;
 
 import com.sajo.common.exception.BusinessException;
-import com.sajo.user_service.account.client.KisOAuthClient;
+import com.sajo.user_service.account.client.kis.KisOAuthClient;
 import com.sajo.user_service.account.client.feign.TradingFeignClient;
 import com.sajo.user_service.account.client.feign.dto.response.TradingActiveStatusResponse;
 import com.sajo.user_service.account.domain.Account;

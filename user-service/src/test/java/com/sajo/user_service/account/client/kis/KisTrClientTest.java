@@ -1,8 +1,8 @@
-package com.sajo.user_service.account.client;
+package com.sajo.user_service.account.client.kis;
 
 import com.sajo.common.exception.BusinessException;
-import com.sajo.user_service.account.client.dto.response.KisBalanceResponse;
-import com.sajo.user_service.account.client.dto.response.KisOrderableAmountResponse;
+import com.sajo.user_service.account.client.kis.dto.response.KisBalanceResponse;
+import com.sajo.user_service.account.client.kis.dto.response.KisOrderableAmountResponse;
 import com.sajo.user_service.account.domain.AccountType;
 import com.sajo.user_service.account.exception.AccountErrorCode;
 import org.junit.jupiter.api.DisplayName;

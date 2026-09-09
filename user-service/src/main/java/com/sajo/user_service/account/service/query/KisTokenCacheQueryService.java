@@ -1,6 +1,6 @@
 package com.sajo.user_service.account.service.query;
 
-import com.sajo.user_service.account.client.KisOAuthClient;
+import com.sajo.user_service.account.client.kis.KisOAuthClient;
 import com.sajo.user_service.account.domain.AccountType;
 import com.sajo.user_service.account.domain.KisTokenType;
 import com.sajo.user_service.account.exception.KisBusinessException;

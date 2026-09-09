@@ -1,8 +1,8 @@
 package com.sajo.user_service.account.service.command;
 
 import com.sajo.common.exception.BusinessException;
-import com.sajo.user_service.account.client.KisOAuthClient;
-import com.sajo.user_service.account.client.dto.response.KisAccessTokenResponse;
+import com.sajo.user_service.account.client.kis.KisOAuthClient;
+import com.sajo.user_service.account.client.kis.dto.response.KisAccessTokenResponse;
 import com.sajo.user_service.account.domain.Account;
 import com.sajo.user_service.account.domain.AccountType;
 import com.sajo.user_service.account.domain.KisTokenType;
