@@ -207,6 +207,10 @@ services:
       SPRING_PROFILES_ACTIVE: prod
       CONFIG_SERVER_URL: http://config-server:8888
       DB_PASSWORD: ${DB_PASSWORD}
+      # ⚠️ 최초 배포 1회용 임시 부트스트랩 override.
+      # market-service/docs/migrations/README.md 참고.
+      # 첫 정상 기동 + V44 실행 확인 후 이 줄을 반드시 삭제하고 재배포할 것.
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
     # ports 없음 - user-service와 동일한 이유 (Gateway만 내부 DNS로 접근하면 됨)
     networks:
       - sajo-net
@@ -228,6 +232,10 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       MONGO_PASSWORD: ${MONGO_PASSWORD}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
+      # ⚠️ 최초 배포 1회용 임시 부트스트랩 override.
+      # market-service/docs/migrations/README.md 참고.
+      # 첫 정상 기동 확인 후 이 줄을 반드시 삭제하고 재배포할 것.
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
     # ports 없음 - user-service와 동일한 이유 (Gateway만 내부 DNS로 접근하면 됨)
     networks:
       - sajo-net

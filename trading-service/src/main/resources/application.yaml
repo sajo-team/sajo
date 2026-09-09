@@ -63,7 +63,7 @@ spring:
     hibernate:
       ddl-auto: validate
   mongodb:
-    uri: mongodb://mongo-ai-risk:27017/ai_risk_db
+    uri: mongodb://root:${MONGO_PASSWORD}@mongo-ai-risk:27017/ai_risk_db?authSource=admin
     auto-index-creation: true
   kafka:
     bootstrap-servers: kafka:9092
