@@ -15,6 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
@@ -96,7 +97,11 @@ public class StrategyEvaluationService {
         validateOrderAmount(strategy);
 
         TradingSignalPayload payload = new TradingSignalPayload(
-                UUID.randomUUID(),
+                createDeterministicSignalId(
+                        request.sourceEventId(),
+                        strategy.getId(),
+                        signalType
+                ),
                 strategy.getId(),
                 strategy.getUserId(),
                 strategy.getStockCode(),
@@ -123,6 +128,15 @@ public class StrategyEvaluationService {
                 payload.strategyId(),
                 payload.signalType()
         );
+    }
+
+    private UUID createDeterministicSignalId(
+            UUID sourceEventId,
+            UUID strategyId,
+            SignalType signalType
+    ) {
+        String identity = sourceEventId + ":" + strategyId + ":" + signalType;
+        return UUID.nameUUIDFromBytes(identity.getBytes(StandardCharsets.UTF_8));
     }
 
     private String createSignalReason(
