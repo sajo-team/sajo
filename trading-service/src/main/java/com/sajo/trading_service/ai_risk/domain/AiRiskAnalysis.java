@@ -13,11 +13,6 @@ import org.hibernate.type.SqlTypes;
 import java.util.List;
 import java.util.UUID;
 
-//TODO: Partial Unique Index 적용
-//CREATE UNIQUE INDEX uq_ai_risk_analysis_pending
-//ON p_ai_risk_analyses (user_id, strategy_id, backtest_id)
-//WHERE status = 'PENDING';
-
 @Entity
 @Table(name = "p_ai_risk_analyses")
 @Getter

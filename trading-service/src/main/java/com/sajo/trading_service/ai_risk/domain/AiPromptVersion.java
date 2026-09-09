@@ -9,12 +9,6 @@ import lombok.NoArgsConstructor;
 import java.time.Instant;
 import java.util.UUID;
 
-// TODO: Partial Unique Index 적용
-// 동일한 prompt_key에는 하나의 ACTIVE 프롬프트만 존재해야 한다.
-// CREATE UNIQUE INDEX uq_ai_prompt_active
-// ON p_ai_prompt_versions (prompt_key)
-// WHERE status = 'ACTIVE';
-
 @Entity
 @Table(
         name = "p_ai_prompt_versions",
