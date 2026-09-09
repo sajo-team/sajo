@@ -68,6 +68,12 @@ spring:
       host: localhost
       port: 6379
       password: redis
+  cloud:
+    openfeign:
+      client:
+        config:
+          user-service:
+            url: ${USER_SERVICE_URL:http://localhost:8081}
 
 # user-service/trading-service local 프로필과 반드시 동일해야 함 (internal API 호출/검증 쌍)
 sajo:
