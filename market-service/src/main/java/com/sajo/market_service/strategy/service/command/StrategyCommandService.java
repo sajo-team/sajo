@@ -2,7 +2,6 @@ package com.sajo.market_service.strategy.service.command;
 
 import com.sajo.common.exception.BusinessException;
 import com.sajo.market_service.market.controller.dto.response.InternalStockIndicatorResponse;
-import com.sajo.market_service.market.controller.dto.response.InternalStockQuoteResponse;
 import com.sajo.market_service.market.dto.response.QuoteResponse;
 import com.sajo.market_service.market.service.query.MarketInternalQueryService;
 import com.sajo.market_service.market.service.query.MarketQuoteQueryService;
