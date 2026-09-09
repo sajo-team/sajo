@@ -11,7 +11,8 @@ import java.util.List;
 @Component
 @RequiredArgsConstructor
 public class BacktestPriceReader {
-    // Market의 백테스트 기간에 맞는 기존 일별 시세 조회 기능 호출
+    // MVP에서는 요청 기간의 일수만큼 최근 일별 시세를 조회한다.
+    // 추후 startDate ~ endDate 정확한 기간 조회 방식으로 전환한다.
 
     private final MarketStockPriceQueryService marketStockPriceQueryService;
 
@@ -20,7 +21,10 @@ public class BacktestPriceReader {
             LocalDate startDate,
             LocalDate endDate
     ) {
+        // TODO: startDate, endDate 입력을 통한 기간 지정으로 수정 예정
+        int days = Math.toIntExact(endDate.toEpochDay() - startDate.toEpochDay()) + 1;
+
         return marketStockPriceQueryService
-                .getDailyPrices(stockCode, startDate, endDate);
+                .getRecentDailyPrices(stockCode, days);
     }
 }

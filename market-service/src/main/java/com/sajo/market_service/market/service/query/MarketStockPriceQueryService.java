@@ -55,10 +55,12 @@ public class MarketStockPriceQueryService {
         MarketStock stock = findStock(stockCode);
 
         return marketStockPriceQueryRepository
-                .findDailyRestPrices(stock.getId(), PriceSource.REST, startDate, endDate)
-                .stream()
-                .map(MarketStockPriceResponse::from)
-                .toList();
+                .findDailyRestPrices(
+                        stock.getId(),
+                        PriceSource.REST,
+                        startDate,
+                        endDate
+                ).stream().map(MarketStockPriceResponse::from).toList();
     }
 
     private MarketStock findStock(String stockCode) {
