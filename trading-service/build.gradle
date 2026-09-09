@@ -31,6 +31,7 @@ dependencies {
     testImplementation platform('org.testcontainers:testcontainers-bom:2.0.3')
     testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
     testImplementation 'org.testcontainers:testcontainers-postgresql'
+    testImplementation 'org.testcontainers:testcontainers-mongodb'
 
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 
