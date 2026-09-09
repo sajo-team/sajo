@@ -10,12 +10,11 @@ import java.util.UUID;
 
 @FeignClient(
         name = "market-service",
-        contextId = "strategyFeignClient",
-        path = "/internal/v1/strategies"
+        contextId = "strategyFeignClient"
 )
 public interface StrategyFeignClient {
 
-    @GetMapping("/{strategyId}")
+    @GetMapping("/internal/v1/strategies/{strategyId}")
     StrategyInternalResponse getStrategy(
             @PathVariable("strategyId") UUID strategyId
     );
