@@ -4,6 +4,7 @@ import com.sajo.common.exception.BusinessException;
 import com.sajo.common.exception.GlobalExceptionHandler;
 import com.sajo.common.response.PageResponse;
 import com.sajo.market_service.market.dto.response.MarketStockResponse;
+import com.sajo.market_service.market.dto.response.MarketStockSearchResponse;
 import com.sajo.market_service.market.exception.MarketErrorCode;
 import com.sajo.market_service.market.service.query.MarketStockQueryService;
 import org.junit.jupiter.api.Test;
@@ -49,11 +50,12 @@ class MarketStockQueryControllerTest {
     @Test
     void searchesStocks() throws Exception {
         given(marketStockQueryService.searchStocks(eq("삼성"), eq(0), eq(10), org.mockito.ArgumentMatchers.isNull()))
-                .willReturn(pageResponse());
+                .willReturn(searchPageResponse());
 
         mockMvc.perform(get("/api/v1/market/stocks/search").param("keyword", "삼성"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.content[0].stockName").value("삼성전자"));
+                .andExpect(jsonPath("$.data.content[0].stockName").value("삼성전자"))
+                .andExpect(jsonPath("$.data.content[0].stockId").isNotEmpty());
     }
 
     @Test
@@ -98,7 +100,7 @@ class MarketStockQueryControllerTest {
         given(marketStockQueryService.getStocks(eq(null), eq(0), eq(10), eq("stockCode,asc")))
                 .willReturn(pageResponse());
         given(marketStockQueryService.searchStocks(eq("삼성"), eq(0), eq(10), eq("marketType,desc")))
-                .willReturn(pageResponse());
+                .willReturn(searchPageResponse());
 
         mockMvc.perform(get("/api/v1/market/stocks").param("sort", "stockCode,asc"))
                 .andExpect(status().isOk());
@@ -135,7 +137,16 @@ class MarketStockQueryControllerTest {
         return new PageResponse<>(List.of(stockResponse()), 0, 10, 1, 1);
     }
 
+    private PageResponse<MarketStockSearchResponse> searchPageResponse() {
+        return new PageResponse<>(List.of(searchResponse()), 0, 10, 1, 1);
+    }
+
     private MarketStockResponse stockResponse() {
         return new MarketStockResponse("005930", "삼성전자", "KOSPI", "001", 1_000_000L, null);
+    }
+
+    private MarketStockSearchResponse searchResponse() {
+        return new MarketStockSearchResponse(
+                java.util.UUID.randomUUID(), "005930", "삼성전자", "KOSPI", "001", 1_000_000L, null);
     }
 }

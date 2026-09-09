@@ -14,9 +14,11 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -78,6 +80,22 @@ class MarketStockQueryServiceTest {
 
         verify(marketStockQueryRepository).searchByStockNameOrStockCode(org.mockito.ArgumentMatchers.eq("삼성"), org.mockito.ArgumentMatchers.any());
         verify(marketStockQueryRepository).searchByStockNameOrStockCode(org.mockito.ArgumentMatchers.eq("593"), org.mockito.ArgumentMatchers.any());
+    }
+
+    @Test
+    void searchResponseContainsTheMarketStockId() {
+        MarketStock stock = stock("005930", "삼성전자", "KOSPI");
+        UUID stockId = UUID.randomUUID();
+        ReflectionTestUtils.setField(stock, "id", stockId);
+        given(marketStockQueryRepository.searchByStockNameOrStockCode(org.mockito.ArgumentMatchers.eq("삼성"), org.mockito.ArgumentMatchers.any()))
+                .willReturn(new PageImpl<>(List.of(stock)));
+
+        PageResponse<com.sajo.market_service.market.dto.response.MarketStockSearchResponse> response =
+                service.searchStocks("삼성", 0, 10, null);
+
+        assertThat(response.content()).singleElement()
+                .extracting(com.sajo.market_service.market.dto.response.MarketStockSearchResponse::stockId)
+                .isEqualTo(stockId);
     }
 
     @Test
