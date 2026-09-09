@@ -82,7 +82,7 @@ class TradingSignalCommandServiceTest {
                 .willReturn(false);
 
         given(autoTradingCommandRepository
-                .findByUserIdAndStrategyIdAndDeletedAtIsNull(userId, strategyId))
+                .findByUserIdAndStrategyIdForUpdate(userId, strategyId))
                 .willReturn(Optional.of(autoTrading));
 
         given(autoTrading.getId())
@@ -185,7 +185,7 @@ class TradingSignalCommandServiceTest {
                 .willReturn(false);
 
         given(autoTradingCommandRepository
-                .findByUserIdAndStrategyIdAndDeletedAtIsNull(userId, strategyId))
+                .findByUserIdAndStrategyIdForUpdate(userId, strategyId))
                 .willReturn(Optional.empty());
 
         // when & then
@@ -208,7 +208,7 @@ class TradingSignalCommandServiceTest {
                 .willReturn(false);
 
         given(autoTradingCommandRepository
-                .findByUserIdAndStrategyIdAndDeletedAtIsNull(userId, strategyId))
+                .findByUserIdAndStrategyIdForUpdate(userId, strategyId))
                 .willReturn(Optional.of(autoTrading));
 
         given(autoTrading.getEnabled())
@@ -234,7 +234,7 @@ class TradingSignalCommandServiceTest {
                 .willReturn(false);
 
         given(autoTradingCommandRepository
-                .findByUserIdAndStrategyIdAndDeletedAtIsNull(userId, strategyId))
+                .findByUserIdAndStrategyIdForUpdate(userId, strategyId))
                 .willReturn(Optional.of(autoTrading));
 
         given(autoTrading.getEnabled())
@@ -267,7 +267,7 @@ class TradingSignalCommandServiceTest {
                 .willReturn(false);
 
         given(autoTradingCommandRepository
-                .findByUserIdAndStrategyIdAndDeletedAtIsNull(userId, strategyId))
+                .findByUserIdAndStrategyIdForUpdate(userId, strategyId))
                 .willReturn(Optional.of(autoTrading));
 
         given(autoTrading.getEnabled())
@@ -359,13 +359,17 @@ class TradingSignalCommandServiceTest {
                 .willReturn(false);
 
         given(autoTradingCommandRepository
-                .findByUserIdAndStrategyIdAndDeletedAtIsNull(userId, strategyId))
+                .findByUserIdAndStrategyIdForUpdate(
+                        userId,
+                        strategyId
+                ))
                 .willReturn(Optional.of(autoTrading));
 
         given(autoTrading.getEnabled())
                 .willReturn(true);
 
-        given(tradingLimitCommandRepository.findByUserIdForUpdate(userId))
+        given(tradingLimitCommandRepository
+                .findByUserIdForUpdate(userId))
                 .willReturn(Optional.of(tradingLimit));
     }
 
@@ -380,7 +384,7 @@ class TradingSignalCommandServiceTest {
                 .willReturn(false);
 
         given(autoTradingCommandRepository
-                .findByUserIdAndStrategyIdAndDeletedAtIsNull(userId, strategyId))
+                .findByUserIdAndStrategyIdForUpdate(userId, strategyId))
                 .willReturn(Optional.of(autoTrading));
 
         given(autoTrading.getId())
@@ -479,7 +483,7 @@ class TradingSignalCommandServiceTest {
                 .willReturn(false);
 
         given(autoTradingCommandRepository
-                .findByUserIdAndStrategyIdAndDeletedAtIsNull(userId, strategyId))
+                .findByUserIdAndStrategyIdForUpdate(userId, strategyId))
                 .willReturn(Optional.of(autoTrading));
 
         given(autoTrading.getEnabled())

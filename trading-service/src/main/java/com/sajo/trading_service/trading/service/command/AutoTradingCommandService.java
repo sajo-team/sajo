@@ -12,6 +12,7 @@ import com.sajo.trading_service.trading.domain.AutoTrading;
 import com.sajo.trading_service.trading.exception.TradingErrorCode;
 import com.sajo.trading_service.trading.repository.command.AutoTradingCommandRepository;
 import com.sajo.trading_service.trading.repository.command.TradingLimitCommandRepository;
+import com.sajo.trading_service.trading.repository.query.OrderQueryRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,6 +30,7 @@ public class AutoTradingCommandService {
     private final TradingLimitCommandRepository tradingLimitCommandRepository;
     private final StrategyClient strategyClient;
     private final AutoTradingCreateTransactionService autoTradingCreateTransactionService;
+    private final OrderQueryRepository orderQueryRepository;
 
     public AutoTradingCreateResponse createAutoTrading(
             UUID userId,
@@ -92,5 +94,39 @@ public class AutoTradingCommandService {
         autoTrading.update(request.enabled());
 
         return AutoTradingUpdateResponse.from(autoTrading);
+    }
+
+    @Transactional
+    public void deleteAutoTrading(
+            UUID userId,
+            UUID autoTradingId
+    ) {
+        AutoTrading autoTrading =
+                autoTradingCommandRepository
+                        .findByIdAndUserIdForUpdate(
+                                autoTradingId,
+                                userId
+                        )
+                        .orElseThrow(() ->
+                                new BusinessException(
+                                        TradingErrorCode.AUTO_TRADING_NOT_FOUND
+                                )
+                        );
+
+        if (orderQueryRepository
+                .existsActiveOrderByAutoTradingId(autoTradingId)) {
+            throw new BusinessException(
+                    TradingErrorCode.AUTO_TRADING_HAS_ACTIVE_ORDER
+            );
+        }
+
+        if (orderQueryRepository
+                .existsOpenPositionByAutoTradingId(autoTradingId)) {
+            throw new BusinessException(
+                    TradingErrorCode.AUTO_TRADING_HAS_OPEN_POSITION
+            );
+        }
+
+        autoTrading.softDelete(userId);
     }
 }

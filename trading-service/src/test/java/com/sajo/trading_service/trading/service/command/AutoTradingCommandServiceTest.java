@@ -12,6 +12,7 @@ import com.sajo.trading_service.trading.domain.AutoTrading;
 import com.sajo.trading_service.trading.exception.TradingErrorCode;
 import com.sajo.trading_service.trading.repository.command.AutoTradingCommandRepository;
 import com.sajo.trading_service.trading.repository.command.TradingLimitCommandRepository;
+import com.sajo.trading_service.trading.repository.query.OrderQueryRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -42,6 +43,9 @@ class AutoTradingCommandServiceTest {
 
     @Mock
     private AutoTradingCreateTransactionService autoTradingCreateTransactionService;
+
+    @Mock
+    private OrderQueryRepository orderQueryRepository;
 
     @InjectMocks
     private AutoTradingCommandService autoTradingCommandService;
@@ -314,5 +318,174 @@ class AutoTradingCommandServiceTest {
                                     TradingErrorCode.TRADING_LIMIT_REQUIRED
                             );
                 });
+    }
+
+    @Test
+    @DisplayName("미청산 수량이 없으면 자동매매 설정을 삭제한다")
+    void deleteAutoTrading() {
+        UUID userId = UUID.randomUUID();
+        UUID autoTradingId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+
+        AutoTrading autoTrading =
+                AutoTrading.create(
+                        userId,
+                        strategyId
+                );
+
+        given(autoTradingCommandRepository
+                .findByIdAndUserIdForUpdate(
+                        autoTradingId,
+                        userId
+                ))
+                .willReturn(Optional.of(autoTrading));
+
+        given(orderQueryRepository
+                .existsOpenPositionByAutoTradingId(
+                        autoTradingId
+                ))
+                .willReturn(false);
+
+        given(orderQueryRepository
+                .existsActiveOrderByAutoTradingId(autoTradingId))
+                .willReturn(false);
+
+        autoTradingCommandService.deleteAutoTrading(
+                userId,
+                autoTradingId
+        );
+
+        assertThat(autoTrading.getDeletedAt())
+                .isNotNull();
+
+        assertThat(autoTrading.getDeletedBy())
+                .isEqualTo(userId);
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 자동매매 설정은 삭제할 수 없다")
+    void deleteAutoTradingNotFound() {
+        UUID userId = UUID.randomUUID();
+        UUID autoTradingId = UUID.randomUUID();
+
+        given(autoTradingCommandRepository
+                .findByIdAndUserIdForUpdate(
+                        autoTradingId,
+                        userId
+                ))
+                .willReturn(Optional.empty());
+
+        assertThatThrownBy(() ->
+                autoTradingCommandService.deleteAutoTrading(
+                        userId,
+                        autoTradingId
+                )
+        )
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException =
+                            (BusinessException) exception;
+
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(
+                                    TradingErrorCode.AUTO_TRADING_NOT_FOUND
+                            );
+                });
+    }
+
+    @Test
+    @DisplayName("미청산 수량이 존재하면 자동매매 설정을 삭제할 수 없다")
+    void deleteAutoTradingWithOpenPosition() {
+        UUID userId = UUID.randomUUID();
+        UUID autoTradingId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+
+        AutoTrading autoTrading =
+                AutoTrading.create(
+                        userId,
+                        strategyId
+                );
+
+        given(autoTradingCommandRepository
+                .findByIdAndUserIdForUpdate(
+                        autoTradingId,
+                        userId
+                ))
+                .willReturn(Optional.of(autoTrading));
+
+        given(orderQueryRepository
+                .existsOpenPositionByAutoTradingId(
+                        autoTradingId
+                ))
+                .willReturn(true);
+
+        given(orderQueryRepository
+                .existsActiveOrderByAutoTradingId(autoTradingId))
+                .willReturn(false);
+
+        assertThatThrownBy(() ->
+                autoTradingCommandService.deleteAutoTrading(
+                        userId,
+                        autoTradingId
+                )
+        )
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException =
+                            (BusinessException) exception;
+
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(
+                                    TradingErrorCode.AUTO_TRADING_HAS_OPEN_POSITION
+                            );
+                });
+
+        assertThat(autoTrading.getDeletedAt())
+                .isNull();
+    }
+
+    @Test
+    @DisplayName("진행 중인 주문이 존재하면 자동매매 설정을 삭제할 수 없다")
+    void deleteAutoTradingWithActiveOrder() {
+        UUID userId = UUID.randomUUID();
+        UUID autoTradingId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+
+        AutoTrading autoTrading =
+                AutoTrading.create(
+                        userId,
+                        strategyId
+                );
+
+        given(autoTradingCommandRepository
+                .findByIdAndUserIdForUpdate(
+                        autoTradingId,
+                        userId
+                ))
+                .willReturn(Optional.of(autoTrading));
+
+        given(orderQueryRepository
+                .existsActiveOrderByAutoTradingId(autoTradingId))
+                .willReturn(true);
+
+        assertThatThrownBy(() ->
+                autoTradingCommandService.deleteAutoTrading(
+                        userId,
+                        autoTradingId
+                )
+        )
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException =
+                            (BusinessException) exception;
+
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(
+                                    TradingErrorCode.AUTO_TRADING_HAS_ACTIVE_ORDER
+                            );
+                });
+
+        assertThat(autoTrading.getDeletedAt())
+                .isNull();
     }
 }

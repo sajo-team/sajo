@@ -29,7 +29,7 @@ import java.util.UUID;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -344,5 +344,55 @@ class AutoTradingControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.errorCode").value("COMMON_0001"));
+    }
+
+    @Test
+    @DisplayName("자동매매 설정을 삭제한다")
+    void deleteAutoTrading() throws Exception {
+        UUID userId = UUID.randomUUID();
+        UUID autoTradingId = UUID.randomUUID();
+
+        doNothing()
+                .when(autoTradingCommandService)
+                .deleteAutoTrading(
+                        userId,
+                        autoTradingId
+                );
+
+        mockMvc.perform(
+                        delete("/api/v1/auto-tradings/{autoTradingId}", autoTradingId)
+                                .header("X-User-Id", userId)
+                )
+                .andExpect(status().isOk());
+
+        verify(autoTradingCommandService)
+                .deleteAutoTrading(
+                        userId,
+                        autoTradingId
+                );
+    }
+
+    @Test
+    @DisplayName("진행 중인 주문이 있으면 자동매매 설정 삭제에 실패한다")
+    void deleteAutoTradingWithActiveOrder() throws Exception {
+        UUID userId = UUID.randomUUID();
+        UUID autoTradingId = UUID.randomUUID();
+
+        doThrow(
+                new BusinessException(
+                        TradingErrorCode.AUTO_TRADING_HAS_ACTIVE_ORDER
+                )
+        )
+                .when(autoTradingCommandService)
+                .deleteAutoTrading(
+                        userId,
+                        autoTradingId
+                );
+
+        mockMvc.perform(
+                        delete("/api/v1/auto-tradings/{autoTradingId}", autoTradingId)
+                                .header("X-User-Id", userId)
+                )
+                .andExpect(status().isConflict());
     }
 }

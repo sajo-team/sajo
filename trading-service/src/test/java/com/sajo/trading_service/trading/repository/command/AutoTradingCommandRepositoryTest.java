@@ -177,6 +177,183 @@ class AutoTradingCommandRepositoryTest {
         }
     }
 
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    @DisplayName(
+            "논리 삭제된 AutoTrading과 동일한 사용자와 전략으로 다시 생성할 수 있다"
+    )
+    void recreateAutoTradingAfterSoftDelete() {
+        // given
+        UUID userId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+
+        TransactionTemplate transactionTemplate =
+                new TransactionTemplate(transactionManager);
+
+        transactionTemplate.executeWithoutResult(status -> {
+            AutoTrading first =
+                    AutoTrading.create(
+                            userId,
+                            strategyId
+                    );
+
+            autoTradingCommandRepository.saveAndFlush(first);
+
+            first.softDelete(userId);
+
+            autoTradingCommandRepository.saveAndFlush(first);
+        });
+
+        // when
+        boolean created =
+                saveAutoTrading(
+                        userId,
+                        strategyId
+                );
+
+        // then
+        assertThat(created)
+                .isTrue();
+
+        Integer activeRowCount =
+                jdbcTemplate.queryForObject(
+                        """
+                        SELECT COUNT(*)
+                        FROM trading.p_auto_tradings
+                        WHERE user_id = ?
+                          AND strategy_id = ?
+                          AND deleted_at IS NULL
+                        """,
+                        Integer.class,
+                        userId,
+                        strategyId
+                );
+
+        assertThat(activeRowCount)
+                .isEqualTo(1);
+    }
+
+    @Test
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
+    @DisplayName(
+            "AutoTrading 삭제와 Signal 조회가 동시에 발생하면 삭제 완료 후 Signal은 삭제된 설정을 조회할 수 없다"
+    )
+    void deleteAndSignalLookupAreSerialized() throws Exception {
+        // given
+        UUID userId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+
+        UUID autoTradingId =
+                createAutoTrading(
+                        userId,
+                        strategyId
+                );
+
+        ExecutorService executorService =
+                Executors.newFixedThreadPool(2);
+
+        CountDownLatch deleteLockAcquired =
+                new CountDownLatch(1);
+
+        CountDownLatch allowDeleteCommit =
+                new CountDownLatch(1);
+
+        try {
+            Future<Void> deleteFuture =
+                    executorService.submit(() -> {
+                        TransactionTemplate transactionTemplate =
+                                new TransactionTemplate(
+                                        transactionManager
+                                );
+
+                        transactionTemplate.executeWithoutResult(status -> {
+                            AutoTrading autoTrading =
+                                    autoTradingCommandRepository
+                                            .findByIdAndUserIdForUpdate(
+                                                    autoTradingId,
+                                                    userId
+                                            )
+                                            .orElseThrow();
+
+                            /*
+                             * 삭제 트랜잭션이 AutoTrading row lock을
+                             * 획득했음을 알린다.
+                             */
+                            deleteLockAcquired.countDown();
+
+                            try {
+                                /*
+                                 * Signal 조회가 시작될 시간을 확보하기 위해
+                                 * 삭제 Commit을 잠시 대기시킨다.
+                                 */
+                                allowDeleteCommit.await();
+                            } catch (InterruptedException e) {
+                                Thread.currentThread().interrupt();
+                                throw new RuntimeException(e);
+                            }
+
+                            autoTrading.softDelete(userId);
+                        });
+
+                        return null;
+                    });
+
+            Future<Boolean> signalFuture =
+                    executorService.submit(() -> {
+                        /*
+                         * 삭제 Thread가 먼저 row lock을 획득하도록 한다.
+                         */
+                        deleteLockAcquired.await();
+
+                        TransactionTemplate transactionTemplate =
+                                new TransactionTemplate(
+                                        transactionManager
+                                );
+
+                        return transactionTemplate.execute(status ->
+                                autoTradingCommandRepository
+                                        .findByUserIdAndStrategyIdForUpdate(
+                                                userId,
+                                                strategyId
+                                        )
+                                        .isPresent()
+                        );
+                    });
+
+            /*
+             * 삭제 트랜잭션이 soft delete 후 Commit하도록 진행시킨다.
+             */
+            allowDeleteCommit.countDown();
+
+            deleteFuture.get();
+
+            boolean signalFoundAutoTrading =
+                    signalFuture.get();
+
+            // then
+            assertThat(signalFoundAutoTrading)
+                    .isFalse();
+
+            Integer activeRowCount =
+                    jdbcTemplate.queryForObject(
+                            """
+                            SELECT COUNT(*)
+                            FROM trading.p_auto_tradings
+                            WHERE id = ?
+                              AND deleted_at IS NULL
+                            """,
+                            Integer.class,
+                            autoTradingId
+                    );
+
+            assertThat(activeRowCount)
+                    .isZero();
+
+        } finally {
+            executorService.shutdownNow();
+        }
+    }
+
     private boolean saveAutoTrading(
             UUID userId,
             UUID strategyId
@@ -222,5 +399,27 @@ class AutoTradingCommandRepositoryTest {
 
         assertThat(indexCount)
                 .isEqualTo(1);
+    }
+
+    private UUID createAutoTrading(
+            UUID userId,
+            UUID strategyId
+    ) {
+        TransactionTemplate transactionTemplate =
+                new TransactionTemplate(
+                        transactionManager
+                );
+
+        return transactionTemplate.execute(status -> {
+            AutoTrading autoTrading =
+                    AutoTrading.create(
+                            userId,
+                            strategyId
+                    );
+
+            return autoTradingCommandRepository
+                    .saveAndFlush(autoTrading)
+                    .getId();
+        });
     }
 }
