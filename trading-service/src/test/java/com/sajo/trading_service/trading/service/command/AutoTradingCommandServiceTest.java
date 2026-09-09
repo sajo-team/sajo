@@ -443,4 +443,49 @@ class AutoTradingCommandServiceTest {
         assertThat(autoTrading.getDeletedAt())
                 .isNull();
     }
+
+    @Test
+    @DisplayName("진행 중인 주문이 존재하면 자동매매 설정을 삭제할 수 없다")
+    void deleteAutoTradingWithActiveOrder() {
+        UUID userId = UUID.randomUUID();
+        UUID autoTradingId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+
+        AutoTrading autoTrading =
+                AutoTrading.create(
+                        userId,
+                        strategyId
+                );
+
+        given(autoTradingCommandRepository
+                .findByIdAndUserIdForUpdate(
+                        autoTradingId,
+                        userId
+                ))
+                .willReturn(Optional.of(autoTrading));
+
+        given(orderQueryRepository
+                .existsActiveOrderByAutoTradingId(autoTradingId))
+                .willReturn(true);
+
+        assertThatThrownBy(() ->
+                autoTradingCommandService.deleteAutoTrading(
+                        userId,
+                        autoTradingId
+                )
+        )
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException =
+                            (BusinessException) exception;
+
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(
+                                    TradingErrorCode.AUTO_TRADING_HAS_ACTIVE_ORDER
+                            );
+                });
+
+        assertThat(autoTrading.getDeletedAt())
+                .isNull();
+    }
 }

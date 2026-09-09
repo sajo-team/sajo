@@ -115,6 +115,7 @@ where o.status = com.sajo.trading_service.trading.domain.enums.OrderStatus.REQUE
     boolean existsOpenPositionByAutoTradingId(
             @Param("autoTradingId") UUID autoTradingId
     );
+
     @Query("""
     select case when count(o) > 0 then true else false end
     from Order o

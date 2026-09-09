@@ -116,7 +116,7 @@ public class AutoTradingCommandService {
         if (orderQueryRepository
                 .existsActiveOrderByAutoTradingId(autoTradingId)) {
             throw new BusinessException(
-                    TradingErrorCode.AUTO_TRADING_HAS_OPEN_POSITION
+                    TradingErrorCode.AUTO_TRADING_HAS_ACTIVE_ORDER
             );
         }
 
