@@ -1,6 +1,6 @@
 package com.sajo.user_service.account.controller.dto.response;
 
-import com.sajo.user_service.account.client.dto.response.KisBalanceHoldingResponse;
+import com.sajo.user_service.account.client.kis.dto.response.KisBalanceHoldingResponse;
 
 import java.math.BigDecimal;
 

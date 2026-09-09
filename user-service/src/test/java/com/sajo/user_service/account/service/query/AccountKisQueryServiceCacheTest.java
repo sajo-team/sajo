@@ -1,9 +1,9 @@
 package com.sajo.user_service.account.service.query;
 
-import com.sajo.user_service.account.client.KisOAuthClient;
-import com.sajo.user_service.account.client.KisTrClient;
-import com.sajo.user_service.account.client.dto.response.KisAccessTokenResponse;
-import com.sajo.user_service.account.client.dto.response.KisApprovalKeyResponse;
+import com.sajo.user_service.account.client.kis.KisOAuthClient;
+import com.sajo.user_service.account.client.kis.KisTrClient;
+import com.sajo.user_service.account.client.kis.dto.response.KisAccessTokenResponse;
+import com.sajo.user_service.account.client.kis.dto.response.KisApprovalKeyResponse;
 import com.sajo.user_service.account.controller.dto.response.AccessTokenResponse;
 import com.sajo.user_service.account.controller.dto.response.ApprovalKeyResponse;
 import com.sajo.user_service.account.domain.Account;

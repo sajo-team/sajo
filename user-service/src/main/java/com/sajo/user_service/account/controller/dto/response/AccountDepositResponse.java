@@ -1,6 +1,6 @@
 package com.sajo.user_service.account.controller.dto.response;
 
-import com.sajo.user_service.account.client.dto.response.KisBalanceSummaryResponse;
+import com.sajo.user_service.account.client.kis.dto.response.KisBalanceSummaryResponse;
 
 import java.time.Instant;
 
