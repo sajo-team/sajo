@@ -38,38 +38,40 @@ public class StrategyEvaluationService {
                 strategyQueryRepository.findAllByStockCodeAndStatusAndDeletedAtIsNull(
                         request.stockCode(),
                         StrategyStatus.ACTIVE
-                );
+        );
 
         for (Strategy strategy : strategies) {
             String eventKey = createEventKey(request.sourceEventId(), strategy.getId());
-            boolean acquired = Boolean.TRUE.equals(
-                    stringRedisTemplate.opsForValue().setIfAbsent(
-                            eventKey,
-                            "PROCESSING",
-                            PROCESSING_TTL
-                    )
-            );
-
-            if (!acquired) {
-                log.info(
-                        "이미 처리 중이거나 처리 완료된 전략 평가 이벤트입니다. sourceEventId={}, strategyId={}",
-                        request.sourceEventId(),
-                        strategy.getId()
-                );
-                continue;
-            }
+            boolean acquired = false;
 
             try {
+                acquired = Boolean.TRUE.equals(
+                        stringRedisTemplate.opsForValue().setIfAbsent(
+                                eventKey,
+                                "PROCESSING",
+                                PROCESSING_TTL
+                        )
+                );
+
+                if (!acquired) {
+                    log.info(
+                            "이미 처리 중이거나 처리 완료된 전략 평가 이벤트입니다. sourceEventId={}, strategyId={}",
+                            request.sourceEventId(),
+                            strategy.getId()
+                    );
+                    continue;
+                }
+
                 evaluateStrategy(strategy, request);
                 stringRedisTemplate.opsForValue().set(eventKey, "COMPLETED", COMPLETED_TTL);
             } catch (BusinessException e) {
-                stringRedisTemplate.delete(eventKey);
+                deleteEvaluationEventKey(eventKey, acquired);
                 log.warn("전략 평가실패. strategyId={}, errorCode={}",
                         strategy.getId(),
                         e.getErrorCode()
                 );
             } catch (Exception e) {
-                stringRedisTemplate.delete(eventKey);
+                deleteEvaluationEventKey(eventKey, acquired);
                 log.error("전략 평가 중 예외가 발생했습니다. strategyId={}", strategy.getId(), e);
             }
         }
@@ -77,6 +79,18 @@ public class StrategyEvaluationService {
 
     private String createEventKey(UUID sourceEventId, UUID strategyId) {
         return EVALUATION_EVENT_KEY_PREFIX + sourceEventId + ":" + strategyId;
+    }
+
+    private void deleteEvaluationEventKey(String eventKey, boolean acquired) {
+        if (!acquired) {
+            return;
+        }
+
+        try {
+            stringRedisTemplate.delete(eventKey);
+        } catch (Exception exception) {
+            log.error("전략 평가 이벤트 키 삭제에 실패했습니다. eventKey={}", eventKey, exception);
+        }
     }
 
     private void evaluateStrategy(
