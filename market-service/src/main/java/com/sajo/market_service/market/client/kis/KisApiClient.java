@@ -36,7 +36,7 @@ public class KisApiClient {
     private final RestClient restClient;
 
     public KisApiClient(RestClient.Builder restClientBuilder, KisApiProperties properties) {
-        this.restClient = restClientBuilder.baseUrl(properties.baseUrl()).build();
+        this.restClient = restClientBuilder.clone().baseUrl(properties.baseUrl()).build();
     }
 
     public QuoteResponse getQuote(UserKisTokenResponse credentials, String stockCode) {

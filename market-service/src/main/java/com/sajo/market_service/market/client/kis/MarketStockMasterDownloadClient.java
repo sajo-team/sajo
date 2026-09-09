@@ -30,14 +30,15 @@ public class MarketStockMasterDownloadClient {
             boolean configureTimeout
     ) {
         this.properties = properties;
+        RestClient.Builder clientBuilder = builder.clone();
         if (!configureTimeout) {
-            this.restClient = builder.build();
+            this.restClient = clientBuilder.build();
             return;
         }
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(properties.connectTimeout());
         factory.setReadTimeout(properties.readTimeout());
-        this.restClient = builder.requestFactory(factory).build();
+        this.restClient = clientBuilder.requestFactory(factory).build();
     }
 
     public byte[] downloadKOSPI() {
