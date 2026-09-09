@@ -95,4 +95,41 @@ where o.status = com.sajo.trading_service.trading.domain.enums.OrderStatus.REQUE
             String brokerOrderNo,
             UUID orderId
     );
+
+    @Query(value = """
+    SELECT EXISTS (
+        SELECT 1
+        FROM trading.p_orders o
+        WHERE o.auto_trading_id = :autoTradingId
+          AND o.deleted_at IS NULL
+        GROUP BY o.stock_code
+        HAVING SUM(
+            CASE
+                WHEN o.order_type = 'BUY' THEN o.filled_quantity
+                WHEN o.order_type = 'SELL' THEN -o.filled_quantity
+                ELSE 0
+            END
+        ) > 0
+    )
+    """, nativeQuery = true)
+    boolean existsOpenPositionByAutoTradingId(
+            @Param("autoTradingId") UUID autoTradingId
+    );
+    @Query("""
+    select case when count(o) > 0 then true else false end
+    from Order o
+    where o.autoTradingId = :autoTradingId
+      and o.deletedAt is null
+      and o.status in (
+          com.sajo.trading_service.trading.domain.enums.OrderStatus.REQUESTED,
+          com.sajo.trading_service.trading.domain.enums.OrderStatus.PROCESSING,
+          com.sajo.trading_service.trading.domain.enums.OrderStatus.TIMEOUT,
+          com.sajo.trading_service.trading.domain.enums.OrderStatus.ACCEPTED,
+          com.sajo.trading_service.trading.domain.enums.OrderStatus.PARTIALLY_FILLED
+      )
+    """)
+    boolean existsActiveOrderByAutoTradingId(
+            @Param("autoTradingId") UUID autoTradingId
+    );
+
 }
