@@ -28,24 +28,11 @@ public class StrategyEvaluationService {
     private final TradingSignalProducer tradingSignalProducer;
     private final StringRedisTemplate stringRedisTemplate;
 
-    private static final String PROCESSED_EVENT_KEY_PREFIX = "strategy:evaluation:processed:";
-    private static final Duration PROCESSED_EVENT_TTL = Duration.ofDays(1);
+    private static final String EVALUATION_EVENT_KEY_PREFIX = "strategy:evaluation:event:";
+    private static final Duration PROCESSING_TTL = Duration.ofMinutes(5);
+    private static final Duration COMPLETED_TTL = Duration.ofDays(1);
 
     public void evaluate(StrategyEvaluationRequest request) {
-        String eventKey = PROCESSED_EVENT_KEY_PREFIX + request.sourceEventId();
-        boolean firstProcessing = Boolean.TRUE.equals(
-                stringRedisTemplate.opsForValue().setIfAbsent(
-                        eventKey,
-                        "1",
-                        PROCESSED_EVENT_TTL
-                )
-        );
-
-        if (!firstProcessing) {
-            log.info("이미 처리된 전략 평가 이벤트입니다. sourceEventId={}", request.sourceEventId());
-            return;
-        }
-
         List<Strategy> strategies =
                 strategyQueryRepository.findAllByStockCodeAndStatusAndDeletedAtIsNull(
                         request.stockCode(),
@@ -53,17 +40,42 @@ public class StrategyEvaluationService {
                 );
 
         for (Strategy strategy : strategies) {
+            String eventKey = createEventKey(request.sourceEventId(), strategy.getId());
+            boolean acquired = Boolean.TRUE.equals(
+                    stringRedisTemplate.opsForValue().setIfAbsent(
+                            eventKey,
+                            "PROCESSING",
+                            PROCESSING_TTL
+                    )
+            );
+
+            if (!acquired) {
+                log.info(
+                        "이미 처리 중이거나 처리 완료된 전략 평가 이벤트입니다. sourceEventId={}, strategyId={}",
+                        request.sourceEventId(),
+                        strategy.getId()
+                );
+                continue;
+            }
+
             try {
                 evaluateStrategy(strategy, request);
+                stringRedisTemplate.opsForValue().set(eventKey, "COMPLETED", COMPLETED_TTL);
             } catch (BusinessException e) {
+                stringRedisTemplate.delete(eventKey);
                 log.warn("전략 평가실패. strategyId={}, errorCode={}",
                         strategy.getId(),
                         e.getErrorCode()
                 );
             } catch (Exception e) {
+                stringRedisTemplate.delete(eventKey);
                 log.error("전략 평가 중 예외가 발생했습니다. strategyId={}", strategy.getId(), e);
             }
         }
+    }
+
+    private String createEventKey(UUID sourceEventId, UUID strategyId) {
+        return EVALUATION_EVENT_KEY_PREFIX + sourceEventId + ":" + strategyId;
     }
 
     private void evaluateStrategy(
