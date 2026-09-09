@@ -87,7 +87,7 @@ erDiagram
 
 ### 현재가 조회
 
-`GET /quote?stockCode=005930`
+`GET /api/v1/market/quote?stockCode=005930`
 
 - 요청 헤더 `X-User-Id`가 필요하다.
 - Redis를 먼저 조회한다.
@@ -129,7 +129,7 @@ erDiagram
 ## 6. 삼성전자 조회 예시
 
 1. `GET /api/v1/market/stocks/search?keyword=삼성`으로 `m_market_stocks`를 검색해 삼성전자와 `005930`을 찾는다.
-2. `GET /quote?stockCode=005930`으로 Redis 또는 KIS에서 지금 가격을 확인한다.
+2. `GET /api/v1/market/quote?stockCode=005930`으로 Redis 또는 KIS에서 지금 가격을 확인한다.
 3. `GET /api/v1/market/stocks/005930/prices?days=30`으로 `m_market_stocks_price`의 저장된 날짜별 가격을 확인한다.
 4. `GET /api/v1/market/stocks/005930/indicators`로 `m_market_stocks_indicator`의 최신 PER, PBR, EPS, BPS, ROE를 확인한다.
 
