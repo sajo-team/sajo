@@ -7,7 +7,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -22,17 +24,25 @@ public class MarketStockMasterSyncService {
             throw new IllegalArgumentException("종목 마스터 청크 크기는 양수여야 합니다.");
         }
         MarketStockMasterSyncResult result = new MarketStockMasterSyncResult(0, 0, 0, 0);
-        result = result.plus(syncMarket(downloadClient.downloadKOSPI(), "KOSPI", chunkSize));
-        result = result.plus(syncMarket(downloadClient.downloadKOSDAQ(), "KOSDAQ", chunkSize));
+        Map<String, Integer> failureCounts = new LinkedHashMap<>();
+        result = result.plus(syncMarket(downloadClient.downloadKOSPI(), "KOSPI", chunkSize, failureCounts));
+        result = result.plus(syncMarket(downloadClient.downloadKOSDAQ(), "KOSDAQ", chunkSize, failureCounts));
+        if (!failureCounts.isEmpty()) {
+            log.error("종목 마스터 청크 실패 원인 요약: {}", failureCounts);
+        }
         return result;
     }
 
-    private MarketStockMasterSyncResult syncMarket(byte[] zip, String marketType, int chunkSize) {
+    private MarketStockMasterSyncResult syncMarket(
+            byte[] zip,
+            String marketType,
+            int chunkSize,
+            Map<String, Integer> failureCounts
+    ) {
         MarketStockMasterParser.ParseResult parseResult = parser.parseWithStats(zip, marketType);
         List<MarketStockMasterParser.ParsedStock> parsed = parseResult.stocks();
         int saved = 0;
         int failed = 0;
-        boolean failureLogged = false;
         for (int i = 0; i < parsed.size(); i += chunkSize) {
             List<MarketStockMasterCommand> chunk = parsed.subList(i, Math.min(i + chunkSize, parsed.size()))
                     .stream().map(MarketStockMasterParser.ParsedStock::command).toList();
@@ -40,13 +50,14 @@ public class MarketStockMasterSyncService {
                 saved += commandService.saveMasterStocks(chunk);
             } catch (RuntimeException exception) {
                 failed += chunk.size();
-                if (!failureLogged) {
-                    Throwable rootCause = rootCause(exception);
-                    log.error("종목 마스터 첫 청크 저장 실패: exceptionType={}, causeType={}, reason={}",
+                Throwable rootCause = rootCause(exception);
+                String failureKey = exception.getClass().getSimpleName() + "/" + rootCause.getClass().getSimpleName();
+                int occurrence = failureCounts.merge(failureKey, 1, Integer::sum);
+                if (occurrence == 1) {
+                    log.error("종목 마스터 청크 저장 실패(원인별 최초): exceptionType={}, causeType={}, reason={}",
                             exception.getClass().getSimpleName(),
                             rootCause.getClass().getSimpleName(),
                             safeReason(rootCause));
-                    failureLogged = true;
                 }
             }
         }

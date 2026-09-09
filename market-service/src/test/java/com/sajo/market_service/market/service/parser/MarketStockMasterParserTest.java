@@ -15,7 +15,8 @@ class MarketStockMasterParserTest {
 
     @Test
     void parsesKoreanNameFromCp949KospiRecord() {
-        byte[] zip = zip("kospi_code.mst", "005930   000000000005삼성전자" + "ST" + " ".repeat(225) + "\n");
+        String tail = tail(227, 3, "0027", 113, "5846278", 212, "15755720");
+        byte[] zip = zip("kospi_code.mst", "005930   000000000005삼성전자" + tail + "\n");
 
         var result = parser.parse(zip, "KOSPI");
 
@@ -23,13 +24,27 @@ class MarketStockMasterParserTest {
         assertThat(result.get(0).command().stockCode()).isEqualTo("005930");
         assertThat(result.get(0).command().stockName()).isEqualTo("삼성전자");
         assertThat(result.get(0).command().marketType()).isEqualTo("KOSPI");
+        assertThat(result.get(0).command().industryCode()).isEqualTo("0027");
+        assertThat(result.get(0).command().listedShares()).isEqualTo(5_846_278_000L);
+        assertThat(result.get(0).command().marketCap()).isEqualByComparingTo("1575572000000000");
     }
 
     @Test
     void parsesKosdaqUsingThe222CharacterTail() {
-        byte[] zip = zip("kosdaq_code.mst", "035720   000000000035카카오" + "ST" + " ".repeat(219) + "\n");
+        String tail = tail(221, 3, "1009", 108, "23457", 206, "38212");
+        byte[] zip = zip("kosdaq_code.mst", "035720   000000000035카카오" + tail + "\n");
 
-        assertThat(parser.parse(zip, "KOSDAQ")).hasSize(1);
+        var command = parser.parse(zip, "KOSDAQ").get(0).command();
+        assertThat(command.marketType()).isEqualTo("KOSDAQ");
+        assertThat(command.industryCode()).isEqualTo("1009");
+        assertThat(command.listedShares()).isEqualTo(23_457_000L);
+        assertThat(command.marketCap()).isEqualByComparingTo("3821200000000");
+    }
+
+    @Test
+    void skipsListedSharesWhenUnitConversionOverflows() {
+        assertThatThrownBy(() -> MarketStockMasterParser.convertListedShares("9223372036854776"))
+                .isInstanceOf(ArithmeticException.class);
     }
 
     @Test
@@ -91,5 +106,22 @@ class MarketStockMasterParserTest {
         tail[0] = 'S';
         tail[1] = 'T';
         return new String(tail);
+    }
+
+    private static String tail(int length, int industryOffset, String industry,
+                               int listedSharesOffset, String listedShares,
+                               int marketCapOffset, String marketCap) {
+        char[] value = " ".repeat(length).toCharArray();
+        value[0] = 'S';
+        value[1] = 'T';
+        put(value, industryOffset, 4, industry);
+        put(value, listedSharesOffset, 15, listedShares);
+        put(value, marketCapOffset, 9, marketCap);
+        return new String(value);
+    }
+
+    private static void put(char[] target, int offset, int length, String value) {
+        String padded = " ".repeat(Math.max(0, length - value.length())) + value;
+        padded.getChars(0, length, target, offset);
     }
 }

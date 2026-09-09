@@ -118,8 +118,7 @@ public class MarketStockMasterParser {
         String preferred = layout.value(tail, "preferred");
         if (!ORDINARY.equals(group) || !(preferred.isBlank() || "0".equals(preferred))) return null;
         String industry = layout.value(tail, "industryLarge");
-        Long listedShares = number(layout.value(tail, "listedShares"));
-        if (listedShares != null) listedShares = Math.multiplyExact(listedShares, 1_000L);
+        Long listedShares = convertListedShares(layout.value(tail, "listedShares"));
         BigDecimal marketCap = decimal(layout.value(tail, "marketCap"));
         if (marketCap != null) marketCap = marketCap.multiply(BigDecimal.valueOf(100_000_000L));
         return new ParsedStock(new MarketStockMasterCommand(code, name, marketType, blankToNull(industry), listedShares, marketCap));
@@ -127,6 +126,10 @@ public class MarketStockMasterParser {
 
     private static String slice(String value, int start, int end) { return value.substring(start, Math.min(end, value.length())); }
     private static Long number(String value) { try { return value.isBlank() ? null : Long.parseLong(value); } catch (RuntimeException e) { return null; } }
+    static Long convertListedShares(String value) {
+        Long raw = number(value);
+        return raw == null ? null : Math.multiplyExact(raw, 1_000L);
+    }
     private static BigDecimal decimal(String value) { try { return value.isBlank() ? null : new BigDecimal(value); } catch (RuntimeException e) { return null; } }
     private static String blankToNull(String value) { return value.isBlank() ? null : value; }
     private static void validateEntry(ZipEntry entry) {
