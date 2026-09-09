@@ -7,9 +7,9 @@ import org.springframework.web.bind.annotation.PostMapping;
 
 import java.util.UUID;
 
-@FeignClient(name = "user-service", path = "/internal/v1/accounts")
+@FeignClient(name = "user-service")
 public interface UserAccountFeignClient {
 
-    @PostMapping("/{userId}/token")
+    @PostMapping("/internal/v1/accounts/{userId}/token")
     UserKisTokenResponse getKisToken(@PathVariable("userId") UUID userId);
 }
