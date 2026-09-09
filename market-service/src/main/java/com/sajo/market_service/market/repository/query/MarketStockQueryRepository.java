@@ -10,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 import java.util.Optional;
 import java.util.List;
 import java.util.UUID;
+import java.util.Collection;
 
 public interface MarketStockQueryRepository extends JpaRepository<MarketStock, UUID> {
 
@@ -34,5 +35,15 @@ public interface MarketStockQueryRepository extends JpaRepository<MarketStock, U
     List<MarketStockCollectionTarget> findCollectionTargetsAfterStockCode(
             @Param("lastStockCode") String lastStockCode,
             Pageable pageable
+    );
+
+    @Query("""
+            select stock.id as stockId, stock.stockCode as stockCode
+            from MarketStock stock
+            where stock.stockCode in :stockCodes
+            order by stock.stockCode asc
+            """)
+    List<MarketStockCollectionTarget> findCollectionTargetsByStockCodes(
+            @Param("stockCodes") Collection<String> stockCodes
     );
 }

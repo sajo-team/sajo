@@ -45,6 +45,19 @@ class MarketStockIndicatorSchedulerTest {
     }
 
     @Test
+    void usesConfiguredTargetCodesInsteadOfKeysetPagination() {
+        MarketStockCollectionTarget target = target("005930");
+        var scheduler = scheduler(true, USER_ID.toString(), fridayClock(), List.of("005930"));
+        when(commandService.getCollectionCredentials(USER_ID)).thenReturn(new UserKisTokenResponse("token", "key", "secret"));
+        when(stockRepository.findCollectionTargetsByStockCodes(List.of("005930"))).thenReturn(List.of(target));
+
+        scheduler.collectIndicators();
+
+        verify(stockRepository).findCollectionTargetsByStockCodes(List.of("005930"));
+        verify(stockRepository, never()).findCollectionTargetsAfterStockCode(any(), any());
+    }
+
+    @Test
     void doesNotRunWhenSystemUserIdIsMissingOrInvalid() {
         assertThat(scheduler(true, " ", fridayClock()).collectIndicators().runStatus())
                 .isEqualTo(MarketStockIndicatorScheduler.IndicatorRunStatus.SYSTEM_USER_ID_MISSING);
@@ -163,9 +176,14 @@ class MarketStockIndicatorSchedulerTest {
     }
 
     private MarketStockIndicatorScheduler scheduler(boolean enabled, String userId, Clock clock) {
+        return scheduler(enabled, userId, clock, List.of());
+    }
+
+    private MarketStockIndicatorScheduler scheduler(boolean enabled, String userId, Clock clock,
+                                                    List<String> targetStockCodes) {
         lenient().when(rateLimiter.tryAcquire()).thenReturn(true);
         return new MarketStockIndicatorScheduler(new MarketSchedulerProperties(
-                false, userId, "0 10 16 * * MON-FRI", 10, enabled, "0 20 16 * * MON-FRI", java.time.Duration.ofMillis(500)),
+                false, userId, "0 10 16 * * MON-FRI", 10, enabled, "0 20 16 * * MON-FRI", java.time.Duration.ofMillis(500), targetStockCodes),
                 stockRepository, commandService, rateLimiter, clock);
     }
 
