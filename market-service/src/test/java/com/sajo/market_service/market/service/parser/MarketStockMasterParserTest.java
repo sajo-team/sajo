@@ -30,6 +30,47 @@ class MarketStockMasterParserTest {
     }
 
     @Test
+    void acceptsDirectoryAndOneExpectedMstFile() {
+        byte[] zip = zipEntries(
+                new Entry("directory/", ""),
+                new Entry("kospi_code.mst", "005930   000000000005삼성전자" + tail(227, 3, "0027", 113, "1", 212, "1") + "\n"));
+
+        assertThat(parser.parse(zip, "KOSPI")).hasSize(1);
+    }
+
+    @Test
+    void rejectsExpectedMstFollowedByAdditionalFile() {
+        byte[] zip = zipEntries(
+                new Entry("kospi_code.mst", "content"),
+                new Entry("extra.txt", "content"));
+
+        assertThatThrownBy(() -> parser.parse(zip, "KOSPI"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void rejectsAdditionalFileBeforeExpectedMst() {
+        byte[] zip = zipEntries(
+                new Entry("extra.txt", "content"),
+                new Entry("kospi_code.mst", "content"));
+
+        assertThatThrownBy(() -> parser.parse(zip, "KOSPI"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void rejectsZipWithOnlyDirectoryEntries() {
+        assertThatThrownBy(() -> parser.parse(zipEntries(new Entry("directory/", "")), "KOSPI"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void rejectsEmptyZip() {
+        assertThatThrownBy(() -> parser.parse(zipEntries(), "KOSPI"))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
     void parsesKosdaqUsingThe222CharacterTail() {
         String tail = tail(221, 3, "1009", 108, "23457", 206, "38212");
         byte[] zip = zip("kosdaq_code.mst", "035720   000000000035카카오" + tail + "\n");
@@ -87,18 +128,26 @@ class MarketStockMasterParserTest {
     }
 
     private static byte[] zip(String name, String content) {
+        return zipEntries(new Entry(name, content));
+    }
+
+    private static byte[] zipEntries(Entry... entries) {
         try {
             ByteArrayOutputStream output = new ByteArrayOutputStream();
             try (ZipOutputStream zip = new ZipOutputStream(output)) {
-                zip.putNextEntry(new ZipEntry(name));
-                zip.write(content.getBytes(Charset.forName("CP949")));
-                zip.closeEntry();
+                for (Entry entry : entries) {
+                    zip.putNextEntry(new ZipEntry(entry.name()));
+                    zip.write(entry.content().getBytes(Charset.forName("CP949")));
+                    zip.closeEntry();
+                }
             }
             return output.toByteArray();
         } catch (Exception exception) {
             throw new AssertionError(exception);
         }
     }
+
+    private record Entry(String name, String content) { }
 
     private static String fixedTail(int length, int preferredOffset) {
         char[] tail = " ".repeat(length).toCharArray();

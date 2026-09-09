@@ -78,24 +78,22 @@ public class MarketStockMasterParser {
                     throw new IllegalArgumentException("예상하지 않은 종목 마스터 파일입니다.");
                 }
                 found = true;
-                try (BufferedReader reader = new BufferedReader(new InputStreamReader(zip, CP949))) {
-                    String row;
-                    while ((row = reader.readLine()) != null) {
-                        uncompressedBytes += row.getBytes(CP949).length + 1;
-                        if (uncompressedBytes > MAX_UNCOMPRESSED_BYTES) {
-                            throw new IllegalArgumentException("종목 마스터 압축 해제 크기가 제한을 초과했습니다.");
-                        }
-                        ParsedStock parsed;
-                        try {
-                            parsed = parseRow(row, tailLength, layout, marketType);
-                        } catch (ArithmeticException exception) {
-                            parsed = null;
-                        }
-                        if (parsed != null) result.add(parsed);
-                        else if (!row.isBlank()) skipped++;
+                BufferedReader reader = new BufferedReader(new InputStreamReader(zip, CP949));
+                String row;
+                while ((row = reader.readLine()) != null) {
+                    uncompressedBytes += row.getBytes(CP949).length + 1;
+                    if (uncompressedBytes > MAX_UNCOMPRESSED_BYTES) {
+                        throw new IllegalArgumentException("종목 마스터 압축 해제 크기가 제한을 초과했습니다.");
                     }
+                    ParsedStock parsed;
+                    try {
+                        parsed = parseRow(row, tailLength, layout, marketType);
+                    } catch (ArithmeticException exception) {
+                        parsed = null;
+                    }
+                    if (parsed != null) result.add(parsed);
+                    else if (!row.isBlank()) skipped++;
                 }
-                break;
             }
             if (!found) throw new IllegalArgumentException("종목 마스터 ZIP에 파일이 없습니다.");
             return new ParseResult(result, skipped);
