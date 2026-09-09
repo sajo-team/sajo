@@ -2,8 +2,9 @@ package com.sajo.market_service.strategy.service.command;
 
 import com.sajo.common.exception.BusinessException;
 import com.sajo.market_service.market.controller.dto.response.InternalStockIndicatorResponse;
-import com.sajo.market_service.market.controller.dto.response.InternalStockQuoteResponse;
+import com.sajo.market_service.market.dto.response.QuoteResponse;
 import com.sajo.market_service.market.service.query.MarketInternalQueryService;
+import com.sajo.market_service.market.service.query.MarketQuoteQueryService;
 import com.sajo.market_service.strategy.controller.dto.request.StrategyActivationRequest;
 import com.sajo.market_service.strategy.controller.dto.request.StrategyCreateRequest;
 import com.sajo.market_service.strategy.controller.dto.request.StrategyUpdateRequest;
@@ -29,6 +30,7 @@ public class StrategyCommandService {
     private final StrategyCommandRepository strategyCommandRepository;
     private final MarketInternalQueryService marketInternalQueryService;
     private final StrategyActivationCommandService strategyActivationCommandService;
+    private final MarketQuoteQueryService marketQuoteQueryService;
 
     @Transactional
     public StrategyCreateResponse createStrategy(
@@ -146,8 +148,8 @@ public class StrategyCommandService {
     }
 
     private void validateMarketDataAvailable(UUID userId, Strategy strategy) {
-        InternalStockQuoteResponse quote =
-                marketInternalQueryService.getQuote(userId, strategy.getStockCode());
+        QuoteResponse quote =
+                marketQuoteQueryService.getQuote(userId, strategy.getStockCode());
 
         log.info("Market 현재가 조회 완료. stockCode={}, currentPrice={}, baseTime={}",
                 strategy.getStockCode(),
