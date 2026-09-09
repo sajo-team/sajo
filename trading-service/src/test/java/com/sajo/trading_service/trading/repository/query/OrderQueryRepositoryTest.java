@@ -293,4 +293,131 @@ class OrderQueryRepositoryTest {
         assertThat(result)
                 .isTrue();
     }
+
+    @Test
+    @DisplayName("진행 중인 주문이 존재하면 true를 반환한다")
+    void existsActiveOrderByAutoTradingId() {
+        // given
+        UUID userId = UUID.randomUUID();
+        UUID autoTradingId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+
+        Order order = Order.create(
+                userId,
+                autoTradingId,
+                strategyId,
+                UUID.randomUUID(),
+                "005930",
+                OrderType.BUY,
+                70_000L,
+                10
+        );
+
+        // Order.create() 직후 상태 = REQUESTED
+        orderCommandRepository.saveAndFlush(order);
+
+        // when
+        boolean result =
+                orderQueryRepository
+                        .existsActiveOrderByAutoTradingId(autoTradingId);
+
+        // then
+        assertThat(result).isTrue();
+    }
+
+    @Test
+    @DisplayName("종료된 주문만 존재하면 진행 중 주문이 없는 것으로 판단한다")
+    void doesNotExistActiveOrderWhenOrderIsFilled() {
+        // given
+        UUID userId = UUID.randomUUID();
+        UUID autoTradingId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+
+        Order order = Order.create(
+                userId,
+                autoTradingId,
+                strategyId,
+                UUID.randomUUID(),
+                "005930",
+                OrderType.BUY,
+                70_000L,
+                10
+        );
+
+        order.startProcessing();
+        order.accept("ORDER-001");
+        order.applyFill(10, 0);
+
+        orderCommandRepository.saveAndFlush(order);
+
+        // when
+        boolean result =
+                orderQueryRepository
+                        .existsActiveOrderByAutoTradingId(autoTradingId);
+
+        // then
+        assertThat(result).isFalse();
+    }
+
+    @Test
+    @DisplayName("다른 AutoTrading의 진행 중 주문은 조회하지 않는다")
+    void doesNotExistActiveOrderForDifferentAutoTrading() {
+        // given
+        UUID userId = UUID.randomUUID();
+        UUID targetAutoTradingId = UUID.randomUUID();
+        UUID otherAutoTradingId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+
+        Order order = Order.create(
+                userId,
+                otherAutoTradingId,
+                strategyId,
+                UUID.randomUUID(),
+                "005930",
+                OrderType.BUY,
+                70_000L,
+                10
+        );
+
+        orderCommandRepository.saveAndFlush(order);
+
+        // when
+        boolean result =
+                orderQueryRepository
+                        .existsActiveOrderByAutoTradingId(
+                                targetAutoTradingId
+                        );
+
+        // then
+        assertThat(result).isFalse();
+    }
+
+    @Test
+    @DisplayName("논리 삭제된 진행 중 주문은 조회하지 않는다")
+    void doesNotExistActiveOrderWhenDeleted() {
+        UUID userId = UUID.randomUUID();
+        UUID autoTradingId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+
+        Order order = Order.create(
+                userId,
+                autoTradingId,
+                strategyId,
+                UUID.randomUUID(),
+                "005930",
+                OrderType.BUY,
+                70_000L,
+                10
+        );
+
+        order.softDelete(userId);
+
+        orderCommandRepository.saveAndFlush(order);
+
+        boolean result =
+                orderQueryRepository
+                        .existsActiveOrderByAutoTradingId(autoTradingId);
+
+        assertThat(result).isFalse();
+    }
 }
