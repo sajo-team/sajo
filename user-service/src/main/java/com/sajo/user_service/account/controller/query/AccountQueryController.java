@@ -4,7 +4,10 @@ import com.sajo.common.code.GeneralResponseCode;
 import com.sajo.common.response.GeneralResponse;
 import com.sajo.user_service.account.controller.dto.response.AccountDepositResponse;
 import com.sajo.user_service.account.controller.dto.response.AccountHoldingsResponse;
+import com.sajo.user_service.account.controller.dto.response.AccountResponse;
+import com.sajo.user_service.account.domain.Account;
 import com.sajo.user_service.account.service.query.AccountKisQueryService;
+import com.sajo.user_service.account.service.query.AccountQueryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -20,6 +23,15 @@ import java.util.UUID;
 @RequestMapping("/api/v1")
 public class AccountQueryController {
     private final AccountKisQueryService accountKisQueryService;
+    private final AccountQueryService accountQueryService;
+
+    @GetMapping("/accounts/me")
+    public ResponseEntity<GeneralResponse<AccountResponse>> getMyAccount(
+            @RequestHeader("X-User-Id") UUID userId
+    ) {
+        Account account = accountQueryService.getAccountByUserId(userId);
+        return GeneralResponse.toResponseEntity(GeneralResponseCode.OK, AccountResponse.from(account));
+    }
 
     @GetMapping("/accounts/me/deposit")
     public ResponseEntity<GeneralResponse<AccountDepositResponse>> getDeposit(

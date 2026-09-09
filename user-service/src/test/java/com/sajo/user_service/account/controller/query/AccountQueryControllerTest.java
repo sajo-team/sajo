@@ -5,8 +5,11 @@ import com.sajo.common.exception.GlobalExceptionHandler;
 import com.sajo.user_service.account.controller.dto.response.AccountDepositResponse;
 import com.sajo.user_service.account.controller.dto.response.AccountHoldingResponse;
 import com.sajo.user_service.account.controller.dto.response.AccountHoldingsResponse;
+import com.sajo.user_service.account.domain.Account;
+import com.sajo.user_service.account.domain.AccountType;
 import com.sajo.user_service.account.exception.AccountErrorCode;
 import com.sajo.user_service.account.service.query.AccountKisQueryService;
+import com.sajo.user_service.account.service.query.AccountQueryService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -36,6 +39,47 @@ class AccountQueryControllerTest {
 
     @MockitoBean
     private AccountKisQueryService accountKisQueryService;
+
+    @MockitoBean
+    private AccountQueryService accountQueryService;
+
+    @Test
+    @DisplayName("내 계좌 조회에 성공하면 200과 계좌번호/계좌유형을 반환한다")
+    void getMyAccount() throws Exception {
+        // given
+        UUID userId = UUID.randomUUID();
+        Account account = Account.createAccount(
+                userId, "app-key", "secret-key", "12345678-01", "hashed", AccountType.VIRTUAL);
+        given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
+
+        // when & then
+        mockMvc.perform(get("/api/v1/accounts/me").header("X-User-Id", userId.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.accountNo").value("12345678-01"))
+                .andExpect(jsonPath("$.data.accountType").value("VIRTUAL"));
+    }
+
+    @Test
+    @DisplayName("계좌가 없으면 내 계좌 조회는 404를 반환한다")
+    void getMyAccountNotFound() throws Exception {
+        // given
+        UUID userId = UUID.randomUUID();
+        given(accountQueryService.getAccountByUserId(userId))
+                .willThrow(new BusinessException(AccountErrorCode.ACCOUNT_NOT_FOUND));
+
+        // when & then
+        mockMvc.perform(get("/api/v1/accounts/me").header("X-User-Id", userId.toString()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.errorCode").value("ACCOUNT_0006"));
+    }
+
+    @Test
+    @DisplayName("X-User-Id 헤더가 없으면 내 계좌 조회는 401을 반환한다")
+    void getMyAccountWithoutUserHeader() throws Exception {
+        // when & then
+        mockMvc.perform(get("/api/v1/accounts/me"))
+                .andExpect(status().isBadRequest());
+    }
 
     @Test
     @DisplayName("예수금 조회에 성공하면 200과 예수금 정보를 반환한다")
