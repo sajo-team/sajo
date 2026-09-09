@@ -7,6 +7,7 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 
 import java.sql.Statement;
+import java.sql.Timestamp;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -42,6 +43,21 @@ class MarketStockMasterWriterTest {
                 .willReturn(new int[]{1, Statement.SUCCESS_NO_INFO});
 
         assertThat(writer.upsertAll(List.of(command(), command()))).isEqualTo(1);
+    }
+
+    @Test
+    void bindsCreatedAndUpdatedAtAsJdbcTimestamps() {
+        NamedParameterJdbcTemplate jdbcTemplate = mock(NamedParameterJdbcTemplate.class);
+        MarketStockMasterWriter writer = new MarketStockMasterWriter(jdbcTemplate);
+        given(jdbcTemplate.batchUpdate(anyString(), any(MapSqlParameterSource[].class))).willReturn(new int[]{1});
+
+        ArgumentCaptor<MapSqlParameterSource[]> parameters = ArgumentCaptor.forClass(MapSqlParameterSource[].class);
+        writer.upsertAll(List.of(command()));
+        verify(jdbcTemplate).batchUpdate(anyString(), parameters.capture());
+
+        MapSqlParameterSource values = parameters.getValue()[0];
+        assertThat(values.getValue("createdAt")).isInstanceOf(Timestamp.class).isNotNull();
+        assertThat(values.getValue("updatedAt")).isInstanceOf(Timestamp.class).isNotNull();
     }
 
     private MarketStockMasterCommand command() {
