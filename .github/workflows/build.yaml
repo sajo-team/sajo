@@ -9,6 +9,10 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module: [gateway, discovery-service, user-service, market-service, trading-service, config-server]
 
     services:
       postgres:
@@ -53,5 +57,10 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Build and test with Gradle
-        run: ./gradlew build --parallel -x :config-server:test
+      - name: Build and test ${{ matrix.module }}
+        run: |
+          if [ "${{ matrix.module }}" = "config-server" ]; then
+            ./gradlew :config-server:build --parallel -x :config-server:test
+          else
+            ./gradlew :${{ matrix.module }}:build --parallel
+          fi
