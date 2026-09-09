@@ -210,6 +210,8 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       INTERNAL_API_SECRET: ${INTERNAL_API_SECRET}
+      MARKET_SCHEDULER_ENABLED: ${MARKET_SCHEDULER_ENABLED:-false}
+      MARKET_SCHEDULER_SYSTEM_USER_ID: ${MARKET_SCHEDULER_SYSTEM_USER_ID:-}
     # ports 없음 - user-service와 동일한 이유 (Gateway만 내부 DNS로 접근하면 됨)
     networks:
       - sajo-net
