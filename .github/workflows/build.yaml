@@ -48,7 +48,7 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
-      - name: Set up Gradle (원격 빌드 캐시 연결)
+      - name: Set up Gradle (GitHub Actions 캐시 기반 의존성/빌드 캐시)
         uses: gradle/actions/setup-gradle@v4
 
       - name: Install postgresql client
@@ -83,7 +83,7 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
-      - name: Set up Gradle (원격 빌드 캐시 연결)
+      - name: Set up Gradle (GitHub Actions 캐시 기반 의존성/빌드 캐시)
         uses: gradle/actions/setup-gradle@v4
 
       - name: Grant execute permission for gradlew
@@ -114,7 +114,7 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
 
-      - name: Set up Gradle (원격 빌드 캐시 연결)
+      - name: Set up Gradle (GitHub Actions 캐시 기반 의존성/빌드 캐시)
         uses: gradle/actions/setup-gradle@v4
 
       - name: Grant execute permission for gradlew
