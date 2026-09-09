@@ -42,6 +42,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
       - name: Set up Gradle (원격 빌드 캐시 연결)
         uses: gradle/actions/setup-gradle@v4
 
@@ -64,3 +70,29 @@ jobs:
           else
             ./gradlew :${{ matrix.module }}:build --parallel
           fi
+
+  build-libs:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module: [common, common-redis, common-kafka, common-jwt]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Set up Gradle (원격 빌드 캐시 연결)
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build and test libs:${{ matrix.module }}
+        run: ./gradlew :libs:${{ matrix.module }}:build --parallel
