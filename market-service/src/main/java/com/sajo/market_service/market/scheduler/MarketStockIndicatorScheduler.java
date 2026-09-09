@@ -73,8 +73,13 @@ public class MarketStockIndicatorScheduler {
         IndicatorCollectionSummary summary = IndicatorCollectionSummary.empty();
         String lastStockCode = null;
         while (true) {
-            var targets = marketStockQueryRepository.findCollectionTargetsAfterStockCode(
-                    lastStockCode, PageRequest.of(0, properties.pageSize(), Sort.by(Sort.Direction.ASC, STOCK_CODE_SORT_PROPERTY)));
+            var targets = properties.targetStockCodes().isEmpty()
+                    ? marketStockQueryRepository.findCollectionTargetsAfterStockCode(
+                    lastStockCode, PageRequest.of(0, properties.pageSize(), Sort.by(Sort.Direction.ASC, STOCK_CODE_SORT_PROPERTY)))
+                    : marketStockQueryRepository.findCollectionTargetsByStockCodes(properties.targetStockCodes());
+            if (!properties.targetStockCodes().isEmpty()) {
+                return collectTargetList(credentials, targets, summary);
+            }
             if (targets.isEmpty()) {
                 return summary;
             }
@@ -96,6 +101,20 @@ public class MarketStockIndicatorScheduler {
             }
             lastStockCode = nextLastStockCode;
         }
+    }
+
+    private IndicatorCollectionSummary collectTargetList(
+            UserKisTokenResponse credentials,
+            java.util.List<MarketStockCollectionTarget> targets,
+            IndicatorCollectionSummary summary
+    ) {
+        for (MarketStockCollectionTarget target : targets) {
+            summary = collectStock(credentials, target, summary);
+            if (summary.runStatus() == IndicatorRunStatus.INTERRUPTED) {
+                return summary;
+            }
+        }
+        return summary;
     }
 
     private IndicatorCollectionSummary collectStock(

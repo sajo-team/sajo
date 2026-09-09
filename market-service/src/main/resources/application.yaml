@@ -41,6 +41,7 @@ sajo:
     indicator-enabled: ${MARKET_INDICATOR_SCHEDULER_ENABLED:false}
     indicator-cron: "${MARKET_INDICATOR_SCHEDULER_CRON:0 20 16 * * MON-FRI}"
     kis-request-interval: ${MARKET_SCHEDULER_KIS_REQUEST_INTERVAL:500ms}
+    target-stock-codes: ${MARKET_SCHEDULER_TARGET_STOCK_CODES:}
 
   kafka:
     type-mappings:

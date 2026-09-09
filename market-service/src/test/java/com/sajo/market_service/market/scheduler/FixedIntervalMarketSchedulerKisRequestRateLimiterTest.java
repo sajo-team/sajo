@@ -48,7 +48,7 @@ class FixedIntervalMarketSchedulerKisRequestRateLimiterTest {
         AtomicReference<Boolean> acquired = new AtomicReference<>();
         AtomicReference<Boolean> interrupted = new AtomicReference<>();
         FixedIntervalMarketSchedulerKisRequestRateLimiter limiter = new FixedIntervalMarketSchedulerKisRequestRateLimiter(
-                new MarketSchedulerProperties(false, "", "", 10, false, "", Duration.ofSeconds(30)),
+        new MarketSchedulerProperties(false, "", "", 10, false, "", Duration.ofSeconds(30), java.util.List.of()),
                 System::nanoTime,
                 nanos -> {
                     waiting.countDown();
@@ -73,7 +73,7 @@ class FixedIntervalMarketSchedulerKisRequestRateLimiterTest {
 
     private FixedIntervalMarketSchedulerKisRequestRateLimiter limiter(AtomicLong now, ArrayDeque<Long> waits) {
         return new FixedIntervalMarketSchedulerKisRequestRateLimiter(
-                new MarketSchedulerProperties(false, "", "", 10, false, "", Duration.ofMillis(500)),
+        new MarketSchedulerProperties(false, "", "", 10, false, "", Duration.ofMillis(500), java.util.List.of()),
                 now::get,
                 requestedWait -> {
                     waits.add(requestedWait);
