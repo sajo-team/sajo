@@ -41,9 +41,11 @@ public class MarketStock extends BaseUpdatableEntity {
     private String industryCode;
 
     @Column(name = "listed_shares")
+    /** 실제 주식 수 단위. KIS 마스터의 천 주 단위를 1,000배 변환해 저장한다. */
     private Long listedShares;
 
     @Column(name = "market_cap", precision = 20, scale = 0)
+    /** 원 단위. KIS 마스터의 억 원 단위를 100,000,000배 변환해 저장한다. */
     private BigDecimal marketCap;
 
     private MarketStock(

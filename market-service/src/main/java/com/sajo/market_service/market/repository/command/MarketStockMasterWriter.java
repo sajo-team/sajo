@@ -9,6 +9,7 @@ import org.springframework.stereotype.Repository;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.sql.Timestamp;
 
 /**
  * PostgreSQL에 종목 마스터 정보를 batch upsert하는 Writer
@@ -57,6 +58,6 @@ public class MarketStockMasterWriter {
                 .addValue("industryCode", stock.industryCode())
                 .addValue("listedShares", stock.listedShares())
                 .addValue("marketCap", stock.marketCap())
-                .addValue("now", now);
+                .addValue("now", Timestamp.from(now));
     }
 }

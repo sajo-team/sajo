@@ -9,7 +9,9 @@ public record MarketStockResponse(
         String stockName,
         String marketType,
         String industryCode,
+        /** 실제 주식 수 단위 */
         Long listedShares,
+        /** 원 단위 */
         BigDecimal marketCap
 ) {
     public static MarketStockResponse from(MarketStock stock) {

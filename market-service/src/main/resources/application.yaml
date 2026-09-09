@@ -25,6 +25,12 @@ market:
     ttl: 60s
     lock-ttl: 30s
     lock-wait-timeout: 5s
+  stock-master-sync:
+    enabled: ${MARKET_STOCK_MASTER_SYNC_ENABLED:false}
+    chunk-size: ${MARKET_STOCK_MASTER_SYNC_CHUNK_SIZE:500}
+    max-download-bytes: ${MARKET_STOCK_MASTER_SYNC_MAX_DOWNLOAD_BYTES:52428800}
+    connect-timeout: ${MARKET_STOCK_MASTER_SYNC_CONNECT_TIMEOUT:3s}
+    read-timeout: ${MARKET_STOCK_MASTER_SYNC_READ_TIMEOUT:10s}
 
 sajo:
   scheduler:
