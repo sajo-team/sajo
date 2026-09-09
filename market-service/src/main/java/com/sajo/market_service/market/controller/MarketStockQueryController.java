@@ -4,6 +4,7 @@ import com.sajo.common.code.GeneralResponseCode;
 import com.sajo.common.response.GeneralResponse;
 import com.sajo.common.response.PageResponse;
 import com.sajo.market_service.market.dto.response.MarketStockResponse;
+import com.sajo.market_service.market.dto.response.MarketStockSearchResponse;
 import com.sajo.market_service.market.domain.MarketStock;
 import com.sajo.market_service.market.service.query.MarketStockQueryService;
 import jakarta.validation.constraints.NotBlank;
@@ -61,7 +62,7 @@ public class MarketStockQueryController {
      * ex) 이름이나 코드에 ‘삼성’이 포함된 종목 찾기
      */
     @GetMapping("/search")
-    public ResponseEntity<GeneralResponse<PageResponse<MarketStockResponse>>> searchStocks(
+    public ResponseEntity<GeneralResponse<PageResponse<MarketStockSearchResponse>>> searchStocks(
             @RequestParam @NotBlank(message = "검색어는 필수입니다.") @Size(max = 100) String keyword,
             @RequestParam(defaultValue = "0") @Min(0) int page,
             @RequestParam(defaultValue = "10") @Min(1) @Max(50) int size,
