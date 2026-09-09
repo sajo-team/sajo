@@ -24,7 +24,7 @@ public class MarketStockMasterWriter {
             insert into m_market_stocks (
                 id, stock_code, stock_name, market_type, industry_code, listed_shares, market_cap, created_at, updated_at
             ) values (
-                :id, :stockCode, :stockName, :marketType, :industryCode, :listedShares, :marketCap, :now, :now
+                :id, :stockCode, :stockName, :marketType, :industryCode, :listedShares, :marketCap, :createdAt, :updatedAt
             ) on conflict (stock_code) do update set
                 stock_name = excluded.stock_name,
                 market_type = excluded.market_type,
@@ -58,6 +58,7 @@ public class MarketStockMasterWriter {
                 .addValue("industryCode", stock.industryCode())
                 .addValue("listedShares", stock.listedShares())
                 .addValue("marketCap", stock.marketCap())
-                .addValue("now", Timestamp.from(now));
+                .addValue("createdAt", Timestamp.from(now))
+                .addValue("updatedAt", Timestamp.from(now));
     }
 }

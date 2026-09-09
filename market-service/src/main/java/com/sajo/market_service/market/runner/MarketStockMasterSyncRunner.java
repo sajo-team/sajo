@@ -22,7 +22,13 @@ public class MarketStockMasterSyncRunner implements ApplicationRunner {
     public void run(ApplicationArguments args) {
         try {
             MarketStockMasterSyncResult result = syncService.sync(properties.chunkSize());
-            log.info("종목 마스터 동기화 완료: collected={}, saved={}, skipped={}, failed={}", result.collectedCount(), result.savedCount(), result.skippedCount(), result.failedCount());
+            if (result.marketFailureCount() > 0) {
+                log.warn("종목 마스터 동기화 일부 시장 실패: collected={}, saved={}, skipped={}, stockFailed={}, marketFailed={}",
+                        result.collectedCount(), result.savedCount(), result.skippedCount(), result.failedCount(), result.marketFailureCount());
+            } else {
+                log.info("종목 마스터 동기화 완료: collected={}, saved={}, skipped={}, stockFailed={}, marketFailed=0",
+                        result.collectedCount(), result.savedCount(), result.skippedCount(), result.failedCount());
+            }
         } catch (RuntimeException exception) {
             // 일회성 운영 동기화 실패가 Market Service 전체 기동을 막지 않도록 한다.
             log.error("종목 마스터 동기화에 실패했습니다. 기존 종목 데이터는 유지됩니다.", exception);

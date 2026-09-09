@@ -12,6 +12,7 @@ import java.util.List;
 import java.math.BigDecimal;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -61,6 +62,42 @@ class MarketStockMasterSyncServiceTest {
         verify(commandService).saveMasterStocks(List.of(second.command()));
         org.assertj.core.api.Assertions.assertThat(result.savedCount()).isEqualTo(1);
         org.assertj.core.api.Assertions.assertThat(result.failedCount()).isEqualTo(1);
+    }
+
+    @Test
+    void continuesWithKosdaqWhenKospiDownloadFails() {
+        when(downloadClient.downloadKOSPI()).thenThrow(new IllegalStateException("KOSPI unavailable"));
+        when(downloadClient.downloadKOSDAQ()).thenReturn(new byte[]{2});
+        MarketStockMasterParser.ParsedStock stock = parsed("000250");
+        when(parser.parseWithStats(new byte[]{2}, "KOSDAQ"))
+                .thenReturn(new MarketStockMasterParser.ParseResult(List.of(stock), 3));
+        when(commandService.saveMasterStocks(List.of(stock.command()))).thenReturn(1);
+
+        MarketStockMasterSyncResult result = service.sync(10);
+
+        verify(parser, never()).parseWithStats(any(), eq("KOSPI"));
+        verify(commandService).saveMasterStocks(List.of(stock.command()));
+        assertThat(result.savedCount()).isEqualTo(1);
+        assertThat(result.skippedCount()).isEqualTo(3);
+        assertThat(result.marketFailureCount()).isEqualTo(1);
+    }
+
+    @Test
+    void continuesWithKosdaqWhenKospiParsingFails() {
+        when(downloadClient.downloadKOSPI()).thenReturn(new byte[]{1});
+        when(downloadClient.downloadKOSDAQ()).thenReturn(new byte[]{2});
+        when(parser.parseWithStats(new byte[]{1}, "KOSPI"))
+                .thenThrow(new IllegalArgumentException("malformed KOSPI"));
+        MarketStockMasterParser.ParsedStock stock = parsed("000250");
+        when(parser.parseWithStats(new byte[]{2}, "KOSDAQ"))
+                .thenReturn(new MarketStockMasterParser.ParseResult(List.of(stock), 0));
+        when(commandService.saveMasterStocks(List.of(stock.command()))).thenReturn(1);
+
+        MarketStockMasterSyncResult result = service.sync(10);
+
+        verify(commandService).saveMasterStocks(List.of(stock.command()));
+        assertThat(result.savedCount()).isEqualTo(1);
+        assertThat(result.marketFailureCount()).isEqualTo(1);
     }
 
     private static MarketStockMasterParser.ParsedStock parsed(String code) {

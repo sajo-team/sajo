@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 @Service
 @RequiredArgsConstructor
@@ -23,14 +24,30 @@ public class MarketStockMasterSyncService {
         if (chunkSize <= 0) {
             throw new IllegalArgumentException("종목 마스터 청크 크기는 양수여야 합니다.");
         }
-        MarketStockMasterSyncResult result = new MarketStockMasterSyncResult(0, 0, 0, 0);
+        MarketStockMasterSyncResult result = new MarketStockMasterSyncResult(0, 0, 0, 0, 0);
         Map<String, Integer> failureCounts = new LinkedHashMap<>();
-        result = result.plus(syncMarket(downloadClient.downloadKOSPI(), "KOSPI", chunkSize, failureCounts));
-        result = result.plus(syncMarket(downloadClient.downloadKOSDAQ(), "KOSDAQ", chunkSize, failureCounts));
+        result = result.plus(syncMarketSafely("KOSPI", downloadClient::downloadKOSPI, chunkSize, failureCounts));
+        result = result.plus(syncMarketSafely("KOSDAQ", downloadClient::downloadKOSDAQ, chunkSize, failureCounts));
         if (!failureCounts.isEmpty()) {
             log.error("종목 마스터 청크 실패 원인 요약: {}", failureCounts);
         }
         return result;
+    }
+
+    private MarketStockMasterSyncResult syncMarketSafely(
+            String marketType,
+            Supplier<byte[]> downloader,
+            int chunkSize,
+            Map<String, Integer> failureCounts
+    ) {
+        try {
+            return syncMarket(downloader.get(), marketType, chunkSize, failureCounts);
+        } catch (RuntimeException exception) {
+            Throwable rootCause = rootCause(exception);
+            log.error("종목 마스터 시장 처리 실패: marketType={}, exceptionType={}, causeType={}, reason={}",
+                    marketType, exception.getClass().getSimpleName(), rootCause.getClass().getSimpleName(), safeReason(rootCause));
+            return new MarketStockMasterSyncResult(0, 0, 0, 0, 1);
+        }
     }
 
     private MarketStockMasterSyncResult syncMarket(
@@ -61,7 +78,7 @@ public class MarketStockMasterSyncService {
                 }
             }
         }
-        return new MarketStockMasterSyncResult(parsed.size(), saved, parseResult.skippedCount(), failed);
+        return new MarketStockMasterSyncResult(parsed.size(), saved, parseResult.skippedCount(), failed, 0);
     }
 
     private static Throwable rootCause(Throwable exception) {
