@@ -7,10 +7,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 
 import java.util.UUID;
 
-@FeignClient(
-        name = "market-service",
-        configuration = StrategyClientConfig.class
-)
+@FeignClient(name = "market-service")
 public interface StrategyClient {
 
     @GetMapping("/internal/v1/strategies/{strategyId}")
