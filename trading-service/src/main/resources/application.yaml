@@ -52,6 +52,11 @@ spring:
     openai:
       api-key: ${OPENAI_API_KEY}
 
+# user-service/market-service local 프로필과 반드시 동일해야 함 (internal API 호출/검증 쌍)
+sajo:
+  internal:
+    api-secret: local-dev-internal-api-secret-do-not-use-in-prod
+
 eureka:
   client:
     service-url:
@@ -71,6 +76,8 @@ spring:
         default_schema: trading
     hibernate:
       ddl-auto: validate
+  # MONGO_PASSWORD가 URI에 그대로 삽입됨 - URI 예약문자(@ : / ? # %) 포함 시 파싱이 깨질 수 있으니
+  # .env.example의 제약(영숫자 권장)을 반드시 지킬 것
   mongodb:
     uri: mongodb://root:${MONGO_PASSWORD}@mongo-ai-risk:27017/ai_risk_db?authSource=admin
     auto-index-creation: true
@@ -83,6 +90,8 @@ sajo:
   kafka:
     type-mappings:
       trading.signal.generated: com.sajo.trading_service.trading.kafka.dto.TradingSignalGeneratedEvent
+  internal:
+    api-secret: ${INTERNAL_API_SECRET}
 
 kis:
   base-url: ${KIS_BASE_URL:https://openapivts.koreainvestment.com:29443}

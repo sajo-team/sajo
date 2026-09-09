@@ -62,6 +62,11 @@ spring:
       port: 6379
       password: redis
 
+# user-service/trading-service local 프로필과 반드시 동일해야 함 (internal API 호출/검증 쌍)
+sajo:
+  internal:
+    api-secret: local-dev-internal-api-secret-do-not-use-in-prod
+
 eureka:
   client:
     service-url:
@@ -86,6 +91,10 @@ spring:
       host: redis
       port: 6379
       password: ${REDIS_PASSWORD}
+
+sajo:
+  internal:
+    api-secret: ${INTERNAL_API_SECRET}
 
 eureka:
   client:
