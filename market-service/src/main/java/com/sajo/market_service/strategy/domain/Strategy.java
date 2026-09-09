@@ -78,6 +78,7 @@ public class Strategy extends BaseUpdatableEntity {
             BigDecimal stopLossRate,
             BigDecimal targetReturnRate,
             Long allocatedAmount,
+            Long orderAmount,
             BigDecimal perCondition,
             BigDecimal pbrCondition,
             BigDecimal roeCondition
@@ -91,7 +92,7 @@ public class Strategy extends BaseUpdatableEntity {
         this.stopLossRate = stopLossRate;
         this.targetReturnRate = targetReturnRate;
         this.allocatedAmount = allocatedAmount;
-        this.orderAmount = null;
+        this.orderAmount = orderAmount;
         this.perCondition = perCondition;
         this.pbrCondition = pbrCondition;
         this.roeCondition = roeCondition;
@@ -108,6 +109,7 @@ public class Strategy extends BaseUpdatableEntity {
             BigDecimal stopLossRate,
             BigDecimal targetReturnRate,
             Long allocatedAmount,
+            Long orderAmount,
             BigDecimal perCondition,
             BigDecimal pbrCondition,
             BigDecimal roeCondition
@@ -144,6 +146,14 @@ public class Strategy extends BaseUpdatableEntity {
             throw new BusinessException(StrategyErrorCode.INVALID_STRATEGY, "전략 배정 금액은 0보다 커야 합니다.");
         }
 
+        if (orderAmount == null || orderAmount <= 0) {
+            throw new BusinessException(StrategyErrorCode.INVALID_STRATEGY, "1회 주문 금액은 0보다 커야합니다.");
+        }
+
+        if (orderAmount > allocatedAmount) {
+            throw new BusinessException(StrategyErrorCode.INVALID_STRATEGY, "1회 주문 금액은 전략 배정 금액보다 클 수 없습니다.");
+        }
+
         return new Strategy(
                 userId,
                 stockId,
@@ -154,6 +164,7 @@ public class Strategy extends BaseUpdatableEntity {
                 stopLossRate,
                 targetReturnRate,
                 allocatedAmount,
+                orderAmount,
                 perCondition,
                 pbrCondition,
                 roeCondition
@@ -167,57 +178,120 @@ public class Strategy extends BaseUpdatableEntity {
             BigDecimal stopLossRate,
             BigDecimal targetReturnRate,
             Long allocatedAmount,
+            Long orderAmount,
             BigDecimal perCondition,
             BigDecimal pbrCondition,
             BigDecimal roeCondition
     ) {
         validateMutable();
 
+
+//         금액 변경 가능성을 먼저 계산하고 검증한다.
+//         검증 실패 시 다른 필드가 변경되지 않도록 필드 대입보다 먼저 수행한다.
+
+        Long newAllocatedAmount =
+                allocatedAmount != null
+                        ? allocatedAmount
+                        : this.allocatedAmount;
+
+        Long newOrderAmount =
+                orderAmount != null
+                        ? orderAmount
+                        : this.orderAmount;
+
+        if (allocatedAmount != null) {
+            validatePositive(
+                    allocatedAmount,
+                    "전략 배정 금액은 0보다 커야 합니다."
+            );
+        }
+
+        if (orderAmount != null) {
+            validatePositive(
+                    orderAmount,
+                    "1회 주문 금액은 0보다 커야 합니다."
+            );
+        }
+
+        if (newOrderAmount != null
+                && newOrderAmount > newAllocatedAmount) {
+            throw new BusinessException(
+                    StrategyErrorCode.INVALID_STRATEGY,
+                    "1회 주문 금액은 전략 배정 금액보다 클 수 없습니다."
+            );
+        }
+
         if (strategyName != null) {
             if (strategyName.isBlank()) {
-                throw new BusinessException(StrategyErrorCode.INVALID_STRATEGY);
+                throw new BusinessException(
+                        StrategyErrorCode.INVALID_STRATEGY
+                );
             }
             this.strategyName = strategyName;
         }
 
         if (buyConditionPrice != null) {
-            validatePositive(buyConditionPrice, "매수 조건 가격은 0보다 커야 합니다.");
+            validatePositive(
+                    buyConditionPrice,
+                    "매수 조건 가격은 0보다 커야 합니다."
+            );
             this.buyConditionPrice = buyConditionPrice;
         }
 
         if (sellConditionPrice != null) {
-            validatePositive(sellConditionPrice, "매도 조건 가격은 0보다 커야 합니다.");
+            validatePositive(
+                    sellConditionPrice,
+                    "매도 조건 가격은 0보다 커야 합니다."
+            );
             this.sellConditionPrice = sellConditionPrice;
         }
 
         if (stopLossRate != null) {
-            validatePositive(stopLossRate, "손절률은 0보다 커야합니다.");
+            validatePositive(
+                    stopLossRate,
+                    "손절률은 0보다 커야 합니다."
+            );
             this.stopLossRate = stopLossRate;
         }
 
         if (targetReturnRate != null) {
-            validatePositive(targetReturnRate, "목표 수익률은 0보다 커야합니다.");
+            validatePositive(
+                    targetReturnRate,
+                    "목표 수익률은 0보다 커야 합니다."
+            );
             this.targetReturnRate = targetReturnRate;
         }
 
-        if (allocatedAmount != null) {
-            validatePositive(allocatedAmount, "전략 배정 금액은 0보다 커야 합니다.");
-            this.allocatedAmount = allocatedAmount;
-        }
-
         if (perCondition != null) {
-            validatePositive(perCondition, "PER 조건은 0보다 커야 합니다.");
+            validatePositive(
+                    perCondition,
+                    "PER 조건은 0보다 커야 합니다."
+            );
             this.perCondition = perCondition;
         }
 
         if (pbrCondition != null) {
-            validatePositive(pbrCondition, "PBR 조건은 0보다 커야 합니다.");
+            validatePositive(
+                    pbrCondition,
+                    "PBR 조건은 0보다 커야 합니다."
+            );
             this.pbrCondition = pbrCondition;
         }
 
         if (roeCondition != null) {
-            validatePositive(roeCondition, "ROE 조건은 0보다 커야 합니다.");
+            validatePositive(
+                    roeCondition,
+                    "ROE 조건은 0보다 커야 합니다."
+            );
             this.roeCondition = roeCondition;
+        }
+
+        if (allocatedAmount != null) {
+            this.allocatedAmount = allocatedAmount;
+        }
+
+        if (orderAmount != null) {
+            this.orderAmount = orderAmount;
         }
     }
 

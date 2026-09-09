@@ -46,7 +46,7 @@ class StrategyQueryRepositoryTest {
         return Strategy.create(
                 userId, UUID.randomUUID(), stockCode, name,
                 70_000L, 80_000L, new BigDecimal("5.0000"), null,
-                1_000_000L, null, null, null
+                1_000_000L, 100_000L, null, null, null
         );
     }
 

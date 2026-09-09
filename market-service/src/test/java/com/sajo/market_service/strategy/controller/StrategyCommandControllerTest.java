@@ -52,13 +52,13 @@ class StrategyCommandControllerTest {
         StrategyCreateRequest request = new StrategyCreateRequest(
                 stockId, "005930", "삼성전자 눌림목 전략",
                 70_000L, 80_000L, new BigDecimal("5.0000"), null,
-                3_000_000L, null, null, null
+                3_000_000L, 100_000L, null, null, null
         );
 
         StrategyCreateResponse response = new StrategyCreateResponse(
                 strategyId, stockId, "005930", "삼성전자 눌림목 전략",
                 70_000L, 80_000L, new BigDecimal("5.0000"), null,
-                3_000_000L, null, null, null,
+                3_000_000L, 100_000L, null, null, null,
                 StrategyStatus.INACTIVE, Instant.now()
         );
 
@@ -87,7 +87,7 @@ class StrategyCommandControllerTest {
         StrategyCreateRequest request = new StrategyCreateRequest(
                 UUID.randomUUID(), "005930", "",
                 70_000L, 80_000L, new BigDecimal("5.0000"), null,
-                3_000_000L, null, null, null
+                3_000_000L, 100_000L, null, null, null
         );
 
         // when & then
@@ -109,7 +109,7 @@ class StrategyCommandControllerTest {
         StrategyCreateRequest request = new StrategyCreateRequest(
                 UUID.randomUUID(), "005930", "삼성전자 눌림목 전략",
                 0L, 80_000L, new BigDecimal("5.0000"), null,
-                3_000_000L, null, null, null
+                3_000_000L, 100_000L, null, null, null
         );
 
         // when & then
@@ -137,6 +137,7 @@ class StrategyCommandControllerTest {
                 new BigDecimal("4.0000"),
                 new BigDecimal("12.0000"),
                 4_000_000L,
+                100_000L,
                 new BigDecimal("15.0000"),
                 new BigDecimal("1.2000"),
                 new BigDecimal("10.0000")
@@ -151,6 +152,7 @@ class StrategyCommandControllerTest {
                 new BigDecimal("4.0000"),
                 new BigDecimal("12.0000"),
                 4_000_000L,
+                100_000L,
                 new BigDecimal("15.0000"),
                 new BigDecimal("1.2000"),
                 new BigDecimal("10.0000"),
