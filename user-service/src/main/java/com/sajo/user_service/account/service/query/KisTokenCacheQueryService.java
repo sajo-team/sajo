@@ -41,8 +41,11 @@ public class KisTokenCacheQueryService {
     private static final Duration RETRY_INTERVAL = Duration.ofMillis(50);
     // KIS 문서 기준 approval key(웹소켓 접속키) 유효기간은 24시간 - expires_in 같은 응답 필드가 없어 고정값 사용
     private static final Duration APPROVAL_KEY_TTL = Duration.ofHours(23);
-    // 락 해제 직후 다음 대기자가 백오프 없이 같은 실패를 바로 반복하는 것을 막는 억제 시간
+    // 락 해제 직후 다음 대기자가 백오프 없이 같은 실패를 바로 반복하는 것을 막는 억제 시간(일시적일 수 있는 일반 실패용)
     private static final Duration RECENT_FAILURE_TTL = Duration.ofSeconds(1);
+    // KIS OAuth rate limit(EGW00133, 1분당 1회)은 확정적으로 남은 시간 내내 계속 실패하므로,
+    // 일반 실패보다 훨씬 길게 억제해도 손해가 없음 - 1분 윈도우 대비 안전마진
+    private static final Duration RATE_LIMIT_RECENT_FAILURE_TTL = Duration.ofSeconds(55);
 
     public String getAccessToken(UUID userId, UUID accountId, String appKey, String secretKey, AccountType accountType) {
         String key = KisTokenCacheKeys.accessToken(userId);
@@ -100,10 +103,12 @@ public class KisTokenCacheQueryService {
                     if (recheck.token() != null) {
                         return recheck.token();
                     }
-                    if (hasRecentFailure(key)) {
-                        // 직전 락 홀더가 방금 실패했다 - 백오프 없이 곧바로 같은 실패를 반복하지 않도록 즉시 실패 처리
-                        throw new BusinessException(AccountErrorCode.KIS_TOKEN_ISSUE_FAILED);
+                    Optional<AccountErrorCode> recentFailure = recentFailure(key);
+                    if (recentFailure.isPresent()) {
+                        // 직전 락 홀더가 방금 실패했다 - 백오프 없이 곧바로 같은 실패를 반복하지 않도록 즉시 실패 처리.
+                        throw new BusinessException(recentFailure.get());
                     }
+
                     return fetchCacheReleaseThenRecord(userId, accountId, tokenType, key, fetcher, lockToken);
                 } finally {
                     releaseLock(key, lockToken);
@@ -145,7 +150,7 @@ public class KisTokenCacheQueryService {
             result = fetcher.get();
         } catch (KisBusinessException e) {
             kisTokenLogCommandService.recordFail(accountId, userId, tokenType, e.getKisErrorCode(), e.getKisMessage());
-            markRecentFailure(key);
+            markRecentFailure(key, (AccountErrorCode) e.getErrorCode());
             throw e;
         }
 
@@ -175,7 +180,7 @@ public class KisTokenCacheQueryService {
         try {
             result = fetcher.get();
         } catch (KisBusinessException e) {
-            markRecentFailure(key);
+            markRecentFailure(key, (AccountErrorCode) e.getErrorCode());
             releaseLock(key, lockToken);
             kisTokenLogCommandService.recordFail(accountId, userId, tokenType, e.getKisErrorCode(), e.getKisMessage());
             throw e;
@@ -195,22 +200,34 @@ public class KisTokenCacheQueryService {
         return result.value();
     }
 
-    // 마커 존재 자체가 신호라 값은 아무 의미 없음("1" 고정) - 저장 실패해도 그냥 넘어감 (억제 실패 = 재시도 허용, 안전한 방향)
-    private void markRecentFailure(String key) {
+    // 마커에 실패 당시의 AccountErrorCode를 같이 저장해서, fail-fast 시에도 원래 실패 종류(rate limit/자격증명
+    // 오류 등)를 그대로 재현할 수 있게 한다 - 저장 실패해도 그냥 넘어감 (억제 실패 = 재시도 허용, 안전한 방향)
+    private void markRecentFailure(String key, AccountErrorCode errorCode) {
+        Duration ttl = errorCode == AccountErrorCode.KIS_RATE_LIMITED
+                ? RATE_LIMIT_RECENT_FAILURE_TTL
+                : RECENT_FAILURE_TTL;
         try {
-            redisTemplate.opsForValue().set(recentFailureKey(key), "1", RECENT_FAILURE_TTL);
+            redisTemplate.opsForValue().set(recentFailureKey(key), errorCode.name(), ttl);
         } catch (DataAccessException e) {
             log.warn("Redis 실패 마커 저장 실패. key={}", key, e);
         }
     }
 
     // 조회 실패해도 "최근 실패 없음"으로 간주 - Redis 장애 시 이 억제 기능 때문에 KIS 호출 자체가 막히면 안 됨
-    private boolean hasRecentFailure(String key) {
+    private Optional<AccountErrorCode> recentFailure(String key) {
         try {
-            return redisTemplate.opsForValue().get(recentFailureKey(key)) != null;
+            String errorCodeName = redisTemplate.opsForValue().get(recentFailureKey(key));
+            if (errorCodeName == null) {
+                return Optional.empty();
+            }
+            return Optional.of(AccountErrorCode.valueOf(errorCodeName));
         } catch (DataAccessException e) {
             log.warn("Redis 실패 마커 조회 실패. key={}", key, e);
-            return false;
+            return Optional.empty();
+        } catch (IllegalArgumentException e) {
+            // 마커 값이 유효한 AccountErrorCode 이름이 아닌 경우(손상 등) - 안전하게 "최근 실패 없음"으로 처리
+            log.warn("Redis 실패 마커 값이 유효한 에러코드가 아닙니다. key={}", key, e);
+            return Optional.empty();
         }
     }
 

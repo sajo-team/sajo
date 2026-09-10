@@ -156,6 +156,32 @@ class KisTokenCacheQueryServiceTest {
         verify(kisTokenCacheLock, times(2)).unlock(eq(key), anyString());
         // 실제 토큰 값은 캐시에 안 남지만, 실패 마커(key:recent-failure)는 남으므로 set() 자체는 호출됨
         verify(valueOperations, never()).set(eq(key), any(), any(Duration.class));
+        // rate limit이 아닌 일반 실패는 짧은 억제 시간(1초) - 일시적일 수 있으니 재시도 기회를 오래 막지 않음
+        verify(valueOperations).set(eq(key + ":recent-failure"), eq("INVALID_KIS_CREDENTIALS"), eq(Duration.ofSeconds(1)));
+    }
+
+    @Test
+    @DisplayName("rate limit으로 실패하면, 확정적으로 한동안 계속 실패할 것이므로 훨씬 긴 시간 동안 억제한다")
+    void getAccessToken_rateLimited_marksRecentFailureWithLongerTtl() {
+        // given
+        UUID userId = UUID.randomUUID();
+        UUID accountId = UUID.randomUUID();
+        String key = KisTokenCacheKeys.accessToken(userId);
+        KisBusinessException rateLimitException =
+                new KisBusinessException(AccountErrorCode.KIS_RATE_LIMITED, "EGW00133", "접근토큰 발급 제한");
+
+        given(redisTemplate.opsForValue()).willReturn(valueOperations);
+        given(valueOperations.get(key)).willReturn(null);
+        given(kisTokenCacheLock.tryLock(eq(key), anyString(), any(Duration.class))).willReturn(true);
+        given(kisOAuthClient.getAccessToken("app-key", "secret-key", AccountType.REAL)).willThrow(rateLimitException);
+
+        // when & then
+        assertThatThrownBy(() ->
+                kisTokenCacheQueryService.getAccessToken(userId, accountId, "app-key", "secret-key", AccountType.REAL))
+                .isSameAs(rateLimitException);
+
+        // KIS OAuth rate limit(1분당 1회)은 확정적으로 한동안 계속 실패하므로 55초까지 억제해도 손해가 없음
+        verify(valueOperations).set(eq(key + ":recent-failure"), eq("KIS_RATE_LIMITED"), eq(Duration.ofSeconds(55)));
     }
 
     @Test
@@ -167,15 +193,15 @@ class KisTokenCacheQueryServiceTest {
         given(redisTemplate.opsForValue()).willReturn(valueOperations);
         given(valueOperations.get(key)).willReturn(null);
         given(kisTokenCacheLock.tryLock(eq(key), anyString(), any(Duration.class))).willReturn(true);
-        given(valueOperations.get(key + ":recent-failure")).willReturn("1");
+        given(valueOperations.get(key + ":recent-failure")).willReturn(AccountErrorCode.KIS_RATE_LIMITED.name());
 
-        // when & then
+        // when & then - 마커에 저장된 원래 실패 종류(KIS_RATE_LIMITED)를 그대로 재현해야 한다
         assertThatThrownBy(() ->
                 kisTokenCacheQueryService.getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(exception -> {
                     BusinessException businessException = (BusinessException) exception;
-                    assertThat(businessException.getErrorCode()).isEqualTo(AccountErrorCode.KIS_TOKEN_ISSUE_FAILED);
+                    assertThat(businessException.getErrorCode()).isEqualTo(AccountErrorCode.KIS_RATE_LIMITED);
                 });
 
         verifyNoInteractions(kisOAuthClient);
