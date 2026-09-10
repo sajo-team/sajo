@@ -45,11 +45,6 @@ sajo:
     account-key: local-dev-account-encryption-key
     account-salt: e9f26d0f9854767f
     account-hash-key: reM647WLMdaO/aIbzmDTKhOnJN0dcy00pcU2OKa4bq4=
-  redis:
-    cache:
-      ttl:
-        kis-access-token: 23h
-        kis-approval-key: 23h
   # gateway의 local 프로필과 반드시 동일해야 함 (발급/검증 쌍이 맞아야 함)
   jwt:
     secret: local-dev-jwt-secret-key-do-not-use-in-prod-32bytes-min
@@ -88,11 +83,6 @@ sajo:
     account-key: ${ACCOUNT_ENCRYPTION_KEY}
     account-salt: ${ACCOUNT_ENCRYPTION_SALT}
     account-hash-key: ${ACCOUNT_HASH_KEY}
-  redis:
-    cache:
-      ttl:
-        kis-access-token: 23h
-        kis-approval-key: 23h
   # TODO: 운영값은 sajo-config-repo에 gateway와 동일한 sajo.jwt.secret으로 등록할 것
   jwt:
     secret: ${JWT_SECRET}
