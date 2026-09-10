@@ -17,11 +17,11 @@ public class MarketStockIndicatorWriter {
 
     private static final String UPSERT_INDICATOR = """
             insert into m_market_stocks_indicator (
-                id, stock_id, reference_date, per, pbr, eps, bps, valuation_fetched_at,
+                id, stock_id, reference_date, per, pbr, valuation_fetched_at,
                 roe, financial_period_type, financial_reference_year_month, financial_fetched_at,
                 created_at, updated_at
             ) values (
-                :id, :stockId, null, :per, :pbr, null, null, :valuationFetchedAt,
+                :id, :stockId, null, :per, :pbr, :valuationFetchedAt,
                 :roe, :financialPeriodType, :financialReferenceYearMonth, :financialFetchedAt,
                 :createdAt, :updatedAt
             ) on conflict (stock_id, financial_period_type, financial_reference_year_month)

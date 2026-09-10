@@ -40,6 +40,18 @@ Apply V44, V52, then `V103__market_stock_indicator_upsert.sql` manually before s
 
 Apply V44, V52, V103, then `V104__market_stock_indicator_financial_period.sql` manually before deploying the new indicator collector. V104 leaves existing rows unchanged, makes the legacy `reference_date` nullable, and adds separate valuation receipt time and quarterly financial-period metadata. Existing rows are not assigned fabricated periods or receipt times. Verify duplicate non-null `(stock_id, financial_period_type, financial_reference_year_month)` values before applying. The SQL is not run automatically because Flyway/Liquibase is not configured; record its execution separately.
 
+## V105 execution order
+
+Apply V44, V52, V103, V104, then `V105__market_stock_indicator_drop_eps_bps.sql` manually. V105 drops the `eps`/`bps` columns from `m_market_stocks_indicator`.
+
+**This is not a safe blanket drop of always-null data.** The current (post-#185) quarterly upsert (`MarketStockIndicatorWriter`) only ever writes `eps`/`bps` as literal `NULL`, and no consumer (Strategy's internal contract, `/indicators`, `/indicators/history`) reads them — but before the #185 quarterly-financial-ratio refactor, the writer stored the real KIS current-price `eps`/`bps` for every legacy (`reference_date`-based) row. Any environment that ran the indicator scheduler before that refactor can have legacy rows with real, non-null `eps`/`bps` values, and KIS's current-price API cannot return a past point-in-time `eps`/`bps`, so this data cannot be re-collected once dropped.
+
+V105 therefore checks for any row with a non-null `eps` or `bps` and refuses to run (raises an exception) if one exists, mirroring V104's duplicate-check guard. If it refuses, the team must explicitly decide — and record the decision — whether to archive those values (e.g. export to a backup table) before rerunning, or accept the loss.
+
+This does **not** affect `/quote`'s `eps`/`bps`, which are served live from the KIS current-price API and are unrelated to this table.
+
+Deploy the updated `market-service` (with the `eps`/`bps` fields removed from the `MarketStockIndicator` entity) only after V105 has been applied, so `hibernate.ddl-auto: validate` does not fail against columns the entity no longer declares. A brand-new (empty) database bootstrapped after this change never creates these columns in the first place, so V105 is only relevant to already-existing databases.
+
 The daily-price and indicator schedulers use the same JVM-local KIS request limiter. Their default cron times are 16:10 and 16:20 (Asia/Seoul), but a long daily run can overlap the indicator run; the shared limiter therefore spaces their combined KIS calls by at least 500 ms (at most two requests per second).
 
 Spring's default scheduler uses a single scheduler thread, so scheduled jobs in one application instance run sequentially. This does not provide a global guarantee: multiple application instances each have their own limiter and can exceed the App Key limit together.

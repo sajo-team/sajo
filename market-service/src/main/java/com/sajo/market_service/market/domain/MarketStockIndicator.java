@@ -69,14 +69,6 @@ public class MarketStockIndicator extends BaseEntity {
     @Column(precision = 10, scale = 4)
     private BigDecimal pbr;
 
-    //주식 한 주당 기업이 얼마의 이익을 냈는지
-    @Column(precision = 15, scale = 2)
-    private BigDecimal eps;
-
-    //기업의 순자산을 주식 한 주당으로 나눈 값
-    @Column(precision = 15, scale = 2)
-    private BigDecimal bps;
-
     //기업이 자기자본을 이용해 얼마의 이익을 냈는지
     @Column(precision = 10, scale = 4)
     private BigDecimal roe;
@@ -86,16 +78,12 @@ public class MarketStockIndicator extends BaseEntity {
             LocalDate referenceDate,
             BigDecimal per,
             BigDecimal pbr,
-            BigDecimal eps,
-            BigDecimal bps,
             BigDecimal roe
     ) {
         this.stockId = stockId;
         this.referenceDate = referenceDate;
         this.per = per;
         this.pbr = pbr;
-        this.eps = eps;
-        this.bps = bps;
         this.roe = roe;
     }
 
@@ -104,8 +92,6 @@ public class MarketStockIndicator extends BaseEntity {
             LocalDate referenceDate,
             BigDecimal per,
             BigDecimal pbr,
-            BigDecimal eps,
-            BigDecimal bps,
             BigDecimal roe
     ) {
         if (stockId == null) {
@@ -125,8 +111,6 @@ public class MarketStockIndicator extends BaseEntity {
                 referenceDate,
                 per,
                 pbr,
-                eps,
-                bps,
                 roe
         );
     }

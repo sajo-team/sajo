@@ -98,7 +98,7 @@ class MarketStockIndicatorQueryControllerTest {
 
     private MarketStockIndicatorResponse response() {
         return new MarketStockIndicatorResponse(null, new BigDecimal("12.34"),
-                new BigDecimal("1.23"), null, null, new BigDecimal("8.76"),
+                new BigDecimal("1.23"), new BigDecimal("8.76"),
                 Instant.parse("2026-09-10T01:00:00Z"), FinancialPeriodType.QUARTER, "2026-06",
                 Instant.parse("2026-09-10T01:00:01Z"));
     }

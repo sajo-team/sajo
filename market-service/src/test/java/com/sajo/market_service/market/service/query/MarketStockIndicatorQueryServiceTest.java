@@ -184,7 +184,7 @@ class MarketStockIndicatorQueryServiceTest {
 
     private MarketStockIndicator indicator() {
         return MarketStockIndicator.create(stockId, LocalDate.of(2026, 9, 1), new BigDecimal("12.34"),
-                new BigDecimal("1.23"), new BigDecimal("1000"), new BigDecimal("20000"), new BigDecimal("8.76"));
+                new BigDecimal("1.23"), new BigDecimal("8.76"));
     }
 
     /**
@@ -193,7 +193,7 @@ class MarketStockIndicatorQueryServiceTest {
      */
     private MarketStockIndicator financialIndicator(String yearMonth, Instant fetchedAt) {
         MarketStockIndicator indicator = MarketStockIndicator.create(stockId, LocalDate.of(2026, 1, 1),
-                new BigDecimal("10.0"), new BigDecimal("1.0"), null, null, new BigDecimal("5.0"));
+                new BigDecimal("10.0"), new BigDecimal("1.0"), new BigDecimal("5.0"));
         ReflectionTestUtils.setField(indicator, "referenceDate", null);
         ReflectionTestUtils.setField(indicator, "financialPeriodType", FinancialPeriodType.QUARTER);
         ReflectionTestUtils.setField(indicator, "financialReferenceYearMonth", yearMonth);

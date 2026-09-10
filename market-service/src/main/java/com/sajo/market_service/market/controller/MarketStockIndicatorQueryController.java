@@ -40,8 +40,6 @@ public class MarketStockIndicatorQueryController {
      * 기준일
      * PER
      * PBR
-     * EPS
-     * BPS
      * ROE
      */
     @GetMapping("/{stockCode}/indicators")
