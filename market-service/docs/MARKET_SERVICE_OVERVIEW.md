@@ -102,13 +102,16 @@ erDiagram
 - `GET /api/v1/market/stocks/search?keyword=삼성`: 종목명 또는 종목코드 부분 검색이다. PostgreSQL만 조회하며 KIS와 Redis를 사용하지 않는다. `%`, `_`, `!`는 LIKE 검색의 와일드카드가 아닌 일반 문자로 처리한다.
 - `GET /api/v1/market/stocks/{stockCode}`: 종목 기본정보를 조회한다. 종목코드 형식 오류와 정상 형식이지만 존재하지 않는 종목을 구분한다.
 
-### 최근 일별 시세
+### 일별 시세
 
 `GET /api/v1/market/stocks/{stockCode}/prices?days=30`
+`GET /api/v1/market/stocks/{stockCode}/prices?startDate=2026-08-01&endDate=2026-09-09`
 
-- `days`의 기본값은 `30`이며, `1`부터 `365`까지만 허용한다.
+- `startDate`·`endDate`가 모두 주어지면 해당 기간의 일별 시세를 조회하고, 이때 `days`는 무시한다.
+- `startDate`·`endDate` 중 하나만 전달되면 400(`MARKET_0003`)으로 응답한다.
+- `startDate`·`endDate`가 없으면 `days`(기본값 `30`, `1`부터 `365`까지 허용) 기준 최근 거래일 조회로 동작한다.
 - PostgreSQL의 REST 일봉(`time IS NULL`, `source = REST`) 중 `closePrice`가 있는 행만 조회한다.
-- DB에서 최신 N개 거래일을 선택한 뒤, 응답은 과거 날짜부터 최신 날짜 순서로 반환한다.
+- 두 조회 방식 모두 응답은 과거 날짜부터 최신 날짜 순서로 반환한다.
 - 요청 중 KIS를 호출하거나 데이터를 저장하지 않는다. 데이터가 부족해도 현재 저장된 데이터만 반환한다.
 
 ### 최신 투자지표
@@ -123,14 +126,14 @@ erDiagram
 | --- | --- | --- | --- |
 | `GET /quote` | 지금 가격 | Redis 또는 KIS | 없음 |
 | `GET /api/v1/market/stocks`, `/search`, `/{stockCode}` | 종목 찾기 | PostgreSQL | 없음 |
-| `GET /api/v1/market/stocks/{stockCode}/prices` | 과거 가격 | PostgreSQL | 없음 |
+| `GET /api/v1/market/stocks/{stockCode}/prices` (days 또는 startDate·endDate) | 과거 가격 | PostgreSQL | 없음 |
 | `GET /api/v1/market/stocks/{stockCode}/indicators` | 최신 저장 지표 | PostgreSQL | 없음 |
 
 ## 6. 삼성전자 조회 예시
 
 1. `GET /api/v1/market/stocks/search?keyword=삼성`으로 `m_market_stocks`를 검색해 삼성전자와 `005930`을 찾는다.
 2. `GET /api/v1/market/quote?stockCode=005930`으로 Redis 또는 KIS에서 지금 가격을 확인한다.
-3. `GET /api/v1/market/stocks/005930/prices?days=30`으로 `m_market_stocks_price`의 저장된 날짜별 가격을 확인한다.
+3. `GET /api/v1/market/stocks/005930/prices?days=30` 또는 `GET /api/v1/market/stocks/005930/prices?startDate=2026-08-01&endDate=2026-09-09`으로 `m_market_stocks_price`의 저장된 날짜별 가격을 확인한다.
 4. `GET /api/v1/market/stocks/005930/indicators`로 `m_market_stocks_indicator`의 최신 PER, PBR, EPS, BPS, ROE를 확인한다.
 
 ## 7. 조회 API와 내부 저장 Command 구분
