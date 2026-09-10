@@ -122,12 +122,23 @@ erDiagram
 - 종목이 없을 때와 종목은 있지만 투자지표가 없을 때를 서로 다른 404 오류로 구분한다.
 - 요청 중 외부 API를 호출하거나 데이터를 저장하지 않는다.
 
+### 투자지표 이력
+
+`GET /api/v1/market/stocks/{stockCode}/indicators/history?limit=8`
+
+- `limit`의 기본값은 `8`이며, `1`부터 `40`까지만 허용한다.
+- 신규 분기 스냅샷이 하나라도 있으면 그것만 `financialReferenceYearMonth` 내림차순으로 반환하고, 레거시 `referenceDate` 데이터는 섞지 않는다.
+- 신규 데이터가 전혀 없는 종목에 한해서만 레거시 `referenceDate` 내림차순 이력으로 폴백한다.
+- 종목이 없으면 404(`MARKET_STOCK_NOT_FOUND`)이고, 종목은 있지만 지표 이력이 전혀 없으면 빈 배열을 반환한다(최신 투자지표 단건 조회와 달리 404가 아니다).
+- 요청 중 외부 API를 호출하거나 데이터를 저장하지 않는다.
+
 | API | 의미 | 데이터 출처 | DB 저장 발생 |
 | --- | --- | --- | --- |
 | `GET /quote` | 지금 가격 | Redis 또는 KIS | 없음 |
 | `GET /api/v1/market/stocks`, `/search`, `/{stockCode}` | 종목 찾기 | PostgreSQL | 없음 |
 | `GET /api/v1/market/stocks/{stockCode}/prices` (days 또는 startDate·endDate) | 과거 가격 | PostgreSQL | 없음 |
 | `GET /api/v1/market/stocks/{stockCode}/indicators` | 최신 저장 지표 | PostgreSQL | 없음 |
+| `GET /api/v1/market/stocks/{stockCode}/indicators/history` | 저장된 지표 이력 | PostgreSQL | 없음 |
 
 ## 6. 삼성전자 조회 예시
 
@@ -135,6 +146,7 @@ erDiagram
 2. `GET /api/v1/market/quote?stockCode=005930`으로 Redis 또는 KIS에서 지금 가격을 확인한다.
 3. `GET /api/v1/market/stocks/005930/prices?days=30` 또는 `GET /api/v1/market/stocks/005930/prices?startDate=2026-08-01&endDate=2026-09-09`으로 `m_market_stocks_price`의 저장된 날짜별 가격을 확인한다.
 4. `GET /api/v1/market/stocks/005930/indicators`로 `m_market_stocks_indicator`의 최신 PER, PBR, EPS, BPS, ROE를 확인한다.
+5. `GET /api/v1/market/stocks/005930/indicators/history?limit=8`로 최근 분기별 투자지표 변화 추이를 확인한다.
 
 ## 7. 조회 API와 내부 저장 Command 구분
 
