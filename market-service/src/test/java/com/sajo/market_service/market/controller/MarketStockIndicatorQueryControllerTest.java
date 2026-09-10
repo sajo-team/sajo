@@ -16,7 +16,9 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.Instant;
+import java.util.List;
 
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -51,6 +53,46 @@ class MarketStockIndicatorQueryControllerTest {
         given(marketStockIndicatorQueryService.getLatestIndicator("005930"))
                 .willThrow(new BusinessException(MarketErrorCode.MARKET_STOCK_INDICATOR_NOT_FOUND));
         mockMvc.perform(get("/api/v1/market/stocks/005930/indicators"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void usesDefaultLimitAndReturnsIndicatorHistory() throws Exception {
+        given(marketStockIndicatorQueryService.getIndicatorHistory(eq("005930"), eq(8)))
+                .willReturn(List.of(response()));
+
+        mockMvc.perform(get("/api/v1/market/stocks/005930/indicators/history"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].financialReferenceYearMonth").value("2026-06"));
+    }
+
+    @Test
+    void returnsEmptyArrayWhenNoIndicatorHistoryExists() throws Exception {
+        given(marketStockIndicatorQueryService.getIndicatorHistory(eq("005930"), eq(8)))
+                .willReturn(List.of());
+
+        mockMvc.perform(get("/api/v1/market/stocks/005930/indicators/history"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").isArray())
+                .andExpect(jsonPath("$.data").isEmpty());
+    }
+
+    @Test
+    void rejectsInvalidStockCodeAndLimitRangeForHistory() throws Exception {
+        mockMvc.perform(get("/api/v1/market/stocks/abc/indicators/history"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/v1/market/stocks/005930/indicators/history").param("limit", "0"))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(get("/api/v1/market/stocks/005930/indicators/history").param("limit", "41"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void returnsNotFoundForMissingStockInHistory() throws Exception {
+        given(marketStockIndicatorQueryService.getIndicatorHistory("999999", 8))
+                .willThrow(new BusinessException(MarketErrorCode.MARKET_STOCK_NOT_FOUND));
+
+        mockMvc.perform(get("/api/v1/market/stocks/999999/indicators/history"))
                 .andExpect(status().isNotFound());
     }
 
