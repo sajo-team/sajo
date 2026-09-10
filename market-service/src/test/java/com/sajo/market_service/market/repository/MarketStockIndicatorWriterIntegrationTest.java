@@ -106,15 +106,13 @@ class MarketStockIndicatorWriterIntegrationTest {
         assertThat(jdbcTemplate.queryForObject("SELECT updated_at FROM market_strategy.m_market_stocks_indicator WHERE id = ?",
                 OffsetDateTime.class, originalId)).isAfter(originalCreatedAt);
 
-        OffsetDateTime valuationFetchedAt = jdbcTemplate.queryForObject(
-                "SELECT valuation_fetched_at FROM market_strategy.m_market_stocks_indicator WHERE id = ?",
-                OffsetDateTime.class, originalId);
         writer.upsert(stockId, command(referenceDate, "17.2", null, Instant.parse("2026-09-10T02:00:00Z")));
 
-        assertMetrics(originalId, "16.2", "1.4", "4605", "51850");
+        assertMetrics(originalId, "17.2", "1.4", "4605", "51850");
         assertThat(jdbcTemplate.queryForObject(
                 "SELECT valuation_fetched_at FROM market_strategy.m_market_stocks_indicator WHERE id = ?",
-                OffsetDateTime.class, originalId)).isEqualTo(valuationFetchedAt);
+                OffsetDateTime.class, originalId)).isEqualTo(OffsetDateTime.ofInstant(
+                        Instant.parse("2026-09-10T02:00:00Z"), ZoneOffset.UTC));
         assertThat(jdbcTemplate.queryForObject("SELECT roe FROM market_strategy.m_market_stocks_indicator WHERE id = ?",
                 BigDecimal.class, originalId)).isEqualByComparingTo("8.7");
     }

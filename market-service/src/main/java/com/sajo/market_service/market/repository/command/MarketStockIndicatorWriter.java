@@ -27,12 +27,10 @@ public class MarketStockIndicatorWriter {
             ) on conflict (stock_id, financial_period_type, financial_reference_year_month)
               where financial_period_type is not null and financial_reference_year_month is not null
             do update set
-                -- PER/PBR은 하나의 현재가 응답 스냅샷이므로 둘 다 있을 때만 함께 갱신한다.
-                per = case when excluded.per is not null and excluded.pbr is not null
-                    then excluded.per else m_market_stocks_indicator.per end,
-                pbr = case when excluded.per is not null and excluded.pbr is not null
-                    then excluded.pbr else m_market_stocks_indicator.pbr end,
-                valuation_fetched_at = case when excluded.per is not null and excluded.pbr is not null
+                -- KIS 응답에서 누락된 값은 보존하고, 하나라도 수신되면 해당 응답 수신 시각을 기록한다.
+                per = coalesce(excluded.per, m_market_stocks_indicator.per),
+                pbr = coalesce(excluded.pbr, m_market_stocks_indicator.pbr),
+                valuation_fetched_at = case when excluded.per is not null or excluded.pbr is not null
                     then excluded.valuation_fetched_at else m_market_stocks_indicator.valuation_fetched_at end,
                 roe = coalesce(excluded.roe, m_market_stocks_indicator.roe),
                 financial_fetched_at = excluded.financial_fetched_at,
