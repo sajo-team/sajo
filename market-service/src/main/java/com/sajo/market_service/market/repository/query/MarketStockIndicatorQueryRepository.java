@@ -17,4 +17,6 @@ public interface MarketStockIndicatorQueryRepository extends JpaRepository<Marke
      * @return
      */
     Optional<MarketStockIndicator> findTopByStockIdOrderByReferenceDateDescCreatedAtDesc(UUID stockId);
+
+    Optional<MarketStockIndicator> findTopByStockIdAndFinancialPeriodTypeIsNotNullAndFinancialReferenceYearMonthIsNotNullOrderByFinancialReferenceYearMonthDescFinancialFetchedAtDesc(UUID stockId);
 }

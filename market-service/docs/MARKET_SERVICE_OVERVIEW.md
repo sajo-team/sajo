@@ -41,11 +41,11 @@ Market 서비스는 다음 질문에 답하기 위한 데이터를 관리한다.
 
 ### `m_market_stocks_indicator`: 이 종목의 투자지표는 어떠한가?
 
-종목의 기준일별 투자지표 스냅샷(특정 시점의 기록)을 저장한다. `referenceDate`, `per`, `pbr`, `eps`, `bps`, `roe`가 해당한다.
+종목의 평가 지표와 분기 재무지표 스냅샷을 저장한다. PER/PBR은 현재가 조회 시점의 값이며, ROE는 재무비율 응답의 결산연월 기준 값이다.
 
-- 한 종목에는 여러 기준일의 투자지표 행이 존재할 수 있다.
-- `stock_id + reference_date` 조합은 중복되지 않는다.
-- `referenceDate`는 지표 자체가 기준으로 삼는 날짜이고, `createdAt`은 이 서비스가 그 행을 만든 시각이다. 최신 지표 조회는 먼저 `referenceDate`가 더 최신인 행을 선택하고, 같은 기준일이면 `createdAt`이 더 최신인 행을 선택한다.
+- 신규 데이터는 `stock_id + financial_period_type + financial_reference_year_month` 조합으로 upsert한다.
+- `valuationFetchedAt`과 `financialFetchedAt`은 각각 KIS 응답 수신 시각이며 체결 시각이 아니다.
+- 결산연월은 `YYYY-MM` 그대로 보존하고 임의의 일자로 변환하지 않는다. 기존 `referenceDate` 데이터는 호환을 위해 유지하지만 신규 수집에는 사용하지 않는다.
 
 ## 3. 테이블 관계
 
@@ -64,7 +64,7 @@ erDiagram
     }
     MarketStockIndicator {
         uuid stockId FK
-        date referenceDate
+        string financialReferenceYearMonth
     }
 ```
 
@@ -115,7 +115,7 @@ erDiagram
 
 `GET /api/v1/market/stocks/{stockCode}/indicators`
 
-- PostgreSQL에 저장된 지표 중 `referenceDate` 내림차순, 같은 기준일이면 `createdAt` 내림차순으로 최신 한 건을 조회한다.
+- 신규 데이터는 결산연월 내림차순으로 최신 분기 한 건을 조회하고, 기존 데이터만 있는 경우에는 기존 `referenceDate` 기준 조회를 유지한다.
 - 종목이 없을 때와 종목은 있지만 투자지표가 없을 때를 서로 다른 404 오류로 구분한다.
 - 요청 중 외부 API를 호출하거나 데이터를 저장하지 않는다.
 

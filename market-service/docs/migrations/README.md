@@ -36,6 +36,10 @@ Apply V44, V52, then `V103__market_stock_indicator_upsert.sql` manually before s
 
 ## Scheduler KIS rate-limit operation
 
+## V104 execution order
+
+Apply V44, V52, V103, then `V104__market_stock_indicator_financial_period.sql` manually before deploying the new indicator collector. V104 leaves existing rows unchanged, makes the legacy `reference_date` nullable, and adds separate valuation receipt time and quarterly financial-period metadata. Existing rows are not assigned fabricated periods or receipt times. Verify duplicate non-null `(stock_id, financial_period_type, financial_reference_year_month)` values before applying. The SQL is not run automatically because Flyway/Liquibase is not configured; record its execution separately.
+
 The daily-price and indicator schedulers use the same JVM-local KIS request limiter. Their default cron times are 16:10 and 16:20 (Asia/Seoul), but a long daily run can overlap the indicator run; the shared limiter therefore spaces their combined KIS calls by at least 500 ms (at most two requests per second).
 
 Spring's default scheduler uses a single scheduler thread, so scheduled jobs in one application instance run sequentially. This does not provide a global guarantee: multiple application instances each have their own limiter and can exceed the App Key limit together.

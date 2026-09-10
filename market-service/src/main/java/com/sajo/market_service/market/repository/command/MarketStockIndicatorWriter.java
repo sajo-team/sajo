@@ -17,14 +17,21 @@ public class MarketStockIndicatorWriter {
 
     private static final String UPSERT_INDICATOR = """
             insert into m_market_stocks_indicator (
-                id, stock_id, reference_date, per, pbr, eps, bps, roe, created_at, updated_at
+                id, stock_id, reference_date, per, pbr, eps, bps, valuation_fetched_at,
+                roe, financial_period_type, financial_reference_year_month, financial_fetched_at,
+                created_at, updated_at
             ) values (
-                :id, :stockId, :referenceDate, :per, :pbr, :eps, :bps, null, :createdAt, :updatedAt
-            ) on conflict (stock_id, reference_date) do update set
+                :id, :stockId, null, :per, :pbr, null, null, :valuationFetchedAt,
+                :roe, :financialPeriodType, :financialReferenceYearMonth, :financialFetchedAt,
+                :createdAt, :updatedAt
+            ) on conflict (stock_id, financial_period_type, financial_reference_year_month)
+              where financial_period_type is not null and financial_reference_year_month is not null
+            do update set
                 per = coalesce(excluded.per, m_market_stocks_indicator.per),
                 pbr = coalesce(excluded.pbr, m_market_stocks_indicator.pbr),
-                eps = coalesce(excluded.eps, m_market_stocks_indicator.eps),
-                bps = coalesce(excluded.bps, m_market_stocks_indicator.bps),
+                valuation_fetched_at = excluded.valuation_fetched_at,
+                roe = coalesce(excluded.roe, m_market_stocks_indicator.roe),
+                financial_fetched_at = excluded.financial_fetched_at,
                 updated_at = excluded.updated_at
             """;
 
@@ -36,11 +43,13 @@ public class MarketStockIndicatorWriter {
         jdbcTemplate.update(UPSERT_INDICATOR, new MapSqlParameterSource()
                 .addValue("id", UUID.randomUUID())
                 .addValue("stockId", stockId)
-                .addValue("referenceDate", indicator.referenceDate())
                 .addValue("per", indicator.per())
                 .addValue("pbr", indicator.pbr())
-                .addValue("eps", indicator.eps())
-                .addValue("bps", indicator.bps())
+                .addValue("valuationFetchedAt", Timestamp.from(indicator.valuationFetchedAt()))
+                .addValue("roe", indicator.roe())
+                .addValue("financialPeriodType", indicator.financialPeriodType().name())
+                .addValue("financialReferenceYearMonth", indicator.financialReferenceYearMonth().toString())
+                .addValue("financialFetchedAt", Timestamp.from(indicator.financialFetchedAt()))
                 .addValue("createdAt", Timestamp.from(now))
                 .addValue("updatedAt", Timestamp.from(now)));
     }

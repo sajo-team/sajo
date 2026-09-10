@@ -4,20 +4,26 @@ import com.sajo.common.exception.BusinessException;
 import com.sajo.market_service.market.client.user.dto.UserKisTokenResponse;
 import com.sajo.market_service.market.config.KisApiProperties;
 import com.sajo.market_service.market.dto.kis.KisQuoteResponse;
+import com.sajo.market_service.market.dto.kis.KisFinancialRatioResponse;
 import com.sajo.market_service.market.dto.kis.KisDailyPriceResponse;
 import com.sajo.market_service.market.dto.response.DailyPriceResponse;
 import com.sajo.market_service.market.dto.response.QuoteResponse;
+import com.sajo.market_service.market.dto.response.FinancialRatioResponse;
 import com.sajo.market_service.market.exception.MarketErrorCode;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Optional;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -32,11 +38,19 @@ public class KisApiClient {
     private static final String INQUIRE_DAILY_PRICE_PATH = "/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice";
     private static final String DAILY_PRICE_TRANSACTION_ID = "FHKST03010100";
     private static final long MAX_DAILY_PRICE_LOOKBACK_DAYS = 365;
+    private static final String FINANCIAL_RATIO_PATH = "/uapi/domestic-stock/v1/finance/financial-ratio";
 
     private final RestClient restClient;
+    private final Clock clock;
 
-    public KisApiClient(RestClient.Builder restClientBuilder, KisApiProperties properties) {
+    @Autowired
+    public KisApiClient(RestClient.Builder restClientBuilder, KisApiProperties properties, Clock clock) {
         this.restClient = restClientBuilder.clone().baseUrl(properties.baseUrl()).build();
+        this.clock = clock;
+    }
+
+    KisApiClient(RestClient.Builder restClientBuilder, KisApiProperties properties) {
+        this(restClientBuilder, properties, Clock.systemUTC());
     }
 
     public QuoteResponse getQuote(UserKisTokenResponse credentials, String stockCode) {
@@ -86,7 +100,56 @@ public class KisApiClient {
                             .formatted(response.messageCode(), response.message())
             );
         }
-        return QuoteResponse.from(response, stockCode);
+        Instant fetchedAt = clock.instant();
+        return QuoteResponse.from(response, stockCode, fetchedAt);
+    }
+
+    public Optional<FinancialRatioResponse> getLatestQuarterlyFinancialRatio(
+            UserKisTokenResponse credentials,
+            String stockCode
+    ) {
+        KisFinancialRatioResponse response;
+        try {
+            response = restClient.get()
+                    .uri(uriBuilder -> uriBuilder.path(FINANCIAL_RATIO_PATH)
+                            .queryParam("FID_DIV_CLS_CODE", "1")
+                            .queryParam("FID_COND_MRKT_DIV_CODE", "J")
+                            .queryParam("FID_INPUT_ISCD", stockCode)
+                            .build())
+                    .headers(headers -> applyKisHeaders(headers, credentials, "FHKST66430300"))
+                    .retrieve()
+                    .body(KisFinancialRatioResponse.class);
+        } catch (RestClientResponseException exception) {
+            log.warn("KIS 재무비율 HTTP 호출에 실패했습니다. stockCode={}, httpStatus={}",
+                    stockCode, exception.getStatusCode().value());
+            throw new BusinessException(MarketErrorCode.KIS_QUOTE_RESPONSE_INVALID,
+                    "KIS 재무비율 호출에 실패했습니다. httpStatus=" + exception.getStatusCode().value());
+        } catch (RestClientException exception) {
+            log.warn("KIS 재무비율 호출에 실패했습니다. stockCode={}, exceptionType={}",
+                    stockCode, exception.getClass().getSimpleName());
+            throw new BusinessException(MarketErrorCode.KIS_QUOTE_RESPONSE_INVALID,
+                    "KIS 재무비율 호출에 실패했습니다.");
+        }
+        if (response == null) {
+            throw new BusinessException(MarketErrorCode.KIS_QUOTE_RESPONSE_INVALID,
+                    "KIS 재무비율 응답이 비어 있습니다.");
+        }
+        if (!response.isSuccessful()) {
+            throw new BusinessException(MarketErrorCode.KIS_QUOTE_RESPONSE_INVALID,
+                    "KIS 재무비율 응답에 실패했습니다. msg_cd=%s, msg1=%s"
+                            .formatted(response.messageCode(), response.message()));
+        }
+        return FinancialRatioResponse.latest(response.output(), stockCode, clock.instant());
+    }
+
+    private void applyKisHeaders(org.springframework.http.HttpHeaders headers,
+                                 UserKisTokenResponse credentials,
+                                 String transactionId) {
+        headers.setBearerAuth(credentials.accessToken());
+        headers.set("appkey", credentials.appKey());
+        headers.set("appsecret", credentials.secretKey());
+        headers.set("tr_id", transactionId);
+        headers.setContentType(MediaType.APPLICATION_JSON);
     }
 
     public List<DailyPriceResponse> getDailyPrices(UserKisTokenResponse credentials, String stockCode,

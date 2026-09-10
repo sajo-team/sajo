@@ -14,7 +14,11 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.client.ResourceAccessException;
 
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.YearMonth;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.stream.IntStream;
@@ -39,10 +43,35 @@ class KisApiClientTest {
             "https://kis.example/uapi/domestic-stock/v1/quotations/inquire-daily-itemchartprice";
 
     @Test
+    void fetchesLatestQuarterlyFinancialRatioUsingOfficialContract() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        Clock clock = Clock.fixed(Instant.parse("2026-09-10T01:00:00Z"), ZoneId.of("Asia/Seoul"));
+        KisApiClient client = new KisApiClient(builder, new KisApiProperties("https://kis.example"), clock);
+        server.expect(requestTo("https://kis.example/uapi/domestic-stock/v1/finance/financial-ratio?FID_DIV_CLS_CODE=1&FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=005930"))
+                .andExpect(header("tr_id", "FHKST66430300"))
+                .andRespond(withSuccess("""
+                        {"rt_cd":"0","msg_cd":"MCA00000","msg1":"정상처리 되었습니다.","output":[
+                          {"stac_yymm":"202603","roe_val":"19.16"},
+                          {"stac_yymm":"202606","roe_val":"31.39"}
+                        ]}
+                        """, MediaType.APPLICATION_JSON));
+
+        var response = client.getLatestQuarterlyFinancialRatio(CREDENTIALS, "005930");
+
+        assertTrue(response.isPresent());
+        assertEquals(YearMonth.of(2026, 6), response.get().financialReferenceYearMonth());
+        assertEquals(new BigDecimal("31.39"), response.get().roe());
+        assertEquals(Instant.parse("2026-09-10T01:00:00Z"), response.get().fetchedAt());
+        server.verify();
+    }
+
+    @Test
     void callsKisWithUserServiceCredentialsAndMapsRawResponse() {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
-        KisApiClient client = new KisApiClient(builder, new KisApiProperties("https://kis.example"));
+        Clock clock = Clock.fixed(Instant.parse("2026-09-04T08:00:00Z"), ZoneId.of("Asia/Seoul"));
+        KisApiClient client = new KisApiClient(builder, new KisApiProperties("https://kis.example"), clock);
 
         server.expect(requestTo("https://kis.example/uapi/domestic-stock/v1/quotations/inquire-price?FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=005930"))
                 .andExpect(method(HttpMethod.GET))
@@ -56,7 +85,7 @@ class KisApiClientTest {
                           "stck_prpr":"70000","stck_oprc":"69000","stck_hgpr":"70500","stck_lwpr":"68800",
                           "stck_sdpr":"69500","prdy_vrss":"500","prdy_ctrt":"0.7194","acml_vol":"123456",
                           "acml_tr_pbmn":"8610000000","hts_avls":"4180000","per":"15.20","pbr":"1.35",
-                          "eps":"4605.00","bps":"51850.00","stck_bsop_date":"20260904","stck_cntg_hour":"143000"
+                          "eps":"4605.00","bps":"51850.00"
                         }}
                         """, MediaType.APPLICATION_JSON));
 
@@ -69,12 +98,13 @@ class KisApiClientTest {
         assertEquals(70000L, response.currentPrice());
         assertEquals(new BigDecimal("0.7194"), response.changeRate());
         assertEquals(new BigDecimal("15.20"), response.per());
-        assertEquals("2026-09-04T14:30:00+09:00", response.baseTime());
+        assertNull(response.baseTime());
+        assertEquals("2026-09-04T08:00:00Z", response.fetchedAt().toString());
         server.verify();
     }
 
     @Test
-    void returnsQuoteWhenKisBaseTimeFieldsAreInvalid() {
+    void ignoresFieldsOutsideTheOfficialInquirePriceContract() {
         RestClient.Builder builder = RestClient.builder();
         MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
         KisApiClient client = new KisApiClient(builder, new KisApiProperties("https://kis.example"));
