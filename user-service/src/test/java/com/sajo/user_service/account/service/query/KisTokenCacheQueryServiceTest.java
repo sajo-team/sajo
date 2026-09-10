@@ -177,7 +177,7 @@ class KisTokenCacheQueryServiceTest {
     @Test
     @DisplayName("락을 계속 못 잡고 캐시도 안 채워지면 타임아웃 예외를 던진다")
     void getAccessToken_lockNeverAcquired_throwsTimeoutException() {
-        // given - LOCK_WAIT_TIMEOUT(5s) 다 채우는 실제 대기가 일어나 다른 테스트보다 느리다
+        // given - LOCK_WAIT_TIMEOUT(10s) 다 채우는 실제 대기가 일어나 다른 테스트보다 느리다
         UUID userId = UUID.randomUUID();
         String key = KisTokenCacheKeys.accessToken(userId);
         given(redisTemplate.opsForValue()).willReturn(valueOperations);
