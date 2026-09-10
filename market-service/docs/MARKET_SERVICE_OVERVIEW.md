@@ -114,6 +114,23 @@ erDiagram
 - 두 조회 방식 모두 응답은 과거 날짜부터 최신 날짜 순서로 반환한다.
 - 요청 중 KIS를 호출하거나 데이터를 저장하지 않는다. 데이터가 부족해도 현재 저장된 데이터만 반환한다.
 
+### 차트 데이터
+
+`GET /api/v1/market/stocks/{stockCode}/chart?days=30`
+`GET /api/v1/market/stocks/{stockCode}/chart?startDate=2026-08-01&endDate=2026-09-09`
+
+- 파라미터 지원 범위와 조회 원칙은 `/prices`와 동일하다(`startDate`·`endDate` 우선, 없으면 `days` 기준 최근 거래일).
+- 새로운 조회 로직이나 저장소를 두지 않고 `/prices`가 쓰는 `MarketStockPriceQueryService`를 그대로 재사용한다.
+- 응답 필드도 `/prices`와 동일하다(거래일, 시가, 고가, 저가, 종가, 누적 거래량, 누적 거래대금).
+
+### 거래량
+
+`GET /api/v1/market/stocks/{stockCode}/volume?days=30`
+`GET /api/v1/market/stocks/{stockCode}/volume?startDate=2026-08-01&endDate=2026-09-09`
+
+- 파라미터 지원 범위와 조회 원칙, 검증은 `/prices`와 동일하다.
+- 조회 결과에서 거래량 관련 필드(거래일, 누적 거래량, 누적 거래대금)만 추려서 응답한다.
+
 ### 최신 투자지표
 
 `GET /api/v1/market/stocks/{stockCode}/indicators`
@@ -137,6 +154,8 @@ erDiagram
 | `GET /quote` | 지금 가격 | Redis 또는 KIS | 없음 |
 | `GET /api/v1/market/stocks`, `/search`, `/{stockCode}` | 종목 찾기 | PostgreSQL | 없음 |
 | `GET /api/v1/market/stocks/{stockCode}/prices` (days 또는 startDate·endDate) | 과거 가격 | PostgreSQL | 없음 |
+| `GET /api/v1/market/stocks/{stockCode}/chart` (days 또는 startDate·endDate) | 차트용 과거 가격 | PostgreSQL | 없음 |
+| `GET /api/v1/market/stocks/{stockCode}/volume` (days 또는 startDate·endDate) | 거래량 이력 | PostgreSQL | 없음 |
 | `GET /api/v1/market/stocks/{stockCode}/indicators` | 최신 저장 지표 | PostgreSQL | 없음 |
 | `GET /api/v1/market/stocks/{stockCode}/indicators/history` | 저장된 지표 이력 | PostgreSQL | 없음 |
 
