@@ -27,7 +27,7 @@ class MarketDataStatusQueryControllerTest {
     @Test
     void returnsDataStatus() throws Exception {
         given(marketDataStatusQueryService.getStatus()).willReturn(new MarketDataStatusResponse(
-                2500L, 2400L, LocalDate.of(2026, 9, 7), 2300L, LocalDate.of(2026, 9, 7)));
+                2500L, 2400L, LocalDate.of(2026, 9, 7), 2300L, LocalDate.of(2026, 9, 7), "2026-06"));
 
         mockMvc.perform(get("/api/v1/market/data-status"))
                 .andExpect(status().isOk())
@@ -35,12 +35,13 @@ class MarketDataStatusQueryControllerTest {
                 .andExpect(jsonPath("$.data.dailyPriceStockCount").value(2400))
                 .andExpect(jsonPath("$.data.latestDailyPriceDate").value("2026-09-07"))
                 .andExpect(jsonPath("$.data.indicatorStockCount").value(2300))
-                .andExpect(jsonPath("$.data.latestIndicatorReferenceDate").value("2026-09-07"));
+                .andExpect(jsonPath("$.data.latestIndicatorReferenceDate").value("2026-09-07"))
+                .andExpect(jsonPath("$.data.latestFinancialReferenceYearMonth").value("2026-06"));
     }
 
     @Test
     void returnsNullDatesForEmptyData() throws Exception {
-        given(marketDataStatusQueryService.getStatus()).willReturn(new MarketDataStatusResponse(0, 0, null, 0, null));
+        given(marketDataStatusQueryService.getStatus()).willReturn(new MarketDataStatusResponse(0, 0, null, 0, null, null));
 
         mockMvc.perform(get("/api/v1/market/data-status"))
                 .andExpect(status().isOk())

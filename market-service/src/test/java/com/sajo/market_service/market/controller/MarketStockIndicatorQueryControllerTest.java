@@ -4,6 +4,7 @@ import com.sajo.common.exception.BusinessException;
 import com.sajo.common.exception.GlobalExceptionHandler;
 import com.sajo.market_service.market.dto.response.MarketStockIndicatorResponse;
 import com.sajo.market_service.market.exception.MarketErrorCode;
+import com.sajo.market_service.market.domain.FinancialPeriodType;
 import com.sajo.market_service.market.service.query.MarketStockIndicatorQueryService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,6 +15,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.Instant;
 
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -36,7 +38,8 @@ class MarketStockIndicatorQueryControllerTest {
 
         mockMvc.perform(get("/api/v1/market/stocks/005930/indicators"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.referenceDate").value("2026-09-01"))
+                .andExpect(jsonPath("$.data.financialReferenceYearMonth").value("2026-06"))
+                .andExpect(jsonPath("$.data.valuationFetchedAt").value("2026-09-10T01:00:00Z"))
                 .andExpect(jsonPath("$.data.per").value(12.34));
     }
 
@@ -52,7 +55,9 @@ class MarketStockIndicatorQueryControllerTest {
     }
 
     private MarketStockIndicatorResponse response() {
-        return new MarketStockIndicatorResponse(LocalDate.of(2026, 9, 1), new BigDecimal("12.34"),
-                new BigDecimal("1.23"), new BigDecimal("1000"), new BigDecimal("20000"), new BigDecimal("8.76"));
+        return new MarketStockIndicatorResponse(null, new BigDecimal("12.34"),
+                new BigDecimal("1.23"), null, null, new BigDecimal("8.76"),
+                Instant.parse("2026-09-10T01:00:00Z"), FinancialPeriodType.QUARTER, "2026-06",
+                Instant.parse("2026-09-10T01:00:01Z"));
     }
 }

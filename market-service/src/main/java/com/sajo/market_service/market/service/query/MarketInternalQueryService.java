@@ -3,7 +3,7 @@ package com.sajo.market_service.market.service.query;
 import com.sajo.market_service.market.controller.dto.response.InternalStockIndicatorResponse;
 import com.sajo.market_service.market.controller.dto.response.InternalStockQuoteResponse;
 import com.sajo.market_service.market.domain.MarketStock;
-import com.sajo.market_service.market.dto.response.MarketStockIndicatorResponse;
+import com.sajo.market_service.market.dto.response.MarketStockIndicatorSnapshot;
 import com.sajo.market_service.market.dto.response.QuoteResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -19,7 +19,7 @@ public class MarketInternalQueryService {
 
     public InternalStockIndicatorResponse getIndicator(String stockCode) {
         String normalizedStockCode = MarketStock.normalizeStockCode(stockCode);
-        MarketStockIndicatorResponse indicator = marketStockIndicatorQueryService.getLatestIndicator(normalizedStockCode);
+        MarketStockIndicatorSnapshot indicator = marketStockIndicatorQueryService.getLatestFinancialIndicator(normalizedStockCode);
         return InternalStockIndicatorResponse.from(normalizedStockCode, indicator);
     }
 

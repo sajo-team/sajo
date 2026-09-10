@@ -21,7 +21,8 @@ public class MarketDataStatusQueryService {
                 status.getDailyPriceStockCount(),
                 status.getLatestDailyPriceDate(),
                 status.getIndicatorStockCount(),
-                status.getLatestIndicatorReferenceDate()
+                status.getLatestIndicatorReferenceDate(),
+                status.getLatestFinancialReferenceYearMonth()
         );
     }
 }

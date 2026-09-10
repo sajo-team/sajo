@@ -127,12 +127,14 @@ public class MarketStockIndicatorScheduler {
             return summary.incrementSkippedStock();
         }
         try {
-            if (!requestRateLimiter.tryAcquire()) {
-                return summary.interrupted();
-            }
-            boolean stored = marketStockIndicatorCommandService.collectAndSaveIndicatorsForIdentifiedStock(
-                    credentials, target.getStockId(), target.getStockCode());
-            return stored ? summary.incrementSuccess() : summary.incrementSkippedStock();
+            MarketStockIndicatorCommandService.IndicatorCollectionResult result =
+                    marketStockIndicatorCommandService.collectAndSaveIndicatorsForIdentifiedStock(
+                            credentials, target.getStockId(), target.getStockCode(), requestRateLimiter::tryAcquire);
+            return switch (result) {
+                case SAVED -> summary.incrementSuccess();
+                case SKIPPED -> summary.incrementSkippedStock();
+                case INTERRUPTED -> summary.interrupted();
+            };
         } catch (Exception exception) {
             log.warn("투자지표 수집에 실패했습니다. stockCode={}, exceptionType={}",
                     target.getStockCode(), exception.getClass().getSimpleName());
