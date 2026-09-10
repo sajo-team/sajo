@@ -11,7 +11,6 @@ import com.sajo.market_service.strategy.repository.command.StrategyCommandReposi
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
@@ -22,8 +21,8 @@ public class BacktestCommandService {
 
     private final StrategyCommandRepository strategyCommandRepository;
     private final BacktestCommandRepository backtestCommandRepository;
+    private final BacktestExecutionService backtestExecutionService;
 
-    @Transactional
     public BacktestCreateResponse createBacktest(
             UUID userId,
             UUID strategyId,
@@ -45,11 +44,16 @@ public class BacktestCommandService {
                 request.initialCash()
         );
 
-        Backtest savedBacktest = backtestCommandRepository.save(backtest);
+        Backtest savedBacktest = backtestCommandRepository.saveAndFlush(backtest);
+
+        backtestExecutionService.execute(savedBacktest.getId());
+
+        Backtest executedBacktest = backtestCommandRepository.findById(savedBacktest.getId())
+                .orElseThrow(() -> new BusinessException(StrategyErrorCode.BACKTEST_NOT_FOUND));
 
         log.info("백테스트 생성 완료. backtestId={}, strategyId={}, status={}",
-                savedBacktest.getId(), strategyId, savedBacktest.getStatus());
+                executedBacktest.getId(), strategyId, executedBacktest.getStatus());
 
-        return BacktestCreateResponse.from(savedBacktest);
+        return BacktestCreateResponse.from(executedBacktest);
     }
 }

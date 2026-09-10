@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Comparator;
 import java.util.List;
+import java.time.LocalDate;
 
 @Service
 @RequiredArgsConstructor
@@ -37,6 +38,29 @@ public class MarketStockPriceQueryService {
                 .sorted(Comparator.comparing(price -> price.getDate()))
                 .map(MarketStockPriceResponse::from)
                 .toList();
+    }
+
+    public List<MarketStockPriceResponse> getDailyPrices(
+            String stockCode,
+            LocalDate startDate,
+            LocalDate endDate
+    ) {
+        if (startDate == null || endDate == null || startDate.isAfter(endDate)) {
+            throw new BusinessException(
+                    MarketErrorCode.INVALID_MARKET_STOCK_PRICE,
+                    "조회 기간이 올바르지 않습니다."
+            );
+        }
+
+        MarketStock stock = findStock(stockCode);
+
+        return marketStockPriceQueryRepository
+                .findDailyRestPrices(
+                        stock.getId(),
+                        PriceSource.REST,
+                        startDate,
+                        endDate
+                ).stream().map(MarketStockPriceResponse::from).toList();
     }
 
     private MarketStock findStock(String stockCode) {

@@ -80,8 +80,13 @@ public class MarketDailyPriceScheduler {
         DailyPriceCollectionSummary summary = DailyPriceCollectionSummary.empty();
         String lastStockCode = null;
         while (true) {
-            var targets = marketStockQueryRepository.findCollectionTargetsAfterStockCode(
-                    lastStockCode, PageRequest.of(0, properties.pageSize(), Sort.by(Sort.Direction.ASC, STOCK_CODE_SORT_PROPERTY)));
+            var targets = properties.targetStockCodes().isEmpty()
+                    ? marketStockQueryRepository.findCollectionTargetsAfterStockCode(
+                    lastStockCode, PageRequest.of(0, properties.pageSize(), Sort.by(Sort.Direction.ASC, STOCK_CODE_SORT_PROPERTY)))
+                    : marketStockQueryRepository.findCollectionTargetsByStockCodes(properties.targetStockCodes());
+            if (!properties.targetStockCodes().isEmpty()) {
+                return collectTargetList(credentials, collectionDate, targets, summary);
+            }
             if (targets.isEmpty()) {
                 return summary;
             }
@@ -104,6 +109,21 @@ public class MarketDailyPriceScheduler {
             }
             lastStockCode = nextLastStockCode;
         }
+    }
+
+    private DailyPriceCollectionSummary collectTargetList(
+            UserKisTokenResponse credentials,
+            LocalDate collectionDate,
+            java.util.List<MarketStockCollectionTarget> targets,
+            DailyPriceCollectionSummary summary
+    ) {
+        for (MarketStockCollectionTarget target : targets) {
+            summary = collectStock(credentials, collectionDate, target, summary);
+            if (summary.runStatus() == SchedulerRunStatus.INTERRUPTED) {
+                return summary;
+            }
+        }
+        return summary;
     }
 
     private DailyPriceCollectionSummary collectStock(

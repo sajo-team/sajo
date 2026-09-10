@@ -7,6 +7,7 @@ public record MarketDataStatusResponse(
         long dailyPriceStockCount,
         LocalDate latestDailyPriceDate,
         long indicatorStockCount,
-        LocalDate latestIndicatorReferenceDate
+        LocalDate latestIndicatorReferenceDate,
+        String latestFinancialReferenceYearMonth
 ) {
 }

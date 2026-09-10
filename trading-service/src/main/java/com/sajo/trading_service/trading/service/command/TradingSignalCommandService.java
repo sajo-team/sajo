@@ -44,7 +44,7 @@ public class TradingSignalCommandService {
 
         AutoTrading autoTrading =
                 autoTradingCommandRepository
-                        .findByUserIdAndStrategyIdAndDeletedAtIsNull(
+                        .findByUserIdAndStrategyIdForUpdate(
                                 payload.userId(),
                                 payload.strategyId()
                         )

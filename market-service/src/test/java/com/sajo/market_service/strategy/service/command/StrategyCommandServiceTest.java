@@ -1,8 +1,9 @@
 package com.sajo.market_service.strategy.service.command;
 
 import com.sajo.common.exception.BusinessException;
-import com.sajo.market_service.market.controller.dto.response.InternalStockQuoteResponse;
+import com.sajo.market_service.market.dto.response.QuoteResponse;
 import com.sajo.market_service.market.service.query.MarketInternalQueryService;
+import com.sajo.market_service.market.service.query.MarketQuoteQueryService;
 import com.sajo.market_service.strategy.controller.dto.request.StrategyActivationRequest;
 import com.sajo.market_service.strategy.controller.dto.request.StrategyCreateRequest;
 import com.sajo.market_service.strategy.controller.dto.request.StrategyUpdateRequest;
@@ -44,6 +45,9 @@ class StrategyCommandServiceTest {
     private MarketInternalQueryService marketInternalQueryService;
 
     @Mock
+    private MarketQuoteQueryService marketQuoteQueryService;
+
+    @Mock
     private StrategyActivationCommandService strategyActivationCommandService;
 
     private StrategyCommandService strategyCommandService;
@@ -53,7 +57,8 @@ class StrategyCommandServiceTest {
         strategyCommandService = new StrategyCommandService(
                 strategyCommandRepository,
                 marketInternalQueryService,
-                strategyActivationCommandService
+                strategyActivationCommandService,
+                marketQuoteQueryService
         );
     }
 
@@ -73,6 +78,7 @@ class StrategyCommandServiceTest {
                 new BigDecimal("5.0000"),
                 new BigDecimal("10.0000"),
                 3_000_000L,
+                100_000L,
                 new BigDecimal("15.0000"),
                 new BigDecimal("1.2000"),
                 new BigDecimal("10.0000")
@@ -116,7 +122,7 @@ class StrategyCommandServiceTest {
                 stockId, "005930", "삼성전자 눌림목 전략",
                 70_000L, 80_000L, new BigDecimal("5.0000"),
                 null, // targetReturnRate 생략
-                3_000_000L,
+                3_000_000L, 100_000L,
                 null, null, null // per/pbr/roe 생략
         );
 
@@ -144,7 +150,7 @@ class StrategyCommandServiceTest {
         StrategyCreateRequest request = new StrategyCreateRequest(
                 UUID.randomUUID(), "005930", "테스트 전략",
                 0L, 80_000L, new BigDecimal("5.0000"), null,
-                3_000_000L, null, null, null
+                3_000_000L, 100_000L, null, null, null
         );
 
         // when & then
@@ -168,7 +174,7 @@ class StrategyCommandServiceTest {
         StrategyCreateRequest request = new StrategyCreateRequest(
                 UUID.randomUUID(), "005930", "   ",
                 70_000L, 80_000L, new BigDecimal("5.0000"), null,
-                3_000_000L, null, null, null
+                3_000_000L, 100_000L, null, null, null
         );
 
         // when & then
@@ -200,6 +206,7 @@ class StrategyCommandServiceTest {
                 new BigDecimal("5.0000"),
                 new BigDecimal("10.0000"),
                 3_000_000L,
+                100_000L,
                 null,
                 null,
                 null
@@ -212,6 +219,7 @@ class StrategyCommandServiceTest {
                 new BigDecimal("4.0000"),
                 new BigDecimal("12.0000"),
                 4_000_000L,
+                100_000L,
                 new BigDecimal("15.0000"),
                 new BigDecimal("1.2000"),
                 new BigDecimal("10.0000")
@@ -253,6 +261,7 @@ class StrategyCommandServiceTest {
                 null,
                 null,
                 null,
+                null,
                 null
         );
 
@@ -286,6 +295,7 @@ class StrategyCommandServiceTest {
                 new BigDecimal("5.0000"),
                 null,
                 3_000_000L,
+                100_000L,
                 null,
                 null,
                 null
@@ -293,6 +303,7 @@ class StrategyCommandServiceTest {
 
         StrategyUpdateRequest request = new StrategyUpdateRequest(
                 "수정된 전략",
+                null,
                 null,
                 null,
                 null,
@@ -332,6 +343,7 @@ class StrategyCommandServiceTest {
                 new BigDecimal("5.0000"),
                 null,
                 3_000_000L,
+                100_000L,
                 null,
                 null,
                 null
@@ -387,6 +399,7 @@ class StrategyCommandServiceTest {
                 new BigDecimal("5.0000"),
                 null,
                 3_000_000L,
+                100_000L,
                 null,
                 null,
                 null
@@ -410,18 +423,30 @@ class StrategyCommandServiceTest {
                 StrategyActivationSnapshot.from(strategy)
         )).willReturn(expectedResponse);
 
-        given(marketInternalQueryService.getQuote(userId, "005930"))
-                .willReturn(new InternalStockQuoteResponse(
+        given(marketQuoteQueryService.getQuote(userId, "005930"))
+                .willReturn(new QuoteResponse(
                         "005930",
                         70_000L,
-                        OffsetDateTime.parse("2026-09-07T09:00:00+09:00")
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null
                 ));
 
         // when
         StrategyActivationResponse response = strategyCommandService.updateActivation(userId, strategyId, request);
 
         // then
-        verify(marketInternalQueryService).getQuote(userId, "005930");
+        verify(marketQuoteQueryService).getQuote(userId, "005930");
 
         assertThat(response.status()).isEqualTo(StrategyStatus.ACTIVE);
         assertThat(response.activatedAt()).isNotNull();
@@ -448,6 +473,7 @@ class StrategyCommandServiceTest {
                 new BigDecimal("5.0000"),
                 null,
                 3_000_000L,
+                100_000L,
                 null,
                 null,
                 null
@@ -494,6 +520,7 @@ class StrategyCommandServiceTest {
                 new BigDecimal("5.0000"),
                 null,
                 3_000_000L,
+                100_000L,
                 null,
                 null,
                 null
@@ -502,6 +529,7 @@ class StrategyCommandServiceTest {
 
         StrategyUpdateRequest request = new StrategyUpdateRequest(
                 "수정 전략",
+                null,
                 null,
                 null,
                 null,
@@ -541,6 +569,7 @@ class StrategyCommandServiceTest {
                 new BigDecimal("5.0000"),
                 null,
                 3_000_000L,
+                100_000L,
                 null,
                 null,
                 null

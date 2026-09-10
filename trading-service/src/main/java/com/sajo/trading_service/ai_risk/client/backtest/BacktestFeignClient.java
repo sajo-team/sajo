@@ -9,12 +9,11 @@ import java.util.UUID;
 
 @FeignClient(
         name = "market-service",
-        contextId = "backtestFeignClient",
-        path = "/internal/v1/backtests"
+        contextId = "backtestFeignClient"
 )
 public interface BacktestFeignClient {
 
-    @GetMapping("/{backtestId}")
+    @GetMapping("/internal/v1/backtests/{backtestId}")
     BacktestInternalResponse getBacktest(
             @PathVariable("backtestId") UUID backtestId
     );

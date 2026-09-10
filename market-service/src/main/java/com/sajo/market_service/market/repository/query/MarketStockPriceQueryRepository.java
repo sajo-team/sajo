@@ -9,6 +9,7 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.time.LocalDate;
 import java.util.UUID;
 
 @Repository
@@ -28,5 +29,22 @@ public interface MarketStockPriceQueryRepository extends JpaRepository<MarketSto
             @Param("stockId") UUID stockId,
             @Param("source") PriceSource source,
             Pageable pageable
+    );
+
+    @Query("""
+            select price
+            from MarketStockPrice price
+            where price.stockId = :stockId
+              and price.time is null
+              and price.source = :source
+              and price.closePrice is not null
+              and price.date between :startDate and :endDate
+            order by price.date asc
+            """)
+    List<MarketStockPrice> findDailyRestPrices(
+            @Param("stockId") UUID stockId,
+            @Param("source") PriceSource source,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate
     );
 }

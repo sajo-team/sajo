@@ -64,19 +64,9 @@ class HeaderAuthenticationFilterTest {
         assertThat(response.statusCode()).isEqualTo(403);
     }
 
-    @Test
-    @DisplayName("/internal 경로는 헤더 없이도 열려있다")
-    void internalPathIsOpenWithoutAnyHeaders() throws Exception {
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create("http://localhost:" + port + "/internal/test"))
-                .GET()
-                .build();
-
-        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
-
-        assertThat(response.statusCode()).isEqualTo(200);
-        assertThat(response.body()).isEqualTo("ok");
-    }
+    // /internal 경로의 인증 여부는 이제 InternalApiAuthenticationFilter의 책임이다.
+    // 관련 테스트는 InternalApiAuthenticationFilterTest 참고 - 예전에는 이 경로가
+    // 헤더 없이도 열려있는 게 "정상"이었지만, 그게 바로 고쳐야 했던 문제였다.
 
     private HttpResponse<String> send(String userId, String role) throws Exception {
         HttpRequest request = HttpRequest.newBuilder()

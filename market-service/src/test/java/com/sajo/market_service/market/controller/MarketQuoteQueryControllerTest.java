@@ -41,7 +41,7 @@ class MarketQuoteQueryControllerTest {
         );
         given(marketQuoteQueryService.getQuote(userId, "005930")).willReturn(response);
 
-        mockMvc.perform(get("/quote")
+        mockMvc.perform(get("/api/v1/market/quote")
                         .header("X-User-Id", userId)
                         .param("stockCode", "005930"))
                 .andExpect(status().isOk())
@@ -71,7 +71,7 @@ class MarketQuoteQueryControllerTest {
     void returnsBadRequestForInvalidStockCode() throws Exception {
         UUID userId = UUID.randomUUID();
 
-        mockMvc.perform(get("/quote")
+        mockMvc.perform(get("/api/v1/market/quote")
                         .header("X-User-Id", userId)
                         .param("stockCode", "invalid"))
                 .andExpect(status().isBadRequest())

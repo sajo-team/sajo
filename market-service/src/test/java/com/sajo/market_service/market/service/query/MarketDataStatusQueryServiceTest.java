@@ -17,7 +17,7 @@ class MarketDataStatusQueryServiceTest {
     void mapsAllStoredDataStatusValues() {
         MarketDataStatusQueryRepository repository = mock(MarketDataStatusQueryRepository.class);
         MarketDataStatusProjection projection = projection(2500L, 2400L,
-                LocalDate.of(2026, 9, 7), 2300L, LocalDate.of(2026, 9, 7));
+                LocalDate.of(2026, 9, 7), 2300L, LocalDate.of(2026, 9, 7), "2026-06");
         when(repository.findStatus()).thenReturn(projection);
 
         var response = new MarketDataStatusQueryService(repository).getStatus();
@@ -27,13 +27,14 @@ class MarketDataStatusQueryServiceTest {
         assertThat(response.latestDailyPriceDate()).isEqualTo(LocalDate.of(2026, 9, 7));
         assertThat(response.indicatorStockCount()).isEqualTo(2300L);
         assertThat(response.latestIndicatorReferenceDate()).isEqualTo(LocalDate.of(2026, 9, 7));
+        assertThat(response.latestFinancialReferenceYearMonth()).isEqualTo("2026-06");
         verify(repository).findStatus();
     }
 
     @Test
     void preservesZeroCountsAndNullDatesWhenNoDataExists() {
         MarketDataStatusQueryRepository repository = mock(MarketDataStatusQueryRepository.class);
-        when(repository.findStatus()).thenReturn(projection(0L, 0L, null, 0L, null));
+        when(repository.findStatus()).thenReturn(projection(0L, 0L, null, 0L, null, null));
 
         var response = new MarketDataStatusQueryService(repository).getStatus();
 
@@ -45,13 +46,14 @@ class MarketDataStatusQueryServiceTest {
     }
 
     private MarketDataStatusProjection projection(Long total, Long prices, LocalDate latestPrice,
-                                                   Long indicators, LocalDate latestIndicator) {
+                                                   Long indicators, LocalDate latestIndicator, String latestFinancialPeriod) {
         return new MarketDataStatusProjection() {
             public Long getTotalStockCount() { return total; }
             public Long getDailyPriceStockCount() { return prices; }
             public LocalDate getLatestDailyPriceDate() { return latestPrice; }
             public Long getIndicatorStockCount() { return indicators; }
             public LocalDate getLatestIndicatorReferenceDate() { return latestIndicator; }
+            public String getLatestFinancialReferenceYearMonth() { return latestFinancialPeriod; }
         };
     }
 }

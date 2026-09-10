@@ -97,4 +97,20 @@ public class AutoTradingController {
                 response
         );
     }
+
+    @DeleteMapping("/{autoTradingId}")
+    public ResponseEntity<GeneralResponse<Void>> deleteAutoTrading(
+            @RequestHeader("X-User-Id") UUID userId,
+            @PathVariable UUID autoTradingId
+    ) {
+        autoTradingCommandService.deleteAutoTrading(
+                userId,
+                autoTradingId
+        );
+
+        return GeneralResponse.toResponseEntity(
+                GeneralResponseCode.OK,
+                null
+        );
+    }
 }

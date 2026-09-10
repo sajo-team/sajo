@@ -2,8 +2,9 @@ package com.sajo.market_service.strategy.service.command;
 
 import com.sajo.common.exception.BusinessException;
 import com.sajo.market_service.market.controller.dto.response.InternalStockIndicatorResponse;
-import com.sajo.market_service.market.controller.dto.response.InternalStockQuoteResponse;
+import com.sajo.market_service.market.dto.response.QuoteResponse;
 import com.sajo.market_service.market.service.query.MarketInternalQueryService;
+import com.sajo.market_service.market.service.query.MarketQuoteQueryService;
 import com.sajo.market_service.strategy.controller.dto.request.StrategyActivationRequest;
 import com.sajo.market_service.strategy.controller.dto.request.StrategyCreateRequest;
 import com.sajo.market_service.strategy.controller.dto.request.StrategyUpdateRequest;
@@ -29,6 +30,7 @@ public class StrategyCommandService {
     private final StrategyCommandRepository strategyCommandRepository;
     private final MarketInternalQueryService marketInternalQueryService;
     private final StrategyActivationCommandService strategyActivationCommandService;
+    private final MarketQuoteQueryService marketQuoteQueryService;
 
     @Transactional
     public StrategyCreateResponse createStrategy(
@@ -47,6 +49,7 @@ public class StrategyCommandService {
                 request.stopLossRate(),
                 request.targetReturnRate(),
                 request.allocatedAmount(),
+                request.orderAmount(),
                 request.perCondition(),
                 request.pbrCondition(),
                 request.roeCondition()
@@ -81,6 +84,7 @@ public class StrategyCommandService {
                 request.stopLossRate(),
                 request.targetReturnRate(),
                 request.allocatedAmount(),
+                request.orderAmount(),
                 request.perCondition(),
                 request.pbrCondition(),
                 request.roeCondition()
@@ -124,6 +128,7 @@ public class StrategyCommandService {
         if (Boolean.TRUE.equals(request.active())) {
             log.info("전략 활성화 전 Market 데이터 검증 시작. strategyId={}, stockCode={}",
                     strategyId, strategy.getStockCode());
+            validateOrderAmountForActivation(strategy);
             validateMarketDataAvailable(userId, strategy);
         }
 
@@ -136,9 +141,15 @@ public class StrategyCommandService {
         );
     }
 
+    private void validateOrderAmountForActivation(Strategy strategy) {
+        if (strategy.getOrderAmount() == null || strategy.getOrderAmount() <= 0) {
+            throw new BusinessException(StrategyErrorCode.INVALID_STRATEGY, "1회 주문 금액이 없어 전략을 활성화 할 수 없습니다.");
+        }
+    }
+
     private void validateMarketDataAvailable(UUID userId, Strategy strategy) {
-        InternalStockQuoteResponse quote =
-                marketInternalQueryService.getQuote(userId, strategy.getStockCode());
+        QuoteResponse quote =
+                marketQuoteQueryService.getQuote(userId, strategy.getStockCode());
 
         log.info("Market 현재가 조회 완료. stockCode={}, currentPrice={}, baseTime={}",
                 strategy.getStockCode(),
@@ -171,8 +182,8 @@ public class StrategyCommandService {
             );
         }
 
-        log.info("Market 투자지표 조회 완료. stockCode={}, per={}, pbr={}, referenceDate={}",
-                strategy.getStockCode(), indicator.per(), indicator.pbr(), indicator.referenceDate());
+        log.info("Market 투자지표 조회 완료. stockCode={}, per={}, pbr={}, financialReferenceYearMonth={}",
+                strategy.getStockCode(), indicator.per(), indicator.pbr(), indicator.financialReferenceYearMonth());
 
         validateRequiredIndicator(strategy.getPerCondition(), indicator.per(), "PER");
         validateRequiredIndicator(strategy.getPbrCondition(), indicator.pbr(), "PBR");

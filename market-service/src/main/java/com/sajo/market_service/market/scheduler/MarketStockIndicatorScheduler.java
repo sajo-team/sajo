@@ -73,8 +73,13 @@ public class MarketStockIndicatorScheduler {
         IndicatorCollectionSummary summary = IndicatorCollectionSummary.empty();
         String lastStockCode = null;
         while (true) {
-            var targets = marketStockQueryRepository.findCollectionTargetsAfterStockCode(
-                    lastStockCode, PageRequest.of(0, properties.pageSize(), Sort.by(Sort.Direction.ASC, STOCK_CODE_SORT_PROPERTY)));
+            var targets = properties.targetStockCodes().isEmpty()
+                    ? marketStockQueryRepository.findCollectionTargetsAfterStockCode(
+                    lastStockCode, PageRequest.of(0, properties.pageSize(), Sort.by(Sort.Direction.ASC, STOCK_CODE_SORT_PROPERTY)))
+                    : marketStockQueryRepository.findCollectionTargetsByStockCodes(properties.targetStockCodes());
+            if (!properties.targetStockCodes().isEmpty()) {
+                return collectTargetList(credentials, targets, summary);
+            }
             if (targets.isEmpty()) {
                 return summary;
             }
@@ -98,6 +103,20 @@ public class MarketStockIndicatorScheduler {
         }
     }
 
+    private IndicatorCollectionSummary collectTargetList(
+            UserKisTokenResponse credentials,
+            java.util.List<MarketStockCollectionTarget> targets,
+            IndicatorCollectionSummary summary
+    ) {
+        for (MarketStockCollectionTarget target : targets) {
+            summary = collectStock(credentials, target, summary);
+            if (summary.runStatus() == IndicatorRunStatus.INTERRUPTED) {
+                return summary;
+            }
+        }
+        return summary;
+    }
+
     private IndicatorCollectionSummary collectStock(
             UserKisTokenResponse credentials,
             MarketStockCollectionTarget target,
@@ -108,12 +127,14 @@ public class MarketStockIndicatorScheduler {
             return summary.incrementSkippedStock();
         }
         try {
-            if (!requestRateLimiter.tryAcquire()) {
-                return summary.interrupted();
-            }
-            boolean stored = marketStockIndicatorCommandService.collectAndSaveIndicatorsForIdentifiedStock(
-                    credentials, target.getStockId(), target.getStockCode());
-            return stored ? summary.incrementSuccess() : summary.incrementSkippedStock();
+            MarketStockIndicatorCommandService.IndicatorCollectionResult result =
+                    marketStockIndicatorCommandService.collectAndSaveIndicatorsForIdentifiedStock(
+                            credentials, target.getStockId(), target.getStockCode(), requestRateLimiter::tryAcquire);
+            return switch (result) {
+                case SAVED -> summary.incrementSuccess();
+                case SKIPPED -> summary.incrementSkippedStock();
+                case INTERRUPTED -> summary.interrupted();
+            };
         } catch (Exception exception) {
             log.warn("투자지표 수집에 실패했습니다. stockCode={}, exceptionType={}",
                     target.getStockCode(), exception.getClass().getSimpleName());

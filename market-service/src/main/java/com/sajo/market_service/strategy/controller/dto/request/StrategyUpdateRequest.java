@@ -23,6 +23,9 @@ public record StrategyUpdateRequest(
         Long allocatedAmount,
 
         @Positive
+        Long orderAmount,
+
+        @Positive
         BigDecimal perCondition,
 
         @Positive

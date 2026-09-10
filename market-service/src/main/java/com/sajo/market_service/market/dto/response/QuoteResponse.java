@@ -1,20 +1,17 @@
 package com.sajo.market_service.market.dto.response;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.sajo.common.exception.BusinessException;
 import com.sajo.market_service.market.dto.kis.KisQuoteResponse;
 import com.sajo.market_service.market.exception.MarketErrorCode;
 import lombok.extern.slf4j.Slf4j;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
-import java.time.LocalTime;
-import java.time.OffsetDateTime;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
+import java.time.Instant;
 
-/** Market 내부에서 사용하는 현재가 응답 모델이다. */
+/** Market 내부 현재가 모델. fetchedAt은 실제 체결 시각이 아니라 KIS 응답을 받은 시각이다. */
 @Slf4j
+@JsonIgnoreProperties(ignoreUnknown = true)
 public record QuoteResponse(
         String stockCode,
         Long currentPrice,
@@ -32,7 +29,7 @@ public record QuoteResponse(
         BigDecimal eps,
         BigDecimal bps,
         String baseTime,
-        LocalDate businessDate
+        Instant fetchedAt
 ) {
 
     public QuoteResponse(
@@ -55,6 +52,10 @@ public record QuoteResponse(
     }
 
     public static QuoteResponse from(KisQuoteResponse response, String stockCode) {
+        return from(response, stockCode, null);
+    }
+
+    public static QuoteResponse from(KisQuoteResponse response, String stockCode, Instant fetchedAt) {
         if (response == null) {
             throw new BusinessException(
                     MarketErrorCode.KIS_QUOTE_RESPONSE_INVALID,
@@ -84,8 +85,8 @@ public record QuoteResponse(
                 toOptionalBigDecimal(output.pbr(), stockCode, "pbr"),
                 toOptionalBigDecimal(output.eps(), stockCode, "eps"),
                 toOptionalBigDecimal(output.bps(), stockCode, "bps"),
-                toBaseTime(output.businessDate(), output.contractTime()),
-                toBusinessDate(output.businessDate())
+                null,
+                fetchedAt
         );
     }
 
@@ -110,28 +111,4 @@ public record QuoteResponse(
         }
     }
 
-    private static LocalDate toBusinessDate(String businessDate) {
-        if (businessDate == null || businessDate.isBlank()) {
-            return null;
-        }
-        try {
-            return LocalDate.parse(businessDate, DateTimeFormatter.BASIC_ISO_DATE);
-        } catch (DateTimeParseException exception) {
-            return null;
-        }
-    }
-
-    private static String toBaseTime(String businessDate, String contractTime) {
-        if (businessDate == null || businessDate.isBlank() || contractTime == null || contractTime.isBlank()) {
-            return null;
-        }
-        try {
-            LocalDate date = LocalDate.parse(businessDate, DateTimeFormatter.BASIC_ISO_DATE);
-            LocalTime time = LocalTime.parse(contractTime, DateTimeFormatter.ofPattern("HHmmss"));
-            OffsetDateTime baseTime = OffsetDateTime.of(date, time, ZoneId.of("Asia/Seoul").getRules().getOffset(date.atTime(time)));
-            return DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(baseTime);
-        } catch (DateTimeParseException exception) {
-            return null;
-        }
-    }
 }

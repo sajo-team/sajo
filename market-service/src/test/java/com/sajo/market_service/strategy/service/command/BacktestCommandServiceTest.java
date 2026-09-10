@@ -22,6 +22,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -39,20 +40,28 @@ class BacktestCommandServiceTest {
     @Mock
     private BacktestCommandRepository backtestCommandRepository;
 
+    @Mock
+    private BacktestExecutionService backtestExecutionService;
+
     private BacktestCommandService backtestCommandService;
 
     @BeforeEach
     void setUp() {
-        backtestCommandService = new BacktestCommandService(strategyCommandRepository, backtestCommandRepository);
+        backtestCommandService = new BacktestCommandService(
+                strategyCommandRepository,
+                backtestCommandRepository,
+                backtestExecutionService
+        );
     }
 
     @Test
-    @DisplayName("백테스트 실행을 요청하면 REQUESTED 상태로 저장하고 응답을 반환한다.")
+    @DisplayName("백테스트 실행이 완료되면 최신 상태를 조회해 응답한다.")
     void createBacktest() {
         // given
         UUID userId = UUID.randomUUID();
         UUID strategyId = UUID.randomUUID();
         UUID backtestId = UUID.randomUUID();
+        AtomicReference<Backtest> savedReference = new AtomicReference<>();
 
         Strategy strategy = newStrategy(userId);
         ReflectionTestUtils.setField(strategy, "id", strategyId);
@@ -66,11 +75,26 @@ class BacktestCommandServiceTest {
         given(strategyCommandRepository.findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId))
                 .willReturn(Optional.of(strategy));
 
-        given(backtestCommandRepository.save(any(Backtest.class)))
+        given(backtestCommandRepository.saveAndFlush(any(Backtest.class)))
                 .willAnswer(invocation -> {
                     Backtest backtest = invocation.getArgument(0);
                     ReflectionTestUtils.setField(backtest, "id", backtestId);
+                    savedReference.set(backtest);
                     return backtest;
+                });
+
+        // 동기 실행 자체는 BacktestExecutionServiceTest에서 검증한다.
+        // 이 테스트에서는 생성 서비스가 실행 서비스를 연결하는지만 확인한다.
+        org.mockito.BDDMockito.willDoNothing()
+                .given(backtestExecutionService)
+                .execute(backtestId);
+
+        given(backtestCommandRepository.findById(backtestId))
+                .willAnswer(invocation -> {
+                    Backtest executedBacktest = savedReference.get();
+                    executedBacktest.start();
+                    executedBacktest.complete(BigDecimal.ZERO, 0);
+                    return Optional.of(executedBacktest);
                 });
 
         // when
@@ -78,7 +102,8 @@ class BacktestCommandServiceTest {
 
         // then
         ArgumentCaptor<Backtest> captor = ArgumentCaptor.forClass(Backtest.class);
-        verify(backtestCommandRepository).save(captor.capture());
+        verify(backtestCommandRepository).saveAndFlush(captor.capture());
+        verify(backtestExecutionService).execute(backtestId);
 
         Backtest savedBacktest = captor.getValue();
         assertThat(savedBacktest.getStrategyId()).isEqualTo(strategyId);
@@ -87,12 +112,12 @@ class BacktestCommandServiceTest {
         assertThat(savedBacktest.getStartDate()).isEqualTo(LocalDate.of(2026, 1, 1));
         assertThat(savedBacktest.getEndDate()).isEqualTo(LocalDate.of(2026, 3, 31));
         assertThat(savedBacktest.getInitialCash()).isEqualTo(1_000_000L);
-        assertThat(savedBacktest.getStatus()).isEqualTo(BacktestStatus.REQUESTED);
+        assertThat(savedBacktest.getStatus()).isEqualTo(BacktestStatus.COMPLETED);
         assertThat(savedBacktest.getRequestedAt()).isNotNull();
 
         assertThat(response.backtestId()).isEqualTo(backtestId);
         assertThat(response.strategyId()).isEqualTo(strategyId);
-        assertThat(response.status()).isEqualTo(BacktestStatus.REQUESTED);
+        assertThat(response.status()).isEqualTo(BacktestStatus.COMPLETED);
         assertThat(response.requestedAt()).isNotNull();
     }
 
@@ -165,6 +190,7 @@ class BacktestCommandServiceTest {
                 new BigDecimal("5.0000"),
                 null,
                 3_000_000L,
+                100_000L,
                 null,
                 null,
                 null

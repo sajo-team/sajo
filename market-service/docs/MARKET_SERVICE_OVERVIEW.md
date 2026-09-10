@@ -41,11 +41,11 @@ Market 서비스는 다음 질문에 답하기 위한 데이터를 관리한다.
 
 ### `m_market_stocks_indicator`: 이 종목의 투자지표는 어떠한가?
 
-종목의 기준일별 투자지표 스냅샷(특정 시점의 기록)을 저장한다. `referenceDate`, `per`, `pbr`, `eps`, `bps`, `roe`가 해당한다.
+종목의 평가 지표와 분기 재무지표 스냅샷을 저장한다. PER/PBR은 현재가 조회 시점의 값이며, ROE는 재무비율 응답의 결산연월 기준 값이다.
 
-- 한 종목에는 여러 기준일의 투자지표 행이 존재할 수 있다.
-- `stock_id + reference_date` 조합은 중복되지 않는다.
-- `referenceDate`는 지표 자체가 기준으로 삼는 날짜이고, `createdAt`은 이 서비스가 그 행을 만든 시각이다. 최신 지표 조회는 먼저 `referenceDate`가 더 최신인 행을 선택하고, 같은 기준일이면 `createdAt`이 더 최신인 행을 선택한다.
+- 신규 데이터는 `stock_id + financial_period_type + financial_reference_year_month` 조합으로 upsert한다.
+- `valuationFetchedAt`과 `financialFetchedAt`은 각각 KIS 응답 수신 시각이며 체결 시각이 아니다.
+- 결산연월은 `YYYY-MM` 그대로 보존하고 임의의 일자로 변환하지 않는다. 기존 `referenceDate` 데이터는 호환을 위해 유지하지만 신규 수집에는 사용하지 않는다.
 
 ## 3. 테이블 관계
 
@@ -64,7 +64,7 @@ erDiagram
     }
     MarketStockIndicator {
         uuid stockId FK
-        date referenceDate
+        string financialReferenceYearMonth
     }
 ```
 
@@ -87,7 +87,7 @@ erDiagram
 
 ### 현재가 조회
 
-`GET /quote?stockCode=005930`
+`GET /api/v1/market/quote?stockCode=005930`
 
 - 요청 헤더 `X-User-Id`가 필요하다.
 - Redis를 먼저 조회한다.
@@ -102,36 +102,70 @@ erDiagram
 - `GET /api/v1/market/stocks/search?keyword=삼성`: 종목명 또는 종목코드 부분 검색이다. PostgreSQL만 조회하며 KIS와 Redis를 사용하지 않는다. `%`, `_`, `!`는 LIKE 검색의 와일드카드가 아닌 일반 문자로 처리한다.
 - `GET /api/v1/market/stocks/{stockCode}`: 종목 기본정보를 조회한다. 종목코드 형식 오류와 정상 형식이지만 존재하지 않는 종목을 구분한다.
 
-### 최근 일별 시세
+### 일별 시세
 
 `GET /api/v1/market/stocks/{stockCode}/prices?days=30`
+`GET /api/v1/market/stocks/{stockCode}/prices?startDate=2026-08-01&endDate=2026-09-09`
 
-- `days`의 기본값은 `30`이며, `1`부터 `365`까지만 허용한다.
+- `startDate`·`endDate`가 모두 주어지면 해당 기간의 일별 시세를 조회하고, 이때 `days`는 무시한다.
+- `startDate`·`endDate` 중 하나만 전달되면 400(`MARKET_0003`)으로 응답한다.
+- `startDate`·`endDate`가 없으면 `days`(기본값 `30`, `1`부터 `365`까지 허용) 기준 최근 거래일 조회로 동작한다.
 - PostgreSQL의 REST 일봉(`time IS NULL`, `source = REST`) 중 `closePrice`가 있는 행만 조회한다.
-- DB에서 최신 N개 거래일을 선택한 뒤, 응답은 과거 날짜부터 최신 날짜 순서로 반환한다.
+- 두 조회 방식 모두 응답은 과거 날짜부터 최신 날짜 순서로 반환한다.
 - 요청 중 KIS를 호출하거나 데이터를 저장하지 않는다. 데이터가 부족해도 현재 저장된 데이터만 반환한다.
+
+### 차트 데이터
+
+`GET /api/v1/market/stocks/{stockCode}/chart?days=30`
+`GET /api/v1/market/stocks/{stockCode}/chart?startDate=2026-08-01&endDate=2026-09-09`
+
+- 파라미터 지원 범위와 조회 원칙은 `/prices`와 동일하다(`startDate`·`endDate` 우선, 없으면 `days` 기준 최근 거래일).
+- 새로운 조회 로직이나 저장소를 두지 않고 `/prices`가 쓰는 `MarketStockPriceQueryService`를 그대로 재사용한다.
+- 응답 필드도 `/prices`와 동일하다(거래일, 시가, 고가, 저가, 종가, 누적 거래량, 누적 거래대금).
+
+### 거래량
+
+`GET /api/v1/market/stocks/{stockCode}/volume?days=30`
+`GET /api/v1/market/stocks/{stockCode}/volume?startDate=2026-08-01&endDate=2026-09-09`
+
+- 파라미터 지원 범위와 조회 원칙, 검증은 `/prices`와 동일하다.
+- 조회 결과에서 거래량 관련 필드(거래일, 누적 거래량, 누적 거래대금)만 추려서 응답한다.
 
 ### 최신 투자지표
 
 `GET /api/v1/market/stocks/{stockCode}/indicators`
 
-- PostgreSQL에 저장된 지표 중 `referenceDate` 내림차순, 같은 기준일이면 `createdAt` 내림차순으로 최신 한 건을 조회한다.
+- 신규 데이터는 결산연월 내림차순으로 최신 분기 한 건을 조회하고, 기존 데이터만 있는 경우에는 기존 `referenceDate` 기준 조회를 유지한다.
 - 종목이 없을 때와 종목은 있지만 투자지표가 없을 때를 서로 다른 404 오류로 구분한다.
+- 요청 중 외부 API를 호출하거나 데이터를 저장하지 않는다.
+
+### 투자지표 이력
+
+`GET /api/v1/market/stocks/{stockCode}/indicators/history?limit=8`
+
+- `limit`의 기본값은 `8`이며, `1`부터 `40`까지만 허용한다.
+- 신규 분기 스냅샷이 하나라도 있으면 그것만 `financialReferenceYearMonth` 내림차순으로 반환하고, 레거시 `referenceDate` 데이터는 섞지 않는다.
+- 신규 데이터가 전혀 없는 종목에 한해서만 레거시 `referenceDate` 내림차순 이력으로 폴백한다.
+- 종목이 없으면 404(`MARKET_STOCK_NOT_FOUND`)이고, 종목은 있지만 지표 이력이 전혀 없으면 빈 배열을 반환한다(최신 투자지표 단건 조회와 달리 404가 아니다).
 - 요청 중 외부 API를 호출하거나 데이터를 저장하지 않는다.
 
 | API | 의미 | 데이터 출처 | DB 저장 발생 |
 | --- | --- | --- | --- |
 | `GET /quote` | 지금 가격 | Redis 또는 KIS | 없음 |
 | `GET /api/v1/market/stocks`, `/search`, `/{stockCode}` | 종목 찾기 | PostgreSQL | 없음 |
-| `GET /api/v1/market/stocks/{stockCode}/prices` | 과거 가격 | PostgreSQL | 없음 |
+| `GET /api/v1/market/stocks/{stockCode}/prices` (days 또는 startDate·endDate) | 과거 가격 | PostgreSQL | 없음 |
+| `GET /api/v1/market/stocks/{stockCode}/chart` (days 또는 startDate·endDate) | 차트용 과거 가격 | PostgreSQL | 없음 |
+| `GET /api/v1/market/stocks/{stockCode}/volume` (days 또는 startDate·endDate) | 거래량 이력 | PostgreSQL | 없음 |
 | `GET /api/v1/market/stocks/{stockCode}/indicators` | 최신 저장 지표 | PostgreSQL | 없음 |
+| `GET /api/v1/market/stocks/{stockCode}/indicators/history` | 저장된 지표 이력 | PostgreSQL | 없음 |
 
 ## 6. 삼성전자 조회 예시
 
 1. `GET /api/v1/market/stocks/search?keyword=삼성`으로 `m_market_stocks`를 검색해 삼성전자와 `005930`을 찾는다.
-2. `GET /quote?stockCode=005930`으로 Redis 또는 KIS에서 지금 가격을 확인한다.
-3. `GET /api/v1/market/stocks/005930/prices?days=30`으로 `m_market_stocks_price`의 저장된 날짜별 가격을 확인한다.
+2. `GET /api/v1/market/quote?stockCode=005930`으로 Redis 또는 KIS에서 지금 가격을 확인한다.
+3. `GET /api/v1/market/stocks/005930/prices?days=30` 또는 `GET /api/v1/market/stocks/005930/prices?startDate=2026-08-01&endDate=2026-09-09`으로 `m_market_stocks_price`의 저장된 날짜별 가격을 확인한다.
 4. `GET /api/v1/market/stocks/005930/indicators`로 `m_market_stocks_indicator`의 최신 PER, PBR, EPS, BPS, ROE를 확인한다.
+5. `GET /api/v1/market/stocks/005930/indicators/history?limit=8`로 최근 분기별 투자지표 변화 추이를 확인한다.
 
 ## 7. 조회 API와 내부 저장 Command 구분
 

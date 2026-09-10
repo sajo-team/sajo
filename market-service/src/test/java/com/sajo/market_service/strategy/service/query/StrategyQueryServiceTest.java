@@ -51,7 +51,7 @@ class StrategyQueryServiceTest {
         Strategy strategy = Strategy.create(
                 userId, UUID.randomUUID(), "005930", "삼성전자 눌림목 전략",
                 70_000L, 80_000L, new BigDecimal("5.0000"), null,
-                3_000_000L, null, null, null
+                3_000_000L, 100_000L, null, null, null
         );
         Page<Strategy> page = new PageImpl<>(List.of(strategy), pageable, 1);
 
@@ -125,6 +125,7 @@ class StrategyQueryServiceTest {
                 new BigDecimal("5.0000"),
                 new BigDecimal("10.0000"),
                 3_000_000L,
+                100_000L,
                 new BigDecimal("15.0000"),
                 new BigDecimal("1.2000"),
                 new BigDecimal("10.0000")

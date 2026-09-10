@@ -87,6 +87,7 @@ class BacktestCommandRepositoryTest {
                 new BigDecimal("5.0000"),
                 null,
                 3_000_000L,
+                100_000L,
                 null,
                 null,
                 null
