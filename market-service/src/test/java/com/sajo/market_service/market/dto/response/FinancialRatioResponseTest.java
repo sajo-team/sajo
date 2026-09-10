@@ -33,4 +33,18 @@ class FinancialRatioResponseTest {
         assertThat(FinancialRatioResponse.latest(outputs, "005930", Instant.EPOCH))
                 .hasValueSatisfying(value -> assertThat(value.roe()).isEqualByComparingTo("-1.25"));
     }
+
+    @Test
+    void skipsNewerPeriodWithoutRoeAndSelectsLatestUsablePeriod() {
+        var outputs = List.of(
+                new KisFinancialRatioResponse.KisFinancialRatioOutput("202603", "19.16"),
+                new KisFinancialRatioResponse.KisFinancialRatioOutput("202606", ""),
+                new KisFinancialRatioResponse.KisFinancialRatioOutput("202609", "not-a-number"));
+
+        assertThat(FinancialRatioResponse.latest(outputs, "005930", Instant.EPOCH))
+                .hasValueSatisfying(value -> {
+                    assertThat(value.financialReferenceYearMonth()).isEqualTo(YearMonth.of(2026, 3));
+                    assertThat(value.roe()).isEqualByComparingTo("19.16");
+                });
+    }
 }

@@ -46,6 +46,9 @@ public record FinancialRatioResponse(
         try {
             YearMonth period = YearMonth.parse(output.financialReferenceYearMonth().trim(), KIS_YEAR_MONTH);
             BigDecimal roe = parseOptionalDecimal(output.roe(), stockCode, period);
+            if (roe == null) {
+                return Optional.empty();
+            }
             return Optional.of(new FinancialRatioResponse(period, roe, fetchedAt));
         } catch (DateTimeParseException exception) {
             log.warn("KIS 재무비율 행을 건너뜁니다. stockCode={}, field={}, exceptionType={}",

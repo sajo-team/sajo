@@ -106,9 +106,15 @@ class MarketStockIndicatorWriterIntegrationTest {
         assertThat(jdbcTemplate.queryForObject("SELECT updated_at FROM market_strategy.m_market_stocks_indicator WHERE id = ?",
                 OffsetDateTime.class, originalId)).isAfter(originalCreatedAt);
 
-        writer.upsert(stockId, command(referenceDate, null, null));
+        OffsetDateTime valuationFetchedAt = jdbcTemplate.queryForObject(
+                "SELECT valuation_fetched_at FROM market_strategy.m_market_stocks_indicator WHERE id = ?",
+                OffsetDateTime.class, originalId);
+        writer.upsert(stockId, command(referenceDate, "17.2", null, Instant.parse("2026-09-10T02:00:00Z")));
 
         assertMetrics(originalId, "16.2", "1.4", "4605", "51850");
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT valuation_fetched_at FROM market_strategy.m_market_stocks_indicator WHERE id = ?",
+                OffsetDateTime.class, originalId)).isEqualTo(valuationFetchedAt);
         assertThat(jdbcTemplate.queryForObject("SELECT roe FROM market_strategy.m_market_stocks_indicator WHERE id = ?",
                 BigDecimal.class, originalId)).isEqualByComparingTo("8.7");
     }
@@ -146,8 +152,12 @@ class MarketStockIndicatorWriterIntegrationTest {
     }
 
     private MarketStockIndicatorCommand command(LocalDate date, String per, String pbr) {
+        return command(date, per, pbr, Instant.parse("2026-09-10T01:00:00Z"));
+    }
+
+    private MarketStockIndicatorCommand command(LocalDate date, String per, String pbr, Instant valuationFetchedAt) {
         return new MarketStockIndicatorCommand(decimal(per), decimal(pbr),
-                Instant.parse("2026-09-10T01:00:00Z"), new BigDecimal("8.7"),
+                valuationFetchedAt, new BigDecimal("8.7"),
                 FinancialPeriodType.QUARTER, YearMonth.from(date), Instant.parse("2026-09-10T01:00:01Z"));
     }
 

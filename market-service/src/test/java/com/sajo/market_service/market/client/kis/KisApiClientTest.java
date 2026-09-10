@@ -50,6 +50,7 @@ class KisApiClientTest {
         KisApiClient client = new KisApiClient(builder, new KisApiProperties("https://kis.example"), clock);
         server.expect(requestTo("https://kis.example/uapi/domestic-stock/v1/finance/financial-ratio?FID_DIV_CLS_CODE=1&FID_COND_MRKT_DIV_CODE=J&FID_INPUT_ISCD=005930"))
                 .andExpect(header("tr_id", "FHKST66430300"))
+                .andExpect(header("custtype", "P"))
                 .andRespond(withSuccess("""
                         {"rt_cd":"0","msg_cd":"MCA00000","msg1":"정상처리 되었습니다.","output":[
                           {"stac_yymm":"202603","roe_val":"19.16"},

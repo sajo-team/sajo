@@ -149,6 +149,7 @@ public class KisApiClient {
         headers.set("appkey", credentials.appKey());
         headers.set("appsecret", credentials.secretKey());
         headers.set("tr_id", transactionId);
+        headers.set("custtype", "P");
         headers.setContentType(MediaType.APPLICATION_JSON);
     }
 
