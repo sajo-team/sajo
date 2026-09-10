@@ -15,6 +15,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.RedisConnectionFailureException;
@@ -32,7 +33,9 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
@@ -100,7 +103,31 @@ class KisTokenCacheQueryServiceTest {
         assertThat(result).isEqualTo("issued-token");
         verify(valueOperations).set(eq(key), eq("issued-token"), any(Duration.class));
         verify(kisTokenLogCommandService).recordSuccess(accountId, userId, KisTokenType.ACCESS_TOKEN);
-        verify(kisTokenCacheLock).unlock(eq(key), anyString());
+        // 캐시 저장 직후 조기 해제 + finally 안전망까지 2번 불림 (Lua compare-and-delete라 중복 호출은 무해함)
+        verify(kisTokenCacheLock, times(2)).unlock(eq(key), anyString());
+    }
+
+    @Test
+    @DisplayName("락은 캐시 저장 직후 바로 풀리고, DB 이력 기록(부가 작업)은 그 이후에 일어난다")
+    void getAccessToken_releasesLockBeforeRecordingSuccess() {
+        // given
+        UUID userId = UUID.randomUUID();
+        UUID accountId = UUID.randomUUID();
+        String key = KisTokenCacheKeys.accessToken(userId);
+        given(redisTemplate.opsForValue()).willReturn(valueOperations);
+        given(valueOperations.get(key)).willReturn(null);
+        given(kisTokenCacheLock.tryLock(eq(key), anyString(), any(Duration.class))).willReturn(true);
+        given(kisOAuthClient.getAccessToken("app-key", "secret-key", AccountType.REAL))
+                .willReturn(new KisAccessTokenResponse("issued-token", "Bearer", 86400, "2026-01-01 00:00:00"));
+
+        // when
+        kisTokenCacheQueryService.getAccessToken(userId, accountId, "app-key", "secret-key", AccountType.REAL);
+
+        // then - 캐시 저장 -> 락 해제 -> (락과 무관한 부가 작업인) DB 기록 순서여야 락 보유 시간이 최소화된다
+        InOrder inOrder = inOrder(valueOperations, kisTokenCacheLock, kisTokenLogCommandService);
+        inOrder.verify(valueOperations).set(eq(key), eq("issued-token"), any(Duration.class));
+        inOrder.verify(kisTokenCacheLock).unlock(eq(key), anyString());
+        inOrder.verify(kisTokenLogCommandService).recordSuccess(accountId, userId, KisTokenType.ACCESS_TOKEN);
     }
 
     @Test
@@ -125,7 +152,8 @@ class KisTokenCacheQueryServiceTest {
 
         verify(kisTokenLogCommandService)
                 .recordFail(accountId, userId, KisTokenType.ACCESS_TOKEN, "EGW00123", "유효하지 않은 앱키입니다.");
-        verify(kisTokenCacheLock).unlock(eq(key), anyString());
+        // 실패 시에도 조기 해제 + finally 안전망까지 2번 불림
+        verify(kisTokenCacheLock, times(2)).unlock(eq(key), anyString());
         // 실제 토큰 값은 캐시에 안 남지만, 실패 마커(key:recent-failure)는 남으므로 set() 자체는 호출됨
         verify(valueOperations, never()).set(eq(key), any(), any(Duration.class));
     }
@@ -177,7 +205,7 @@ class KisTokenCacheQueryServiceTest {
     @Test
     @DisplayName("락을 계속 못 잡고 캐시도 안 채워지면 타임아웃 예외를 던진다")
     void getAccessToken_lockNeverAcquired_throwsTimeoutException() {
-        // given - LOCK_WAIT_TIMEOUT(10s) 다 채우는 실제 대기가 일어나 다른 테스트보다 느리다
+        // given - LOCK_WAIT_TIMEOUT(12s) 다 채우는 실제 대기가 일어나 다른 테스트보다 느리다
         UUID userId = UUID.randomUUID();
         String key = KisTokenCacheKeys.accessToken(userId);
         given(redisTemplate.opsForValue()).willReturn(valueOperations);

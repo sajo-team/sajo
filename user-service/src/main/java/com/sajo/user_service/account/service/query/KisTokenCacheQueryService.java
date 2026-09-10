@@ -34,8 +34,9 @@ public class KisTokenCacheQueryService {
 
     // KIS OAuth 호출 최대 시간(connect 3s + read 5s = 8s)보다 여유 있게 - 락 홀더가 죽었을 때 자동 해제되는 상한선
     private static final Duration KIS_LOCK_TTL = Duration.ofSeconds(10);
-    // 락을 못 잡은 요청이 대기하다 포기하기까지의 최대 시간
-    private static final Duration LOCK_WAIT_TIMEOUT = Duration.ofSeconds(10);
+    // 락을 못 잡은 요청이 대기하다 포기하기까지의 최대 시간 - KIS_LOCK_TTL보다 여유 있게 잡아서,
+    // 홀더가 락 TTL 끝자락에 캐시를 막 채운 순간에 대기자가 먼저 타임아웃하는 것을 방지
+    private static final Duration LOCK_WAIT_TIMEOUT = Duration.ofSeconds(12);
     // 락 재시도 간격
     private static final Duration RETRY_INTERVAL = Duration.ofMillis(50);
     // KIS 문서 기준 approval key(웹소켓 접속키) 유효기간은 24시간 - expires_in 같은 응답 필드가 없어 고정값 사용
@@ -103,7 +104,7 @@ public class KisTokenCacheQueryService {
                         // 직전 락 홀더가 방금 실패했다 - 백오프 없이 곧바로 같은 실패를 반복하지 않도록 즉시 실패 처리
                         throw new BusinessException(AccountErrorCode.KIS_TOKEN_ISSUE_FAILED);
                     }
-                    return fetchAndCache(userId, accountId, tokenType, key, fetcher);
+                    return fetchCacheReleaseThenRecord(userId, accountId, tokenType, key, fetcher, lockToken);
                 } finally {
                     releaseLock(key, lockToken);
                 }
@@ -157,6 +158,39 @@ public class KisTokenCacheQueryService {
                 log.warn("Redis 캐시 저장 실패했지만 값은 정상 반환합니다. key={}", key, e);
             }
         }
+
+        return result.value();
+    }
+
+    // fetchAndCache와 거의 동일하지만, 락을 쥔 채로 호출되는 유일한 경로라서 락 보유 시간을 줄이려고
+    // "락이 실제로 보호해야 하는 작업(KIS 호출 + 캐시 저장)"이 끝나자마자 바로 해제하고,
+    // "아무도 안 기다리는 부가 작업"인 DB 이력 기록은 락 해제 이후로 미룬다.
+    // KisBusinessException이 아닌 예외가 fetcher.get()에서 터지면 여기서 락을 못 풀지만,
+    // 호출부(getTokenWithLock)의 finally { releaseLock(...) }가 안전망 역할을 한다 (중복 해제는 무해함).
+    private String fetchCacheReleaseThenRecord(
+            UUID userId, UUID accountId, KisTokenType tokenType, String key,
+            Supplier<TokenFetchResult> fetcher, String lockToken
+    ) {
+        TokenFetchResult result;
+        try {
+            result = fetcher.get();
+        } catch (KisBusinessException e) {
+            markRecentFailure(key);
+            releaseLock(key, lockToken);
+            kisTokenLogCommandService.recordFail(accountId, userId, tokenType, e.getKisErrorCode(), e.getKisMessage());
+            throw e;
+        }
+
+        if (!result.ttl().isZero()) {
+            try {
+                redisTemplate.opsForValue().set(key, result.value(), result.ttl());
+            } catch (DataAccessException e) {
+                log.warn("Redis 캐시 저장 실패했지만 값은 정상 반환합니다. key={}", key, e);
+            }
+        }
+
+        releaseLock(key, lockToken);
+        kisTokenLogCommandService.recordSuccess(accountId, userId, tokenType);
 
         return result.value();
     }
