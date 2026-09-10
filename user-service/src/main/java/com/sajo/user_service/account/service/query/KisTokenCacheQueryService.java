@@ -38,8 +38,10 @@ public class KisTokenCacheQueryService {
     private static final Duration LOCK_WAIT_TIMEOUT = Duration.ofSeconds(5);
     // 락 재시도 간격
     private static final Duration RETRY_INTERVAL = Duration.ofMillis(50);
-    // TODO: KIS 문서상 approval key(웹소켓 접속키) 실제 유효기간 확인 후 조정 - expires_in 같은 응답 필드가 없어 고정값 사용
-    private static final Duration APPROVAL_KEY_TTL = Duration.ofHours(24);
+    // KIS 문서 기준 approval key(웹소켓 접속키) 유효기간은 24시간 - expires_in 같은 응답 필드가 없어 고정값 사용
+    private static final Duration APPROVAL_KEY_TTL = Duration.ofHours(23);
+    // 락 해제 직후 다음 대기자가 백오프 없이 같은 실패를 바로 반복하는 것을 막는 억제 시간
+    private static final Duration RECENT_FAILURE_TTL = Duration.ofSeconds(1);
 
     public String getAccessToken(UUID userId, UUID accountId, String appKey, String secretKey, AccountType accountType) {
         String key = KisTokenCacheKeys.accessToken(userId);
@@ -97,12 +99,17 @@ public class KisTokenCacheQueryService {
                     if (recheck.token() != null) {
                         return recheck.token();
                     }
+                    if (hasRecentFailure(key)) {
+                        // 직전 락 홀더가 방금 실패했다 - 백오프 없이 곧바로 같은 실패를 반복하지 않도록 즉시 실패 처리
+                        throw new BusinessException(AccountErrorCode.KIS_TOKEN_ISSUE_FAILED);
+                    }
                     return fetchAndCache(userId, accountId, tokenType, key, fetcher);
                 } finally {
                     releaseLock(key, lockToken);
                 }
             }
 
+            // 락 획득 못한 경우도 다시 재확인
             TokenLookup waitingLookup = findCachedToken(key);
             if (waitingLookup.token() != null) {
                 return waitingLookup.token();
@@ -137,6 +144,7 @@ public class KisTokenCacheQueryService {
             result = fetcher.get();
         } catch (KisBusinessException e) {
             kisTokenLogCommandService.recordFail(accountId, userId, tokenType, e.getKisErrorCode(), e.getKisMessage());
+            markRecentFailure(key);
             throw e;
         }
 
@@ -151,6 +159,29 @@ public class KisTokenCacheQueryService {
         }
 
         return result.value();
+    }
+
+    // 마커 존재 자체가 신호라 값은 아무 의미 없음("1" 고정) - 저장 실패해도 그냥 넘어감 (억제 실패 = 재시도 허용, 안전한 방향)
+    private void markRecentFailure(String key) {
+        try {
+            redisTemplate.opsForValue().set(recentFailureKey(key), "1", RECENT_FAILURE_TTL);
+        } catch (DataAccessException e) {
+            log.warn("Redis 실패 마커 저장 실패. key={}", key, e);
+        }
+    }
+
+    // 조회 실패해도 "최근 실패 없음"으로 간주 - Redis 장애 시 이 억제 기능 때문에 KIS 호출 자체가 막히면 안 됨
+    private boolean hasRecentFailure(String key) {
+        try {
+            return redisTemplate.opsForValue().get(recentFailureKey(key)) != null;
+        } catch (DataAccessException e) {
+            log.warn("Redis 실패 마커 조회 실패. key={}", key, e);
+            return false;
+        }
+    }
+
+    private String recentFailureKey(String key) {
+        return key + ":recent-failure";
     }
 
     private void releaseLock(String key, String lockToken) {

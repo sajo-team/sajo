@@ -126,7 +126,32 @@ class KisTokenCacheQueryServiceTest {
         verify(kisTokenLogCommandService)
                 .recordFail(accountId, userId, KisTokenType.ACCESS_TOKEN, "EGW00123", "유효하지 않은 앱키입니다.");
         verify(kisTokenCacheLock).unlock(eq(key), anyString());
-        verify(valueOperations, never()).set(any(), any(), any(Duration.class));
+        // 실제 토큰 값은 캐시에 안 남지만, 실패 마커(key:recent-failure)는 남으므로 set() 자체는 호출됨
+        verify(valueOperations, never()).set(eq(key), any(), any(Duration.class));
+    }
+
+    @Test
+    @DisplayName("직전 락 홀더가 방금 실패해 실패 마커가 남아있으면, KIS 호출 없이 즉시 실패한다")
+    void getAccessToken_recentFailureMarkerExists_failsFastWithoutCallingKis() {
+        // given
+        UUID userId = UUID.randomUUID();
+        String key = KisTokenCacheKeys.accessToken(userId);
+        given(redisTemplate.opsForValue()).willReturn(valueOperations);
+        given(valueOperations.get(key)).willReturn(null);
+        given(kisTokenCacheLock.tryLock(eq(key), anyString(), any(Duration.class))).willReturn(true);
+        given(valueOperations.get(key + ":recent-failure")).willReturn("1");
+
+        // when & then
+        assertThatThrownBy(() ->
+                kisTokenCacheQueryService.getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode()).isEqualTo(AccountErrorCode.KIS_TOKEN_ISSUE_FAILED);
+                });
+
+        verifyNoInteractions(kisOAuthClient);
+        verify(kisTokenCacheLock).unlock(eq(key), anyString());
     }
 
     @Test
