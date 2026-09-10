@@ -68,7 +68,7 @@ class MarketStockSummaryQueryControllerTest {
                                 800L, new BigDecimal("1.12"), 123456L, 987654L, 1000000L,
                                 new BigDecimal("15.2"), new BigDecimal("1.3"), new BigDecimal("4605"), new BigDecimal("51850")),
                         new MarketStockIndicatorResponse(null, new BigDecimal("15.2"),
-                                new BigDecimal("1.3"), null, null, new BigDecimal("31.39"),
+                                new BigDecimal("1.3"), new BigDecimal("31.39"),
                                 Instant.parse("2026-09-10T01:00:00Z"), FinancialPeriodType.QUARTER, "2026-06",
                                 Instant.parse("2026-09-10T01:00:01Z"))));
 
