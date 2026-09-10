@@ -65,6 +65,22 @@ class MarketStockIndicatorQueryServiceTest {
         assertErrorCode("005930", MarketErrorCode.MARKET_STOCK_INDICATOR_NOT_FOUND);
     }
 
+    @Test
+    void returnsLegacyIndicatorWhenFinancialSnapshotIsNotYetCollected() {
+        given(marketStockQueryRepository.findByStockCode("005930")).willReturn(Optional.of(stock()));
+        given(marketStockIndicatorQueryRepository
+                .findTopByStockIdAndFinancialPeriodTypeIsNotNullAndFinancialReferenceYearMonthIsNotNullOrderByFinancialReferenceYearMonthDescFinancialFetchedAtDesc(stockId))
+                .willReturn(Optional.empty());
+        given(marketStockIndicatorQueryRepository.findTopByStockIdOrderByReferenceDateDescCreatedAtDesc(stockId))
+                .willReturn(Optional.of(indicator()));
+
+        var snapshot = service.getLatestFinancialIndicator("005930");
+
+        assertThat(snapshot.per()).isEqualByComparingTo("12.34");
+        assertThat(snapshot.pbr()).isEqualByComparingTo("1.23");
+        assertThat(snapshot.financialReferenceYearMonth()).isNull();
+    }
+
     private void assertErrorCode(String stockCode, MarketErrorCode errorCode) {
         assertThatThrownBy(() -> service.getLatestIndicator(stockCode))
                 .isInstanceOf(BusinessException.class)

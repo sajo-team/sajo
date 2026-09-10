@@ -41,8 +41,8 @@ public class MarketStockIndicatorQueryService {
     public MarketStockIndicatorSnapshot getLatestFinancialIndicator(String stockCode) {
         MarketStock stock = marketStockQueryRepository.findByStockCode(MarketStock.normalizeStockCode(stockCode))
                 .orElseThrow(() -> new BusinessException(MarketErrorCode.MARKET_STOCK_NOT_FOUND));
-        return marketStockIndicatorQueryRepository
-                .findTopByStockIdAndFinancialPeriodTypeIsNotNullAndFinancialReferenceYearMonthIsNotNullOrderByFinancialReferenceYearMonthDescFinancialFetchedAtDesc(stock.getId())
+        // 신규 분기 스냅샷이 아직 적재되지 않은 배포 직후에도 기존 지표를 사용할 수 있다.
+        return findLatestEntity(stock.getId())
                 .map(MarketStockIndicatorSnapshot::from)
                 .orElseThrow(() -> new BusinessException(MarketErrorCode.MARKET_STOCK_INDICATOR_NOT_FOUND));
     }

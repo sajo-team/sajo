@@ -69,6 +69,11 @@ public class MarketStockIndicatorCommandService {
                     "KIS 현재가 응답이 비어 있습니다."
             );
         }
+        if (quote.per() == null && quote.pbr() == null) {
+            log.warn("KIS 투자지표 스냅샷 저장을 건너뜁니다. stockCode={}, reason={}",
+                    stockCode, "missingRequiredValuationData");
+            return IndicatorCollectionResult.SKIPPED;
+        }
         if (!beforeKisRequest.getAsBoolean()) {
             return IndicatorCollectionResult.INTERRUPTED;
         }

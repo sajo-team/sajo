@@ -58,6 +58,19 @@ class MarketStockIndicatorCommandServiceTest {
     }
 
     @Test
+    void missingPerAndPbrSkipsFinancialRatioRequest() {
+        var service = new MarketStockIndicatorCommandService(userClient, kisClient, persistence);
+        when(kisClient.getQuote(credentials(), "005930")).thenReturn(quoteWithoutValuation());
+
+        assertThat(service.collectAndSaveIndicatorsForIdentifiedStock(
+                credentials(), UUID.randomUUID(), "005930", () -> true))
+                .isEqualTo(MarketStockIndicatorCommandService.IndicatorCollectionResult.SKIPPED);
+
+        verify(kisClient, never()).getLatestQuarterlyFinancialRatio(any(), any());
+        verify(persistence, never()).save(any(), any());
+    }
+
+    @Test
     void interruptBeforeSecondRequestStopsFinancialCallAndPersistence() {
         var service = new MarketStockIndicatorCommandService(userClient, kisClient, persistence);
         when(kisClient.getQuote(credentials(), "005930")).thenReturn(quote());
@@ -86,5 +99,10 @@ class MarketStockIndicatorCommandServiceTest {
     }
     private FinancialRatioResponse financial() {
         return new FinancialRatioResponse(YearMonth.of(2026, 6), new BigDecimal("31.39"), Instant.parse("2026-09-10T01:00:01Z"));
+    }
+
+    private QuoteResponse quoteWithoutValuation() {
+        return new QuoteResponse("005930", 70000L, null, null, null, null, null, null, null, null, null,
+                null, null, null, null, null, Instant.parse("2026-09-10T01:00:00Z"));
     }
 }

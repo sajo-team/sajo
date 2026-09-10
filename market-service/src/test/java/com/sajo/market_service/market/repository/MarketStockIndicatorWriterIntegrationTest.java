@@ -77,7 +77,7 @@ class MarketStockIndicatorWriterIntegrationTest {
     void upsertsSameSnapshotWithoutGrowingRowsAndPreservesExistingFields() {
         UUID stockId = UUID.randomUUID();
         LocalDate referenceDate = LocalDate.of(2026, 9, 4);
-        MarketStockIndicatorCommand first = command(referenceDate, "15.2", "1.3", "4605", "51850");
+        MarketStockIndicatorCommand first = command(referenceDate, "15.2", "1.3");
         writer.upsert(stockId, first);
 
         UUID originalId = jdbcTemplate.queryForObject(
@@ -86,11 +86,11 @@ class MarketStockIndicatorWriterIntegrationTest {
         OffsetDateTime originalCreatedAt = OffsetDateTime.of(2026, 9, 4, 8, 0, 0, 0, ZoneOffset.UTC);
         jdbcTemplate.update("""
                 UPDATE market_strategy.m_market_stocks_indicator
-                SET roe = 8.7, created_at = ?, updated_at = ?
+                SET roe = 8.7, eps = 4605, bps = 51850, created_at = ?, updated_at = ?
                 WHERE id = ?
                 """, originalCreatedAt, originalCreatedAt, originalId);
 
-        writer.upsert(stockId, command(referenceDate, "16.2", "1.4", "4700", "52000"));
+        writer.upsert(stockId, command(referenceDate, "16.2", "1.4"));
 
         assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM market_strategy.m_market_stocks_indicator", Integer.class))
                 .isEqualTo(1);
@@ -102,13 +102,13 @@ class MarketStockIndicatorWriterIntegrationTest {
                 OffsetDateTime.class, originalId)).isEqualTo(originalCreatedAt);
         assertThat(jdbcTemplate.queryForObject("SELECT roe FROM market_strategy.m_market_stocks_indicator WHERE id = ?",
                 BigDecimal.class, originalId)).isEqualByComparingTo("8.7");
-        assertMetrics(originalId, "16.2", "1.4", "4700", "52000");
+        assertMetrics(originalId, "16.2", "1.4", "4605", "51850");
         assertThat(jdbcTemplate.queryForObject("SELECT updated_at FROM market_strategy.m_market_stocks_indicator WHERE id = ?",
                 OffsetDateTime.class, originalId)).isAfter(originalCreatedAt);
 
-        writer.upsert(stockId, command(referenceDate, null, null, null, null));
+        writer.upsert(stockId, command(referenceDate, null, null));
 
-        assertMetrics(originalId, "16.2", "1.4", "4700", "52000");
+        assertMetrics(originalId, "16.2", "1.4", "4605", "51850");
         assertThat(jdbcTemplate.queryForObject("SELECT roe FROM market_strategy.m_market_stocks_indicator WHERE id = ?",
                 BigDecimal.class, originalId)).isEqualByComparingTo("8.7");
     }
@@ -116,8 +116,8 @@ class MarketStockIndicatorWriterIntegrationTest {
     @Test
     void storesAnotherReferenceDateAsAnotherRow() {
         UUID stockId = UUID.randomUUID();
-        writer.upsert(stockId, command(LocalDate.of(2026, 9, 4), "15.2", "1.3", null, null));
-        writer.upsert(stockId, command(LocalDate.of(2026, 10, 5), "15.3", "1.4", null, null));
+        writer.upsert(stockId, command(LocalDate.of(2026, 9, 4), "15.2", "1.3"));
+        writer.upsert(stockId, command(LocalDate.of(2026, 10, 5), "15.3", "1.4"));
 
         assertThat(jdbcTemplate.queryForObject("SELECT COUNT(*) FROM market_strategy.m_market_stocks_indicator WHERE stock_id = ?",
                 Integer.class, stockId)).isEqualTo(2);
@@ -126,7 +126,7 @@ class MarketStockIndicatorWriterIntegrationTest {
     @Test
     void v104UniqueKeyMatchesUpsertConflictTarget() {
         UUID stockId = UUID.randomUUID();
-        writer.upsert(stockId, command(LocalDate.of(2026, 9, 4), "15.2", "1.3", null, null));
+        writer.upsert(stockId, command(LocalDate.of(2026, 9, 4), "15.2", "1.3"));
 
         assertThat(jdbcTemplate.queryForObject("""
                 SELECT COUNT(*) FROM pg_indexes
@@ -145,7 +145,7 @@ class MarketStockIndicatorWriterIntegrationTest {
         assertThat((BigDecimal) values.get("bps")).isEqualByComparingTo(bps);
     }
 
-    private MarketStockIndicatorCommand command(LocalDate date, String per, String pbr, String eps, String bps) {
+    private MarketStockIndicatorCommand command(LocalDate date, String per, String pbr) {
         return new MarketStockIndicatorCommand(decimal(per), decimal(pbr),
                 Instant.parse("2026-09-10T01:00:00Z"), new BigDecimal("8.7"),
                 FinancialPeriodType.QUARTER, YearMonth.from(date), Instant.parse("2026-09-10T01:00:01Z"));
