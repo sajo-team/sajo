@@ -35,7 +35,7 @@ public class KisTokenCacheQueryService {
     // KIS OAuth 호출 최대 시간(connect 3s + read 5s = 8s)보다 여유 있게 - 락 홀더가 죽었을 때 자동 해제되는 상한선
     private static final Duration KIS_LOCK_TTL = Duration.ofSeconds(10);
     // 락을 못 잡은 요청이 대기하다 포기하기까지의 최대 시간
-    private static final Duration LOCK_WAIT_TIMEOUT = Duration.ofSeconds(5);
+    private static final Duration LOCK_WAIT_TIMEOUT = Duration.ofSeconds(10);
     // 락 재시도 간격
     private static final Duration RETRY_INTERVAL = Duration.ofMillis(50);
     // KIS 문서 기준 approval key(웹소켓 접속키) 유효기간은 24시간 - expires_in 같은 응답 필드가 없어 고정값 사용
