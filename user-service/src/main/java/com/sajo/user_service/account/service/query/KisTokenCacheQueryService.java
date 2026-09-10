@@ -65,6 +65,7 @@ public class KisTokenCacheQueryService {
     }
 
     // 분산락 + 더블체크 + Redis 장애 시 fail-open을 공통 처리
+    // Redis 장애 시에는 kis로 중복 요청 보내질 수 있다
     private String getTokenWithLock(
             UUID userId, UUID accountId, KisTokenType tokenType, String key, Supplier<TokenFetchResult> fetcher
     ) {

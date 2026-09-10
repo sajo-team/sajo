@@ -18,8 +18,6 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-// 예전엔 @CacheEvict/@CachePut + ConcurrentMapCacheManager로 검증했지만, StringRedisTemplate 직접
-// 사용으로 전환하면서 KisTokenCacheQueryService와 동일한 키를 실제로 읽고/지우는지 진짜 Redis로 검증한다.
 @Testcontainers
 @EnabledIfDockerAvailable
 @SpringBootTest(classes = {KisTokenCacheCommandService.class, DataRedisAutoConfiguration.class})
