@@ -30,8 +30,6 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-// 예전엔 @Cacheable + ConcurrentMapCacheManager로 검증했지만, StringRedisTemplate 직접 사용으로
-// 전환하면서 진짜 Redis로 검증한다.
 @Testcontainers
 @EnabledIfDockerAvailable
 @SpringBootTest(classes = {

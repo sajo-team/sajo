@@ -26,8 +26,6 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-// 예전엔 @Cacheable + ConcurrentMapCacheManager로 검증했지만, StringRedisTemplate 직접 사용으로
-// 전환하면서 실제 캐싱 동작(같은 userId는 KIS를 한 번만 호출)을 검증하려면 진짜 Redis가 필요해졌다.
 @Testcontainers
 @EnabledIfDockerAvailable
 @SpringBootTest(classes = {
