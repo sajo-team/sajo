@@ -7,12 +7,11 @@ import org.springframework.web.bind.annotation.PathVariable;
 
 import java.util.UUID;
 
-//TODO: circuit breaker 적용
-@FeignClient(name = "trading-service")
+@FeignClient(name = "trading-service", fallbackFactory = TradingFeignClientFallbackFactory.class)
 public interface TradingFeignClient {
 
     @GetMapping("/internal/v1/trading/users/{userId}/active-status") // 활성 자동매매/미체결 주문 존재 여부 (계좌 삭제 검증용)
     TradingActiveStatusResponse getActiveStatus(
-            @PathVariable("userId") UUID userId
+            @PathVariable UUID userId
     );
 }

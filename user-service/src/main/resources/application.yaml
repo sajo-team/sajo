@@ -11,6 +11,20 @@ spring:
       retry:
         max-attempts: 10
         initial-interval: 2000
+    openfeign:
+      circuitbreaker:
+        enabled: true
+
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10 #최근 10번 호출 저장
+        minimum-number-of-calls: 5 # 서킷 브레이커 동작하기 위한 최소 호출 수
+        failure-rate-threshold: 50 # 실패율 50% 이상이면 open 상태
+        wait-duration-in-open-state: 10s # open 상태에서 half-open으로 전환하는 대기시간
+        permitted-number-of-calls-in-half-open-state: 3 # 서킷브레이커가 half-open 상태에서 허용하는 최대 호출 수
 
 management:
   endpoints:
