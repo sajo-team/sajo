@@ -14,6 +14,11 @@ spring:
     openfeign:
       circuitbreaker:
         enabled: true
+      client:
+        config:
+          trading-service:
+            connect-timeout: 2000
+            read-timeout: 3000
 
 resilience4j:
   circuitbreaker:
