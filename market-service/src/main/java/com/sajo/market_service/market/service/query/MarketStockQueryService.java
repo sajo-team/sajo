@@ -4,6 +4,7 @@ import com.sajo.common.exception.BusinessException;
 import com.sajo.common.response.PageResponse;
 import com.sajo.market_service.market.domain.MarketStock;
 import com.sajo.market_service.market.dto.response.MarketStockResponse;
+import com.sajo.market_service.market.dto.response.MarketStockSearchResponse;
 import com.sajo.market_service.market.exception.MarketErrorCode;
 import com.sajo.market_service.market.repository.query.MarketStockQueryRepository;
 import lombok.RequiredArgsConstructor;
@@ -35,12 +36,12 @@ public class MarketStockQueryService {
         return PageResponse.from(stocks.map(MarketStockResponse::from));
     }
 
-    public PageResponse<MarketStockResponse> searchStocks(String keyword, int page, int size, String sort) {
+    public PageResponse<MarketStockSearchResponse> searchStocks(String keyword, int page, int size, String sort) {
         String normalizedKeyword = normalizeKeyword(keyword);
         Pageable pageable = createPageable(page, size, sort);
         return PageResponse.from(marketStockQueryRepository
                 .searchByStockNameOrStockCode(escapeLikeKeyword(normalizedKeyword), pageable)
-                .map(MarketStockResponse::from));
+                .map(MarketStockSearchResponse::from));
     }
 
     public MarketStockResponse getStock(String stockCode) {

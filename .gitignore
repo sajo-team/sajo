@@ -26,6 +26,10 @@ replay_pid*
 
 # Environment variables
 .env
+*.private.env.json
+
+# Local docker-compose overrides (personal test-only config, not for commit)
+docker-compose.override.yaml
 
 # Build artifacts
 build/

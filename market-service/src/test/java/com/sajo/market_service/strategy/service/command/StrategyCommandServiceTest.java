@@ -1,8 +1,9 @@
 package com.sajo.market_service.strategy.service.command;
 
 import com.sajo.common.exception.BusinessException;
-import com.sajo.market_service.market.controller.dto.response.InternalStockQuoteResponse;
+import com.sajo.market_service.market.dto.response.QuoteResponse;
 import com.sajo.market_service.market.service.query.MarketInternalQueryService;
+import com.sajo.market_service.market.service.query.MarketQuoteQueryService;
 import com.sajo.market_service.strategy.controller.dto.request.StrategyActivationRequest;
 import com.sajo.market_service.strategy.controller.dto.request.StrategyCreateRequest;
 import com.sajo.market_service.strategy.controller.dto.request.StrategyUpdateRequest;
@@ -44,6 +45,9 @@ class StrategyCommandServiceTest {
     private MarketInternalQueryService marketInternalQueryService;
 
     @Mock
+    private MarketQuoteQueryService marketQuoteQueryService;
+
+    @Mock
     private StrategyActivationCommandService strategyActivationCommandService;
 
     private StrategyCommandService strategyCommandService;
@@ -53,7 +57,8 @@ class StrategyCommandServiceTest {
         strategyCommandService = new StrategyCommandService(
                 strategyCommandRepository,
                 marketInternalQueryService,
-                strategyActivationCommandService
+                strategyActivationCommandService,
+                marketQuoteQueryService
         );
     }
 
@@ -418,18 +423,30 @@ class StrategyCommandServiceTest {
                 StrategyActivationSnapshot.from(strategy)
         )).willReturn(expectedResponse);
 
-        given(marketInternalQueryService.getQuote(userId, "005930"))
-                .willReturn(new InternalStockQuoteResponse(
+        given(marketQuoteQueryService.getQuote(userId, "005930"))
+                .willReturn(new QuoteResponse(
                         "005930",
                         70_000L,
-                        OffsetDateTime.parse("2026-09-07T09:00:00+09:00")
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null
                 ));
 
         // when
         StrategyActivationResponse response = strategyCommandService.updateActivation(userId, strategyId, request);
 
         // then
-        verify(marketInternalQueryService).getQuote(userId, "005930");
+        verify(marketQuoteQueryService).getQuote(userId, "005930");
 
         assertThat(response.status()).isEqualTo(StrategyStatus.ACTIVE);
         assertThat(response.activatedAt()).isNotNull();

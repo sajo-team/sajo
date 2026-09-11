@@ -55,6 +55,20 @@ class MarketDailyPriceSchedulerTest {
     }
 
     @Test
+    void usesConfiguredTargetCodesInsteadOfKeysetPagination() {
+        MarketStockCollectionTarget target = target("005930");
+        MarketDailyPriceScheduler scheduler = scheduler(true, SYSTEM_USER_ID.toString(), 100, fridayClock(), List.of("005930"));
+        given(marketStockPriceCommandService.getCollectionCredentials(SYSTEM_USER_ID)).willReturn(CREDENTIALS);
+        given(marketStockQueryRepository.findCollectionTargetsByStockCodes(List.of("005930"))).willReturn(List.of(target));
+
+        scheduler.collectDailyPrices();
+
+        verify(marketStockQueryRepository).findCollectionTargetsByStockCodes(List.of("005930"));
+        verify(marketStockQueryRepository, never()).findCollectionTargetsAfterStockCode(any(), any());
+        verifyCollected(target);
+    }
+
+    @Test
     void reportsMissingSystemUserIdWithoutCountingASkippedStock() {
         MarketDailyPriceScheduler.DailyPriceCollectionSummary summary = scheduler(true, " ", 1).collectDailyPrices();
 
@@ -201,11 +215,16 @@ class MarketDailyPriceSchedulerTest {
     }
 
     private MarketDailyPriceScheduler scheduler(boolean enabled, String systemUserId, int pageSize, Clock clock) {
+        return scheduler(enabled, systemUserId, pageSize, clock, List.of());
+    }
+
+    private MarketDailyPriceScheduler scheduler(boolean enabled, String systemUserId, int pageSize, Clock clock,
+                                                List<String> targetStockCodes) {
         lenient().when(requestRateLimiter.tryAcquire()).thenReturn(true);
         return new MarketDailyPriceScheduler(
                 new MarketSchedulerProperties(
                         enabled, systemUserId, "0 10 16 * * MON-FRI", pageSize,
-                        false, "0 20 16 * * MON-FRI", java.time.Duration.ofMillis(500)),
+                        false, "0 20 16 * * MON-FRI", java.time.Duration.ofMillis(500), targetStockCodes),
                 marketStockQueryRepository,
                 marketStockPriceCommandService,
                 requestRateLimiter,

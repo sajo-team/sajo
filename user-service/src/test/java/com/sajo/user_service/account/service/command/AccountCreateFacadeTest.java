@@ -22,6 +22,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.inOrder;
@@ -64,7 +65,7 @@ class AccountCreateFacadeTest {
         Account account = Account.createAccount(
                 userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
         KisAccessTokenResponse kisResponse =
-                new KisAccessTokenResponse("issued-token", "Bearer", 86400f, "2026-01-01 00:00:00");
+                new KisAccessTokenResponse("issued-token", "Bearer", 86400, "2026-01-01 00:00:00");
 
         given(kisOAuthClient.getAccessToken("app-key", "secret-key", AccountType.REAL)).willReturn(kisResponse);
         given(accountCommandService.createAccount(userId, "app-key", "secret-key", "12345678-01", AccountType.REAL))
@@ -83,7 +84,7 @@ class AccountCreateFacadeTest {
         inOrder.verify(accountCommandService)
                 .createAccount(userId, "app-key", "secret-key", "12345678-01", AccountType.REAL);
         inOrder.verify(kisTokenCacheCommandService)
-                .primeKisAccessTokenCache(userId, "issued-token");
+                .primeKisAccessTokenCache(userId, "issued-token", 86400L);
         verify(kisTokenLogCommandService).recordSuccess(account.getId(), userId, KisTokenType.ACCESS_TOKEN);
     }
 
@@ -145,7 +146,7 @@ class AccountCreateFacadeTest {
         // given
         UUID userId = UUID.randomUUID();
         KisAccessTokenResponse kisResponse =
-                new KisAccessTokenResponse("issued-token", "Bearer", 86400f, "2026-01-01 00:00:00");
+                new KisAccessTokenResponse("issued-token", "Bearer", 86400, "2026-01-01 00:00:00");
 
         given(kisOAuthClient.getAccessToken("app-key", "secret-key", AccountType.REAL)).willReturn(kisResponse);
         given(accountCommandService.createAccount(userId, "app-key", "secret-key", "12345678-01", AccountType.REAL))
@@ -173,13 +174,13 @@ class AccountCreateFacadeTest {
         Account account = Account.createAccount(
                 userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
         KisAccessTokenResponse kisResponse =
-                new KisAccessTokenResponse("issued-token", "Bearer", 86400f, "2026-01-01 00:00:00");
+                new KisAccessTokenResponse("issued-token", "Bearer", 86400, "2026-01-01 00:00:00");
 
         given(kisOAuthClient.getAccessToken("app-key", "secret-key", AccountType.REAL)).willReturn(kisResponse);
         given(accountCommandService.createAccount(userId, "app-key", "secret-key", "12345678-01", AccountType.REAL))
                 .willReturn(account);
         willThrow(new RuntimeException("Redis 연결 실패"))
-                .given(kisTokenCacheCommandService).primeKisAccessTokenCache(any(), any());
+                .given(kisTokenCacheCommandService).primeKisAccessTokenCache(any(), any(), anyLong());
 
         // when
         Account result = accountCreateFacade.createAccount(

@@ -13,4 +13,6 @@ public interface MarketDataStatusProjection {
     Long getIndicatorStockCount();
 
     LocalDate getLatestIndicatorReferenceDate();
+
+    String getLatestFinancialReferenceYearMonth();
 }

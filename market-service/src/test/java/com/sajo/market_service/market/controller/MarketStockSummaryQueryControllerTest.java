@@ -7,6 +7,7 @@ import com.sajo.market_service.market.dto.response.MarketStockResponse;
 import com.sajo.market_service.market.dto.response.MarketStockSummaryResponse;
 import com.sajo.market_service.market.dto.response.PublicQuoteResponse;
 import com.sajo.market_service.market.exception.MarketErrorCode;
+import com.sajo.market_service.market.domain.FinancialPeriodType;
 import com.sajo.market_service.market.service.query.MarketStockSummaryQueryService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,6 +19,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.util.UUID;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.Instant;
 
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -65,8 +67,10 @@ class MarketStockSummaryQueryControllerTest {
                         new PublicQuoteResponse("005930", 71800L, 70000L, 72000L, 69000L, 71000L,
                                 800L, new BigDecimal("1.12"), 123456L, 987654L, 1000000L,
                                 new BigDecimal("15.2"), new BigDecimal("1.3"), new BigDecimal("4605"), new BigDecimal("51850")),
-                        new MarketStockIndicatorResponse(LocalDate.of(2026, 9, 3), new BigDecimal("15.2"),
-                                new BigDecimal("1.3"), new BigDecimal("4605"), new BigDecimal("51850"), null)));
+                        new MarketStockIndicatorResponse(null, new BigDecimal("15.2"),
+                                new BigDecimal("1.3"), new BigDecimal("31.39"),
+                                Instant.parse("2026-09-10T01:00:00Z"), FinancialPeriodType.QUARTER, "2026-06",
+                                Instant.parse("2026-09-10T01:00:01Z"))));
 
         mockMvc.perform(get("/api/v1/market/stocks/005930/summary").header("X-User-Id", userId))
                 .andExpect(status().isOk())
@@ -75,7 +79,7 @@ class MarketStockSummaryQueryControllerTest {
                 .andExpect(jsonPath("$.data.stock.marketType").value("KOSPI"))
                 .andExpect(jsonPath("$.data.quote.currentPrice").value(71800))
                 .andExpect(jsonPath("$.data.quote.changeRate").value(1.12))
-                .andExpect(jsonPath("$.data.indicator.referenceDate").value("2026-09-03"))
+                .andExpect(jsonPath("$.data.indicator.financialReferenceYearMonth").value("2026-06"))
                 .andExpect(jsonPath("$.data.indicator.per").value(15.2))
                 .andExpect(jsonPath("$.data.indicator.pbr").value(1.3))
                 .andExpect(jsonPath("$.data.stock.id").doesNotExist())

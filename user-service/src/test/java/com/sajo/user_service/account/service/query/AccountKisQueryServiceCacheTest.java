@@ -1,5 +1,6 @@
 package com.sajo.user_service.account.service.query;
 
+import com.sajo.user_service.account.cache.KisTokenCacheLock;
 import com.sajo.user_service.account.client.kis.KisOAuthClient;
 import com.sajo.user_service.account.client.kis.KisTrClient;
 import com.sajo.user_service.account.client.kis.dto.response.KisAccessTokenResponse;
@@ -12,13 +13,15 @@ import com.sajo.user_service.account.service.command.KisTokenLogCommandService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.cache.CacheManager;
-import org.springframework.cache.annotation.EnableCaching;
-import org.springframework.cache.concurrent.ConcurrentMapCacheManager;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
+import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.EnabledIfDockerAvailable;
+import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.DockerImageName;
 
 import java.util.UUID;
 
@@ -27,9 +30,18 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+@Testcontainers
+@EnabledIfDockerAvailable
 @SpringBootTest(classes = {
-        AccountKisQueryService.class, KisTokenCacheQueryService.class, AccountKisQueryServiceCacheTest.CacheTestConfig.class})
+        AccountKisQueryService.class, KisTokenCacheQueryService.class, KisTokenCacheLock.class,
+        DataRedisAutoConfiguration.class})
+@DisplayName("계좌 KIS 조회 - 실제 Redis 캐시 통합 테스트")
 class AccountKisQueryServiceCacheTest {
+
+    @Container
+    @ServiceConnection
+    static GenericContainer<?> redis = new GenericContainer<>(DockerImageName.parse("redis:8-alpine"))
+            .withExposedPorts(6379);
 
     @Autowired
     private AccountKisQueryService accountKisQueryService;
@@ -55,7 +67,7 @@ class AccountKisQueryServiceCacheTest {
         Account account = Account.createAccount(
                 userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
         KisAccessTokenResponse kisResponse =
-                new KisAccessTokenResponse("issued-token", "Bearer", 86400f, "2026-01-01 00:00:00");
+                new KisAccessTokenResponse("issued-token", "Bearer", 86400, "2026-01-01 00:00:00");
 
         given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
         given(kisOAuthClient.getAccessToken("app-key", "secret-key", AccountType.REAL)).willReturn(kisResponse);
@@ -84,9 +96,9 @@ class AccountKisQueryServiceCacheTest {
         given(accountQueryService.getAccountByUserId(userId1)).willReturn(account1);
         given(accountQueryService.getAccountByUserId(userId2)).willReturn(account2);
         given(kisOAuthClient.getAccessToken("app-key-1", "secret-key-1", AccountType.REAL))
-                .willReturn(new KisAccessTokenResponse("token-1", "Bearer", 86400f, "2026-01-01 00:00:00"));
+                .willReturn(new KisAccessTokenResponse("token-1", "Bearer", 86400, "2026-01-01 00:00:00"));
         given(kisOAuthClient.getAccessToken("app-key-2", "secret-key-2", AccountType.REAL))
-                .willReturn(new KisAccessTokenResponse("token-2", "Bearer", 86400f, "2026-01-01 00:00:00"));
+                .willReturn(new KisAccessTokenResponse("token-2", "Bearer", 86400, "2026-01-01 00:00:00"));
 
         // when
         AccessTokenResponse result1 = accountKisQueryService.getKisAccessToken(userId1);
@@ -131,7 +143,7 @@ class AccountKisQueryServiceCacheTest {
 
         given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
         given(kisOAuthClient.getAccessToken("app-key", "secret-key", AccountType.REAL))
-                .willReturn(new KisAccessTokenResponse("issued-token", "Bearer", 86400f, "2026-01-01 00:00:00"));
+                .willReturn(new KisAccessTokenResponse("issued-token", "Bearer", 86400, "2026-01-01 00:00:00"));
         given(kisOAuthClient.getApprovalKey("app-key", "secret-key", AccountType.REAL))
                 .willReturn(new KisApprovalKeyResponse("issued-approval-key"));
 
@@ -144,15 +156,5 @@ class AccountKisQueryServiceCacheTest {
         assertThat(approvalKey.approvalKey()).isEqualTo("issued-approval-key");
         verify(kisOAuthClient, times(1)).getAccessToken("app-key", "secret-key", AccountType.REAL);
         verify(kisOAuthClient, times(1)).getApprovalKey("app-key", "secret-key", AccountType.REAL);
-    }
-
-    @Configuration
-    @EnableCaching
-    static class CacheTestConfig {
-
-        @Bean
-        CacheManager cacheManager() {
-            return new ConcurrentMapCacheManager("kis-access-token", "kis-approval-key");
-        }
     }
 }
