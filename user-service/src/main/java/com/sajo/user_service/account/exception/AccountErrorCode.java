@@ -31,7 +31,9 @@ public enum AccountErrorCode implements ErrorCode {
 
     KIS_ORDERABLE_AMOUNT_INQUIRY_FAILED(HttpStatus.BAD_GATEWAY, "ACCOUNT_0011", "KIS 매수가능금액 조회에 실패했습니다"),
 
-    ACTIVE_TRADING_EXISTS(HttpStatus.CONFLICT, "ACCOUNT_0012", "진행 중인 자동매매 또는 미체결 주문이 있어 계좌를 삭제할 수 없습니다");
+    ACTIVE_TRADING_EXISTS(HttpStatus.CONFLICT, "ACCOUNT_0012", "진행 중인 자동매매 또는 미체결 주문이 있어 계좌를 삭제할 수 없습니다"),
+
+    KIS_TOKEN_CACHE_LOCK_TIMEOUT(HttpStatus.SERVICE_UNAVAILABLE, "ACCOUNT_0013", "KIS 토큰 조회가 지연되고 있습니다. 잠시 후 다시 시도해주세요");
 
     private final HttpStatus status;
     private final String errorCode;
