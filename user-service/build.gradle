@@ -6,6 +6,7 @@ dependencies {
     implementation(project(':libs:common'))
     implementation(project(':libs:common-jwt'))
     implementation(project(':libs:common-redis'))
+    implementation 'org.springframework.cloud:spring-cloud-starter-circuitbreaker-resilience4j'
     implementation 'org.springframework.security:spring-security-crypto'
     implementation 'org.springframework.security:spring-security-core'
     implementation 'org.springframework.security:spring-security-config'
