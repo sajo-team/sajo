@@ -3,32 +3,41 @@ package com.sajo.market_service.market.dto.command;
 import com.sajo.market_service.market.dto.response.QuoteResponse;
 
 import java.math.BigDecimal;
-import java.time.LocalDate;
+import com.sajo.market_service.market.domain.FinancialPeriodType;
+import com.sajo.market_service.market.dto.response.FinancialRatioResponse;
+
+import java.time.Instant;
+import java.time.YearMonth;
 import java.util.Optional;
 
 /**
- * KIS 현재가 응답에서 투자지표 저장에 필요한 날짜·PER·PBR·EPS·BPS만 골라 담는 저장 요청 DTO
- *
- * TODO : MVP에선 ROE 데이터 보류
+ * 현재가 평가 지표와 분기 재무비율을 서로의 수신 시각·결산연월과 함께 담는 저장 요청 DTO
  * */
 public record MarketStockIndicatorCommand(
-        LocalDate referenceDate,
         BigDecimal per,
         BigDecimal pbr,
-        BigDecimal eps,
-        BigDecimal bps
+        Instant valuationFetchedAt,
+        BigDecimal roe,
+        FinancialPeriodType financialPeriodType,
+        YearMonth financialReferenceYearMonth,
+        Instant financialFetchedAt
 ) {
 
-    public static Optional<MarketStockIndicatorCommand> from(QuoteResponse quote) {
-        // KIS 실제 영업일이 없으면 저장하지 않는다.
-        if (quote.businessDate() == null) {
+    public static Optional<MarketStockIndicatorCommand> from(
+            QuoteResponse quote,
+            FinancialRatioResponse financialRatio
+    ) {
+        if (quote == null || quote.fetchedAt() == null || financialRatio == null
+                || financialRatio.financialReferenceYearMonth() == null
+                || financialRatio.fetchedAt() == null || financialRatio.roe() == null) {
             return Optional.empty();
         }
-        //PER과 PBR이 둘 다 없으면
         if (quote.per() == null && quote.pbr() == null) {
             return Optional.empty();
         }
         return Optional.of(new MarketStockIndicatorCommand(
-                quote.businessDate(), quote.per(), quote.pbr(), quote.eps(), quote.bps()));
+                quote.per(), quote.pbr(), quote.fetchedAt(),
+                financialRatio.roe(), FinancialPeriodType.QUARTER,
+                financialRatio.financialReferenceYearMonth(), financialRatio.fetchedAt()));
     }
 }

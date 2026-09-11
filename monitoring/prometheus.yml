@@ -7,23 +7,33 @@ scrape_configs:
     metrics_path: /actuator/prometheus
     static_configs:
       - targets: ["discovery-service:8761"]
+        labels:
+          application: discovery-service
 
   - job_name: gateway
     metrics_path: /actuator/prometheus
     static_configs:
       - targets: ["gateway:8080"]
+        labels:
+          application: gateway
 
   - job_name: user-service
     metrics_path: /actuator/prometheus
     static_configs:
       - targets: ["user-service:8081"]
+        labels:
+          application: user-service
 
   - job_name: market-service
     metrics_path: /actuator/prometheus
     static_configs:
       - targets: ["market-service:8082"]
+        labels:
+          application: market-service
 
   - job_name: trading-service
     metrics_path: /actuator/prometheus
     static_configs:
       - targets: ["trading-service:8083"]
+        labels:
+          application: trading-service

@@ -33,7 +33,7 @@ class MarketStockSummaryQueryServiceTest {
                         null, null, null, null, null, null, null));
         MarketStockIndicatorResponse indicator = new MarketStockIndicatorResponse(
                 LocalDate.of(2026, 9, 3), new BigDecimal("15.2"), new BigDecimal("1.3"),
-                new BigDecimal("4605"), new BigDecimal("51850"), null);
+                null, null, null, null, null);
         UUID stockId = UUID.randomUUID();
         when(stockService.getStockTarget("005930"))
                 .thenReturn(new MarketStockQueryTarget(stockId,

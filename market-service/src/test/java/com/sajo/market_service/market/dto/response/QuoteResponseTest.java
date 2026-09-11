@@ -6,6 +6,7 @@ import com.sajo.market_service.market.exception.MarketErrorCode;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -21,11 +22,12 @@ class QuoteResponseTest {
                 "정상처리 되었습니다.",
                 new KisQuoteResponse.KisQuoteOutput(
                         "70000", "69000", "70500", "68800", "69500", "500", "0.7194",
-                        "123456", "8610000000", "4180000", "15.20", "1.35", "4605.00", "51850.00", "20260904", "143000"
+                        "123456", "8610000000", "4180000", "15.20", "1.35", "4605.00", "51850.00"
                 )
         );
+        Instant fetchedAt = Instant.parse("2026-09-04T08:00:00Z");
 
-        QuoteResponse quote = QuoteResponse.from(response, "005930");
+        QuoteResponse quote = QuoteResponse.from(response, "005930", fetchedAt);
 
         assertEquals("005930", quote.stockCode());
         assertEquals(70000L, quote.currentPrice());
@@ -42,8 +44,8 @@ class QuoteResponseTest {
         assertEquals(new BigDecimal("1.35"), quote.pbr());
         assertEquals(new BigDecimal("4605.00"), quote.eps());
         assertEquals(new BigDecimal("51850.00"), quote.bps());
-        assertEquals("2026-09-04T14:30:00+09:00", quote.baseTime());
-        assertEquals(java.time.LocalDate.of(2026, 9, 4), quote.businessDate());
+        assertNull(quote.baseTime());
+        assertEquals(fetchedAt, quote.fetchedAt());
     }
 
     @Test
@@ -54,7 +56,7 @@ class QuoteResponseTest {
                 "정상처리 되었습니다.",
                 new KisQuoteResponse.KisQuoteOutput(
                         "70000", "", null, "", null, "", null,
-                        "", null, "", "", null, "", "", "20260904", "143000"
+                        "", null, "", "", null, "", ""
                 )
         );
 
@@ -84,31 +86,6 @@ class QuoteResponseTest {
     }
 
     @Test
-    void returnsNullBaseTimeWhenBusinessDateIsMissingOrBlank() {
-        assertNull(QuoteResponse.from(responseWithBaseTime(null, "143000"), "005930").baseTime());
-        assertNull(QuoteResponse.from(responseWithBaseTime(" ", "143000"), "005930").baseTime());
-    }
-
-    @Test
-    void returnsNullBaseTimeWhenBusinessDateIsMalformedOrDoesNotExist() {
-        assertNull(QuoteResponse.from(responseWithBaseTime("invalid", "143000"), "005930").baseTime());
-        assertNull(QuoteResponse.from(responseWithBaseTime("20260230", "143000"), "005930").baseTime());
-        assertNull(QuoteResponse.from(responseWithBaseTime("invalid", "143000"), "005930").businessDate());
-    }
-
-    @Test
-    void returnsNullBaseTimeWhenContractTimeIsMissingOrBlank() {
-        assertNull(QuoteResponse.from(responseWithBaseTime("20260904", null), "005930").baseTime());
-        assertNull(QuoteResponse.from(responseWithBaseTime("20260904", " "), "005930").baseTime());
-    }
-
-    @Test
-    void returnsNullBaseTimeWhenContractTimeIsMalformedOrDoesNotExist() {
-        assertNull(QuoteResponse.from(responseWithBaseTime("20260904", "invalid"), "005930").baseTime());
-        assertNull(QuoteResponse.from(responseWithBaseTime("20260904", "246000"), "005930").baseTime());
-    }
-
-    @Test
     void throwsBusinessExceptionWhenKisResponseOrOutputIsMissing() {
         BusinessException nullResponseException = assertThrows(
                 BusinessException.class,
@@ -123,15 +100,9 @@ class QuoteResponseTest {
         assertEquals(MarketErrorCode.KIS_QUOTE_RESPONSE_INVALID, nullOutputException.getErrorCode());
     }
 
-    private KisQuoteResponse responseWithBaseTime(String businessDate, String contractTime) {
-        return new KisQuoteResponse("0", "MCA00000", "정상",
-                new KisQuoteResponse.KisQuoteOutput(
-                        "70000", "", "", "", "", "", "", "", "", "", "", "", "", "", businessDate, contractTime));
-    }
-
     private KisQuoteResponse responseWithIndicators(String per, String pbr, String eps, String bps) {
         return new KisQuoteResponse("0", "MCA00000", "정상",
                 new KisQuoteResponse.KisQuoteOutput(
-                        "70000", "", "", "", "", "", "", "", "", "", per, pbr, eps, bps, "20260904", "143000"));
+                        "70000", "", "", "", "", "", "", "", "", "", per, pbr, eps, bps));
     }
 }

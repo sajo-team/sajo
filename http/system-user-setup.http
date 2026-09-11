@@ -1,0 +1,74 @@
+### SAJO System User Setup
+// market-service 스케줄러(MarketDailyPriceScheduler, MarketStockIndicatorScheduler)가 쓸
+// 시스템 전용 유저 계정을 만드는 1회성 스크립트. postman/system-user-setup.postman_collection.json 이식.
+//
+// 순서: 1 -> 2 -> 3 -> 4 (이미 회원가입 돼있으면 1은 건너뛰고 2부터).
+// 1 실행 후 콘솔(Response 탭 옆 로그)에 systemUserId가 출력된다. 이 값을 로컬/운영 .env의
+// MARKET_SCHEDULER_SYSTEM_USER_ID에 넣을 것.
+//
+// appKey/secretKey/accountNo는 실제 KIS 자격증명이므로 이 파일에 값을 채워서 커밋하지 말 것 -
+// http-client.private.env.json 등 별도 파일(gitignore 대상)에만 넣는다.
+
+@baseUrl = http://localhost:8080
+@systemUserEmail = system-scheduler@sajo.com
+@systemUserPassword = changeMe1234
+@systemUserName = 시스템 스케줄러
+@appKey =
+@secretKey =
+@accountNo = 12345678-01
+@accountType = REAL
+
+### 1. 시스템 유저 회원가입 (이미 있으면 스킵)
+POST {{baseUrl}}/api/v1/users
+Content-Type: application/json
+
+{
+  "email": "{{systemUserEmail}}",
+  "password": "{{systemUserPassword}}",
+  "name": "{{systemUserName}}"
+}
+
+> {%
+    client.test("회원가입 처리됨", function () {
+        client.assert(response.status === 200 || response.status === 201 || response.status === 409, "unexpected status " + response.status);
+    });
+    if (response.body && response.body.data && response.body.data.id) {
+        client.log("systemUserId = " + response.body.data.id);
+        client.log("이 값을 .env의 MARKET_SCHEDULER_SYSTEM_USER_ID에 넣을 것");
+        client.global.set("systemUserId", response.body.data.id);
+    }
+%}
+
+### 2. 로그인
+POST {{baseUrl}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "{{systemUserEmail}}",
+  "password": "{{systemUserPassword}}"
+}
+
+> {%
+    client.test("로그인 성공", function () {
+        client.assert(response.status === 200, "status " + response.status);
+    });
+    client.global.set("systemUserAccessToken", response.body.data.accessToken);
+%}
+
+### 3. KIS 계좌 연동
+POST {{baseUrl}}/api/v1/accounts
+Content-Type: application/json
+Authorization: Bearer {{systemUserAccessToken}}
+
+{
+  "appKey": "{{appKey}}",
+  "secretKey": "{{secretKey}}",
+  "accountNo": "{{accountNo}}",
+  "accountType": "{{accountType}}"
+}
+
+### 4. 내 계좌 확인 (연동 검증)
+// accountNo/accountType이 3번에서 넣은 값과 일치하는지 확인. 이후 systemUserId를
+// .env의 MARKET_SCHEDULER_SYSTEM_USER_ID에 반영.
+GET {{baseUrl}}/api/v1/accounts/me
+Authorization: Bearer {{systemUserAccessToken}}

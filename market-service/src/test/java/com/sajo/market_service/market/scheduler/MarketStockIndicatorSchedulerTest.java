@@ -21,9 +21,9 @@ import java.util.Collections;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.times;
@@ -81,14 +81,14 @@ class MarketStockIndicatorSchedulerTest {
         MarketStockCollectionTarget target = target("005930");
         when(commandService.getCollectionCredentials(USER_ID)).thenReturn(credentials);
         when(stockRepository.findCollectionTargetsAfterStockCode(isNull(), any(Pageable.class))).thenReturn(List.of(target));
-        when(commandService.collectAndSaveIndicatorsForIdentifiedStock(credentials, target.getStockId(), "005930")).thenReturn(true);
+        when(commandService.collectAndSaveIndicatorsForIdentifiedStock(eq(credentials), eq(target.getStockId()), eq("005930"), any()))
+                .thenReturn(MarketStockIndicatorCommandService.IndicatorCollectionResult.SAVED);
 
         var summary = scheduler.collectIndicators();
 
         assertThat(summary.processedSuccessCount()).isEqualTo(1);
         verify(commandService).getCollectionCredentials(USER_ID);
-        verify(rateLimiter).tryAcquire();
-        verify(commandService).collectAndSaveIndicatorsForIdentifiedStock(credentials, target.getStockId(), "005930");
+        verify(commandService).collectAndSaveIndicatorsForIdentifiedStock(eq(credentials), eq(target.getStockId()), eq("005930"), any());
     }
 
     @Test
@@ -100,14 +100,15 @@ class MarketStockIndicatorSchedulerTest {
         when(commandService.getCollectionCredentials(USER_ID)).thenReturn(credentials);
         when(stockRepository.findCollectionTargetsAfterStockCode(isNull(), any(Pageable.class))).thenReturn(List.of(failed, succeeded));
         org.mockito.Mockito.doThrow(new IllegalStateException()).when(commandService)
-                .collectAndSaveIndicatorsForIdentifiedStock(credentials, failed.getStockId(), "000660");
-        when(commandService.collectAndSaveIndicatorsForIdentifiedStock(credentials, succeeded.getStockId(), "005930")).thenReturn(true);
+                .collectAndSaveIndicatorsForIdentifiedStock(eq(credentials), eq(failed.getStockId()), eq("000660"), any());
+        when(commandService.collectAndSaveIndicatorsForIdentifiedStock(eq(credentials), eq(succeeded.getStockId()), eq("005930"), any()))
+                .thenReturn(MarketStockIndicatorCommandService.IndicatorCollectionResult.SAVED);
 
         var summary = scheduler.collectIndicators();
 
         assertThat(summary.failureCount()).isEqualTo(1);
         assertThat(summary.processedSuccessCount()).isEqualTo(1);
-        verify(commandService, times(1)).collectAndSaveIndicatorsForIdentifiedStock(credentials, succeeded.getStockId(), "005930");
+        verify(commandService, times(1)).collectAndSaveIndicatorsForIdentifiedStock(eq(credentials), eq(succeeded.getStockId()), eq("005930"), any());
     }
 
     @Test
@@ -131,7 +132,8 @@ class MarketStockIndicatorSchedulerTest {
         MarketStockCollectionTarget target = target("005930");
         when(commandService.getCollectionCredentials(USER_ID)).thenReturn(credentials);
         when(stockRepository.findCollectionTargetsAfterStockCode(isNull(), any(Pageable.class))).thenReturn(List.of(target));
-        when(commandService.collectAndSaveIndicatorsForIdentifiedStock(credentials, target.getStockId(), "005930")).thenReturn(false);
+        when(commandService.collectAndSaveIndicatorsForIdentifiedStock(eq(credentials), eq(target.getStockId()), eq("005930"), any()))
+                .thenReturn(MarketStockIndicatorCommandService.IndicatorCollectionResult.SKIPPED);
 
         var summary = scheduler.collectIndicators();
 
@@ -149,7 +151,7 @@ class MarketStockIndicatorSchedulerTest {
 
         assertThat(summary.runStatus()).isEqualTo(MarketStockIndicatorScheduler.IndicatorRunStatus.CREDENTIALS_FAILED);
         verify(stockRepository, never()).findCollectionTargetsAfterStockCode(any(), any());
-        verify(commandService, never()).collectAndSaveIndicatorsForIdentifiedStock(any(), any(), any());
+        verify(commandService, never()).collectAndSaveIndicatorsForIdentifiedStock(any(), any(), any(), any());
     }
 
     @Test
@@ -160,13 +162,13 @@ class MarketStockIndicatorSchedulerTest {
         MarketStockCollectionTarget second = target("005930");
         when(commandService.getCollectionCredentials(USER_ID)).thenReturn(credentials);
         when(stockRepository.findCollectionTargetsAfterStockCode(isNull(), any(Pageable.class))).thenReturn(List.of(first, second));
-        when(rateLimiter.tryAcquire()).thenReturn(false);
+        when(commandService.collectAndSaveIndicatorsForIdentifiedStock(any(), any(), any(), any()))
+                .thenReturn(MarketStockIndicatorCommandService.IndicatorCollectionResult.INTERRUPTED);
 
         var summary = scheduler.collectIndicators();
 
         assertThat(summary.runStatus()).isEqualTo(MarketStockIndicatorScheduler.IndicatorRunStatus.INTERRUPTED);
-        verify(commandService, never()).collectAndSaveIndicatorsForIdentifiedStock(any(), any(), any());
-        verify(rateLimiter).tryAcquire();
+        verify(commandService).collectAndSaveIndicatorsForIdentifiedStock(any(), any(), any(), any());
     }
 
     @Test

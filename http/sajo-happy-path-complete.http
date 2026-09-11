@@ -1,0 +1,259 @@
+### SAJO Happy Path Demo - Complete
+// 회원가입 -> 로그인 -> 계좌연동 -> Market -> 전략/백테스트 -> AI -> 자동매매 -> 전략평가
+// -> Kafka Signal -> KIS 모의주문 -> 주문/체결 -> 예수금/보유종목까지의 전체 시연용.
+// postman/SAJO_Happy_Path_Complete_With_Virtual_Trading.postman_collection.json 이식.
+//
+// 위에서 아래로 순서대로 실행할 것 (IntelliJ에서는 각 ### 블록 왼쪽 초록 화살표를 눌러
+// 순서대로 하나씩 실행하거나, 파일 우클릭 -> "Run All Requests in File"로 한 번에 실행 가능).
+// 외부 API는 Gateway(8080)를 경유하고, 03번(전략 평가) 요청만 시연 트리거 용도로
+// market-service(8082)를 직접 호출한다.
+//
+// kisAppKey/kisSecretKey는 실제 KIS 자격증명이므로 이 파일에 값을 채워서 커밋하지 말 것.
+
+@gatewayBaseUrl = http://localhost:8080
+@marketInternalBaseUrl = http://localhost:8082
+@kisAppKey =
+@kisSecretKey =
+@kisAccountNo =
+@stockCode = 005930
+@stockId = caa08dc7-f835-44be-9eb7-489d32dbb730
+
+// ===== 00. Auth =====
+
+### 00-01. 일반 사용자 회원가입
+POST {{gatewayBaseUrl}}/api/v1/users
+Content-Type: application/json
+
+{
+  "email": "user@sajo.com",
+  "password": "user1234",
+  "name": "박순자"
+}
+
+### 00-02. 관리자 회원가입
+// SignUpRequest에는 role이 없으므로 ADMIN 권한 부여는 DB에서 직접 올려야 한다:
+// UPDATE p_users SET role = 'ADMIN' WHERE email = 'admin@sajo.com';
+POST {{gatewayBaseUrl}}/api/v1/users
+Content-Type: application/json
+
+{
+  "email": "admin@sajo.com",
+  "password": "admin1234",
+  "name": "박혁"
+}
+
+### 00-03. 일반 사용자 로그인
+POST {{gatewayBaseUrl}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "user@sajo.com",
+  "password": "user1234"
+}
+
+> {%
+    client.test("로그인 성공", function () {
+        client.assert(response.status === 200, "status " + response.status);
+    });
+    client.global.set("userAccessToken", response.body.data.accessToken);
+    client.global.set("userRefreshToken", response.body.data.refreshToken);
+%}
+
+### 00-04. 관리자 로그인
+// 00-02 이후 DB에서 role을 ADMIN으로 올려둔 상태여야 정상 동작한다.
+POST {{gatewayBaseUrl}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "admin@sajo.com",
+  "password": "admin1234"
+}
+
+> {%
+    client.test("로그인 성공", function () {
+        client.assert(response.status === 200, "status " + response.status);
+    });
+    client.global.set("adminAccessToken", response.body.data.accessToken);
+    client.global.set("adminRefreshToken", response.body.data.refreshToken);
+%}
+
+
+### 01-01. 계좌 연동
+POST {{gatewayBaseUrl}}/api/v1/accounts
+Content-Type: application/json
+Authorization: Bearer {{userAccessToken}}
+
+{
+  "appKey": "{{kisAppKey}}",
+  "secretKey": "{{kisSecretKey}}",
+  "accountNo": "{{kisAccountNo}}",
+  "accountType": "VIRTUAL"
+}
+
+### 01-02. 내 계좌 조회
+GET {{gatewayBaseUrl}}/api/v1/accounts/me
+Authorization: Bearer {{userAccessToken}}
+
+// ===== 02. Market =====
+
+### 02-01. 종목 검색 - 삼성전자
+// 현재 MarketStockResponse에는 stockId가 노출되지 않아 stockId 변수는
+// 로컬 DB의 삼성전자 UUID를 미리 넣어둔 것이다.
+GET {{gatewayBaseUrl}}/api/v1/market/stocks/search?keyword=삼성전자&page=0&size=10
+Authorization: Bearer {{userAccessToken}}
+
+### 02-02. 현재가 조회
+GET {{gatewayBaseUrl}}/api/v1/market/quote?stockCode={{stockCode}}
+Authorization: Bearer {{userAccessToken}}
+
+### 02-03. 투자지표 조회
+// 지표 적재/scheduler 상태에 따라 실패할 수 있음.
+GET {{gatewayBaseUrl}}/api/v1/market/stocks/{{stockCode}}/indicators
+Authorization: Bearer {{userAccessToken}}
+
+// ===== 03. Strategy =====
+
+### 03-01. 전략 생성
+POST {{gatewayBaseUrl}}/api/v1/strategies
+Content-Type: application/json
+Authorization: Bearer {{userAccessToken}}
+
+{
+  "stockId": "{{stockId}}",
+  "stockCode": "{{stockCode}}",
+  "strategyName": "삼성전자 MVP 전략",
+  "buyConditionPrice": 270000,
+  "sellConditionPrice": 280000,
+  "stopLossRate": 5.0,
+  "targetReturnRate": 10.0,
+  "allocatedAmount": 3000000,
+  "orderAmount": 1000000,
+  "perCondition": null,
+  "pbrCondition": null,
+  "roeCondition": null
+}
+
+> {%
+    client.global.set("strategyId", response.body.data.strategyId || response.body.data.id);
+%}
+
+### 03-02. 백테스트 요청
+// m_market_stocks_price에 해당 기간 시세가 있어야 성공한다.
+POST {{gatewayBaseUrl}}/api/v1/strategies/{{strategyId}}/backtests
+Content-Type: application/json
+Authorization: Bearer {{userAccessToken}}
+
+{
+  "startDate": "2026-09-01",
+  "endDate": "2026-09-08",
+  "initialCash": 10000000
+}
+
+> {%
+    client.global.set("backtestId", response.body.data.backtestId || response.body.data.id);
+%}
+
+### 03-03. 백테스트 상태 조회 (COMPLETED 될 때까지 재요청)
+GET {{gatewayBaseUrl}}/api/v1/strategies/{{strategyId}}/backtests/{{backtestId}}/status
+Authorization: Bearer {{userAccessToken}}
+
+### 03-04. 전략 활성화
+// 현재가 기준 시각 등 Market 활성화 선행 데이터가 필요할 수 있음.
+PATCH {{gatewayBaseUrl}}/api/v1/strategies/{{strategyId}}/activation
+Content-Type: application/json
+Authorization: Bearer {{userAccessToken}}
+
+{
+  "active": true
+}
+
+
+
+### 04-01. 관리자 프롬프트 생성
+POST {{gatewayBaseUrl}}/api/v1/admin/ai/prompt-versions
+Content-Type: application/json
+Authorization: Bearer {{adminAccessToken}}
+
+{
+  "promptKey": "RISK_ANALYSIS",
+  "promptContent": "당신은 주식 투자 전략의 위험 요소를 분석하는 AI입니다. 사용자가 설정한 투자 전략과 백테스트 결과를 기반으로 위험 수준을 평가하세요. 반드시 입력으로 제공된 데이터만을 근거로 판단하며 수익을 보장하거나 특정 종목의 매수 또는 매도를 권유해서는 안 됩니다. riskLevel은 LOW, MEDIUM, HIGH 중 하나로 반환하세요. summary에는 전략의 전반적인 위험을 요약하고, riskFactors에는 주요 위험 요소를 목록으로 작성하세요. reasoning에는 위험 등급을 판단한 근거를 작성하고, recommendations에는 사용자가 전략을 재검토할 때 고려할 사항을 작성하세요. 반드시 지정된 JSON 형식으로만 응답하세요.",
+  "changeSummary": "AI 위험 분석 초기 프롬프트"
+}
+
+### 04-02. AI 위험 분석 요청
+// backtestId는 status가 COMPLETED인 상태여야 정상 처리된다 (03-03 확인 후 실행).
+POST {{gatewayBaseUrl}}/api/v1/ai/analyses
+Content-Type: application/json
+Authorization: Bearer {{userAccessToken}}
+
+{
+  "strategyId": "{{strategyId}}",
+  "backtestId": "{{backtestId}}"
+}
+
+> {%
+    client.global.set("analysisId", response.body.data.analysisId || response.body.data.id);
+%}
+
+### 04-03. AI 위험 분석 상세 조회
+// 본인이 요청한 analysisId만 조회 가능.
+GET {{gatewayBaseUrl}}/api/v1/ai/analyses/{{analysisId}}
+Authorization: Bearer {{userAccessToken}}
+
+
+
+### 05-01. 사용자 공통 자동매매 한도 생성
+POST {{gatewayBaseUrl}}/api/v1/trading-limits
+Content-Type: application/json
+Authorization: Bearer {{userAccessToken}}
+
+{
+  "dailyMaxOrderAmount": 5000000,
+  "dailyMaxOrderCount": 10,
+  "dailyLossLimitRate": 5.0
+}
+
+### 05-02. AutoTrading 생성
+// 현재 구현에서 생성 시 enabled=true인 것을 전제로 별도 활성화 PATCH를 두지 않는다.
+// 전략이 활성화(03-04)된 상태여야 한다.
+POST {{gatewayBaseUrl}}/api/v1/auto-tradings
+Content-Type: application/json
+Authorization: Bearer {{userAccessToken}}
+
+{
+  "strategyId": "{{strategyId}}"
+}
+
+> {%
+    client.global.set("autoTradingId", response.body.data.autoTradingId || response.body.data.id);
+%}
+
+### 05-03. 전략 평가 요청 - BUY Signal
+// ACTIVE 전략의 매수조건(70000 이하)을 충족시켜 Kafka BUY Signal을 발생시킨다.
+// market-service(8082)를 직접 호출 (gateway 라우팅 없음).
+POST {{marketInternalBaseUrl}}/internal/v1/strategies/evaluations
+Content-Type: application/json
+X-Internal-Secret: {{internalApiSecret}}
+
+{
+  "sourceEventId": "{{$uuid}}",
+  "stockCode": "{{stockCode}}",
+  "currentPrice": 270000,
+  "baseTime": "{{$isoTimestamp}}"
+}
+
+### 05-04. 주문 목록 조회
+GET {{gatewayBaseUrl}}/api/v1/orders?page=0&size=10&sort=createdAt,desc
+Authorization: Bearer {{userAccessToken}}
+
+### 05-05. 체결 결과 조회
+GET {{gatewayBaseUrl}}/api/v1/executions?page=0&size=10&sort=createdAt,desc
+Authorization: Bearer {{userAccessToken}}
+
+### 05-06. 예수금 조회
+GET {{gatewayBaseUrl}}/api/v1/accounts/me/deposit
+Authorization: Bearer {{userAccessToken}}
+
+### 05-07. 보유 종목 조회
+GET {{gatewayBaseUrl}}/api/v1/accounts/me/holdings
+Authorization: Bearer {{userAccessToken}}

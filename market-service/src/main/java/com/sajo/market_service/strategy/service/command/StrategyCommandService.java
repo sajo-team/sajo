@@ -182,8 +182,8 @@ public class StrategyCommandService {
             );
         }
 
-        log.info("Market 투자지표 조회 완료. stockCode={}, per={}, pbr={}, referenceDate={}",
-                strategy.getStockCode(), indicator.per(), indicator.pbr(), indicator.referenceDate());
+        log.info("Market 투자지표 조회 완료. stockCode={}, per={}, pbr={}, financialReferenceYearMonth={}",
+                strategy.getStockCode(), indicator.per(), indicator.pbr(), indicator.financialReferenceYearMonth());
 
         validateRequiredIndicator(strategy.getPerCondition(), indicator.per(), "PER");
         validateRequiredIndicator(strategy.getPbrCondition(), indicator.pbr(), "PBR");

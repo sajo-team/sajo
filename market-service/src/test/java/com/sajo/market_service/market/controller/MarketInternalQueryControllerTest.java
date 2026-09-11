@@ -6,6 +6,7 @@ import com.sajo.market_service.market.exception.MarketErrorCode;
 import com.sajo.market_service.market.controller.dto.response.InternalStockQuoteResponse;
 import com.sajo.market_service.market.controller.dto.response.InternalStockIndicatorResponse;
 import com.sajo.market_service.market.service.query.MarketInternalQueryService;
+import com.sajo.market_service.market.domain.FinancialPeriodType;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -15,6 +16,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.OffsetDateTime;
 import java.time.LocalDate;
+import java.time.Instant;
 import java.math.BigDecimal;
 import java.util.UUID;
 
@@ -48,11 +50,15 @@ class MarketInternalQueryControllerTest {
     void returnsOnlyStrategyRequiredIndicatorFields() throws Exception {
         given(marketInternalQueryService.getIndicator("005930"))
                 .willReturn(new InternalStockIndicatorResponse("005930", new BigDecimal("15.2"),
-                        new BigDecimal("1.3"), new BigDecimal("8.7"), LocalDate.of(2026, 9, 3)));
+                        new BigDecimal("1.3"), Instant.parse("2026-09-10T01:00:00Z"),
+                        new BigDecimal("8.7"), FinancialPeriodType.QUARTER, "2026-06",
+                        Instant.parse("2026-09-10T01:00:01Z")));
 
         mockMvc.perform(get("/internal/v1/stocks/005930/indicator"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.stockCode").value("005930"))
+                .andExpect(jsonPath("$.data.financialPeriodType").value("QUARTER"))
+                .andExpect(jsonPath("$.data.financialReferenceYearMonth").value("2026-06"))
                 .andExpect(jsonPath("$.data.eps").doesNotExist())
                 .andExpect(jsonPath("$.data.bps").doesNotExist());
     }
