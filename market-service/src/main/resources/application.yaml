@@ -31,6 +31,13 @@ market:
     max-download-bytes: ${MARKET_STOCK_MASTER_SYNC_MAX_DOWNLOAD_BYTES:52428800}
     connect-timeout: ${MARKET_STOCK_MASTER_SYNC_CONNECT_TIMEOUT:3s}
     read-timeout: ${MARKET_STOCK_MASTER_SYNC_READ_TIMEOUT:10s}
+  websocket:
+    enabled: ${MARKET_WEBSOCKET_ENABLED:false}
+    url: ${MARKET_WEBSOCKET_URL:ws://ops.koreainvestment.com:31000}
+    system-user-id: ${MARKET_WEBSOCKET_SYSTEM_USER_ID:}
+    initial-backoff: ${MARKET_WEBSOCKET_INITIAL_BACKOFF:1s}
+    max-backoff: ${MARKET_WEBSOCKET_MAX_BACKOFF:30s}
+    backoff-multiplier: ${MARKET_WEBSOCKET_BACKOFF_MULTIPLIER:2.0}
 
 sajo:
   scheduler:
