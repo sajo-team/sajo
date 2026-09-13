@@ -3,6 +3,8 @@ package com.sajo.market_service.market.client.kis;
 import com.sajo.common.exception.BusinessException;
 import com.sajo.market_service.market.client.user.dto.UserKisTokenResponse;
 import com.sajo.market_service.market.config.KisApiProperties;
+import com.sajo.market_service.market.dto.kis.KisApprovalKeyRequest;
+import com.sajo.market_service.market.dto.kis.KisApprovalKeyResponse;
 import com.sajo.market_service.market.dto.kis.KisQuoteResponse;
 import com.sajo.market_service.market.dto.kis.KisFinancialRatioResponse;
 import com.sajo.market_service.market.dto.kis.KisDailyPriceResponse;
@@ -39,6 +41,7 @@ public class KisApiClient {
     private static final String DAILY_PRICE_TRANSACTION_ID = "FHKST03010100";
     private static final long MAX_DAILY_PRICE_LOOKBACK_DAYS = 365;
     private static final String FINANCIAL_RATIO_PATH = "/uapi/domestic-stock/v1/finance/financial-ratio";
+    private static final String APPROVAL_KEY_PATH = "/oauth2/Approval";
 
     private final RestClient restClient;
     private final Clock clock;
@@ -206,5 +209,43 @@ public class KisApiClient {
                 .map(output -> DailyPriceResponse.from(output, stockCode))
                 .flatMap(java.util.Optional::stream)
                 .toList();
+    }
+
+    /**
+     * KIS WebSocket 접속에 필요한 approval_key를 발급받는다.
+     *
+     * @param credentials KIS 인증정보(appKey/secretKey)
+     * @return 발급된 approval_key
+     */
+    public String issueApprovalKey(UserKisTokenResponse credentials) {
+        KisApprovalKeyResponse response;
+        try {
+            response = restClient.post()
+                    .uri(APPROVAL_KEY_PATH)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .accept(MediaType.APPLICATION_JSON)
+                    .body(KisApprovalKeyRequest.of(credentials.appKey(), credentials.secretKey()))
+                    .retrieve()
+                    .body(KisApprovalKeyResponse.class);
+        } catch (RestClientResponseException exception) {
+            log.warn("KIS 접속키 발급 HTTP 호출에 실패했습니다. httpStatus={}", exception.getStatusCode().value());
+            throw new BusinessException(
+                    MarketErrorCode.KIS_APPROVAL_KEY_ISSUE_FAILED,
+                    "KIS 접속키 발급에 실패했습니다. httpStatus=%s".formatted(exception.getStatusCode().value())
+            );
+        } catch (RestClientException exception) {
+            log.warn("KIS 접속키 발급 호출에 실패했습니다. exceptionType={}", exception.getClass().getSimpleName());
+            throw new BusinessException(
+                    MarketErrorCode.KIS_APPROVAL_KEY_ISSUE_FAILED,
+                    "KIS 접속키 발급에 실패했습니다."
+            );
+        }
+        if (response == null || !response.isSuccess()) {
+            throw new BusinessException(
+                    MarketErrorCode.KIS_APPROVAL_KEY_ISSUE_FAILED,
+                    "KIS 접속키 응답이 비어 있습니다."
+            );
+        }
+        return response.approvalKey();
     }
 }
