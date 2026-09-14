@@ -4,6 +4,16 @@ server:
 spring:
   application:
     name: market-service
+
+  flyway:
+    enabled: true
+    schemas: market_strategy
+    default-schema: market_strategy
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    baseline-version: 105
+    validate-migration-naming: true
+
   config:
     import: "optional:configserver:${CONFIG_SERVER_URL:http://localhost:8888}"
   cloud:
