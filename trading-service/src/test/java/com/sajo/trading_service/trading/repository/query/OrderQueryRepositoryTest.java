@@ -1,14 +1,18 @@
 package com.sajo.trading_service.trading.repository.query;
 
 import com.sajo.common.config.CommonJpaAuditingAutoConfiguration;
+import com.sajo.trading_service.trading.controller.dto.request.OrderSearchCondition;
 import com.sajo.trading_service.trading.domain.Order;
+import com.sajo.trading_service.trading.domain.enums.OrderStatus;
 import com.sajo.trading_service.trading.domain.enums.OrderType;
 import com.sajo.trading_service.trading.repository.command.OrderCommandRepository;
+import com.sajo.trading_service.trading.repository.query.specification.OrderSpecifications;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.junit.jupiter.Container;
@@ -419,5 +423,86 @@ class OrderQueryRepositoryTest {
                         .existsActiveOrderByAutoTradingId(autoTradingId);
 
         assertThat(result).isFalse();
+    }
+
+    @Test
+    @DisplayName("autoTradingId와 status 조건을 동시에 적용해 주문을 조회한다")
+    void findAll_withAutoTradingIdAndStatus() {
+        // given
+        UUID userId = UUID.randomUUID();
+        UUID autoTradingId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+
+        // 조회되어야 하는 주문
+        Order matchedOrder = Order.create(
+                userId,
+                autoTradingId,
+                strategyId,
+                UUID.randomUUID(),
+                "005930",
+                OrderType.BUY,
+                70_000L,
+                10
+        );
+
+        matchedOrder.startProcessing();
+        matchedOrder.accept("ORDER-001");
+        matchedOrder.applyFill(10, 0);
+
+        // 같은 AutoTrading이지만 상태가 REQUESTED
+        Order differentStatusOrder = Order.create(
+                userId,
+                autoTradingId,
+                strategyId,
+                UUID.randomUUID(),
+                "005930",
+                OrderType.BUY,
+                70_000L,
+                10
+        );
+
+        // FILLED지만 다른 AutoTrading
+        Order differentAutoTradingOrder = Order.create(
+                userId,
+                UUID.randomUUID(),
+                strategyId,
+                UUID.randomUUID(),
+                "005930",
+                OrderType.BUY,
+                70_000L,
+                10
+        );
+
+        differentAutoTradingOrder.startProcessing();
+        differentAutoTradingOrder.accept("ORDER-002");
+        differentAutoTradingOrder.applyFill(10, 0);
+
+        orderCommandRepository.saveAndFlush(matchedOrder);
+        orderCommandRepository.saveAndFlush(differentStatusOrder);
+        orderCommandRepository.saveAndFlush(differentAutoTradingOrder);
+
+        OrderSearchCondition condition =
+                new OrderSearchCondition(
+                        autoTradingId,
+                        null,
+                        OrderStatus.FILLED,
+                        null,
+                        null
+                );
+
+        // when
+        var result =
+                orderQueryRepository.findAll(
+                        OrderSpecifications.withCondition(
+                                userId,
+                                condition
+                        ),
+                        PageRequest.of(0, 10)
+                );
+
+        // then
+        assertThat(result.getContent()).hasSize(1);
+        assertThat(result.getContent().get(0).getId())
+                .isEqualTo(matchedOrder.getId());
     }
 }
