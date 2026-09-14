@@ -1,11 +1,13 @@
 package com.sajo.trading_service.trading.service.query;
 
 import com.sajo.common.exception.BusinessException;
+import com.sajo.trading_service.trading.controller.dto.request.OrderSearchCondition;
 import com.sajo.trading_service.trading.controller.dto.response.OrderDetailResponse;
 import com.sajo.trading_service.trading.controller.dto.response.OrderListResponse;
 import com.sajo.trading_service.trading.domain.Order;
 import com.sajo.trading_service.trading.exception.TradingErrorCode;
 import com.sajo.trading_service.trading.repository.query.OrderQueryRepository;
+import com.sajo.trading_service.trading.repository.query.specification.OrderSpecifications;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -22,10 +24,14 @@ public class OrderQueryService {
 
     public Page<OrderListResponse> findOrdersByUserId(
             UUID userId,
+            OrderSearchCondition condition,
             Pageable pageable
-    ){
+    ) {
         return orderQueryRepository
-                .findByUserId(userId, pageable)
+                .findAll(
+                        OrderSpecifications.withCondition(userId, condition),
+                        pageable
+                )
                 .map(OrderListResponse::from);
     }
 

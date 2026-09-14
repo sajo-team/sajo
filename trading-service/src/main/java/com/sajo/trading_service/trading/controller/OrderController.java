@@ -3,6 +3,7 @@ package com.sajo.trading_service.trading.controller;
 import com.sajo.common.code.GeneralResponseCode;
 import com.sajo.common.response.GeneralResponse;
 import com.sajo.common.response.PageResponse;
+import com.sajo.trading_service.trading.controller.dto.request.OrderSearchCondition;
 import com.sajo.trading_service.trading.controller.dto.response.OrderDetailResponse;
 import com.sajo.trading_service.trading.controller.dto.response.OrderListResponse;
 import com.sajo.trading_service.trading.service.query.OrderQueryService;
@@ -23,11 +24,13 @@ public class OrderController {
     @GetMapping
     public ResponseEntity<GeneralResponse<PageResponse<OrderListResponse>>> getAllOrders(
             @RequestHeader("X-User-Id") UUID userId,
+            @ModelAttribute OrderSearchCondition condition,
             Pageable pageable
     ){
         Page<OrderListResponse> page =
                 orderQueryService.findOrdersByUserId(
                         userId,
+                        condition,
                         pageable
                 );
  

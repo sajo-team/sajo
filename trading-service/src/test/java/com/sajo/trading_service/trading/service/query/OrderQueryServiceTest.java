@@ -1,6 +1,7 @@
 package com.sajo.trading_service.trading.service.query;
 
 import com.sajo.common.exception.BusinessException;
+import com.sajo.trading_service.trading.controller.dto.request.OrderSearchCondition;
 import com.sajo.trading_service.trading.controller.dto.response.OrderDetailResponse;
 import com.sajo.trading_service.trading.controller.dto.response.OrderListResponse;
 import com.sajo.trading_service.trading.domain.Order;
@@ -19,6 +20,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 
 import java.time.Instant;
 import java.util.List;
@@ -27,6 +29,8 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -63,6 +67,15 @@ class OrderQueryServiceTest {
         // given
         Pageable pageable = PageRequest.of(0, 10);
 
+        OrderSearchCondition condition =
+                new OrderSearchCondition(
+                        null,
+                        null,
+                        null,
+                        null,
+                        null
+                );
+
         when(order.getId()).thenReturn(orderId);
         when(order.getAutoTradingId()).thenReturn(autoTradingId);
         when(order.getStrategyId()).thenReturn(strategyId);
@@ -81,13 +94,16 @@ class OrderQueryServiceTest {
                         1
                 );
 
-        when(orderQueryRepository.findByUserId(userId, pageable))
-                .thenReturn(orders);
+        when(orderQueryRepository.findAll(
+                any(Specification.class),
+                eq(pageable)
+        )).thenReturn(orders);
 
         // when
         Page<OrderListResponse> result =
                 orderQueryService.findOrdersByUserId(
                         userId,
+                        condition,
                         pageable
                 );
 
@@ -111,13 +127,25 @@ class OrderQueryServiceTest {
         // given
         Pageable pageable = PageRequest.of(0, 10);
 
-        when(orderQueryRepository.findByUserId(userId, pageable))
-                .thenReturn(Page.empty(pageable));
+        OrderSearchCondition condition =
+                new OrderSearchCondition(
+                        null,
+                        null,
+                        null,
+                        null,
+                        null
+                );
+
+        when(orderQueryRepository.findAll(
+                any(Specification.class),
+                eq(pageable)
+        )).thenReturn(Page.empty(pageable));
 
         // when
         Page<OrderListResponse> result =
                 orderQueryService.findOrdersByUserId(
                         userId,
+                        condition,
                         pageable
                 );
 
