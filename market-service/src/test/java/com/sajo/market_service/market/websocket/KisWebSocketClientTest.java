@@ -171,6 +171,28 @@ class KisWebSocketClientTest {
     }
 
     @Test
+    void afterConnectionEstablishedClosesSessionImmediatelyWhenAlreadyShuttingDown() throws Exception {
+        stubSuccessfulCredentials();
+        WebSocketSession firstSession = openSession();
+        given(webSocketClient.execute(any(WebSocketHandler.class), anyString()))
+                .willReturn(CompletableFuture.completedFuture(firstSession));
+
+        KisWebSocketClient client = client(List.of());
+        client.connect();
+        WebSocketHandler handler = capturedHandler();
+
+        // shutdown()이 먼저 호출된 뒤(예: 재연결 스케줄러 스레드에서 진행 중이던 connect() 시도가
+        // 뒤늦게 완료되어) afterConnectionEstablished가 호출되는 경합 상황을 재현한다.
+        client.shutdown();
+
+        WebSocketSession lateSession = openSession();
+        handler.afterConnectionEstablished(lateSession);
+
+        verify(lateSession).close(CloseStatus.NORMAL);
+        verify(lateSession, never()).sendMessage(any(TextMessage.class));
+    }
+
+    @Test
     void scheduleReconnectSwallowsRejectedExecutionWhenSchedulerAlreadyShutDown() {
         given(userAccountFeignClient.getKisToken(any())).willThrow(new RuntimeException("user-service down"));
         given(reconnectPolicy.nextDelay(0)).willReturn(Duration.ofMillis(500));

@@ -88,10 +88,11 @@ public class KisWebSocketClient {
         if (initialTargetStockCodes != null) {
             initialTargetStockCodes.forEach(subscribedStockCodes::add);
         }
-        if (subscribedStockCodes.isEmpty()) {
+        if (properties.enabled() && subscribedStockCodes.isEmpty()) {
             // market.websocket.target-stock-codes가 비어 있으면 연결/재연결은 계속 성공 로그를 남기지만
             // 실제로는 어떤 종목도 구독하지 않는다. subscribe()를 호출하는 운영 코드 경로가 아직 없으므로
             // 이 상태에서는 조용히 "연결만 되고 아무 것도 구독하지 않는" 상태가 되어 운영 중 발견이 어렵다.
+            // enabled=false인 로컬/테스트/CI 환경에서는 어차피 연결을 시도하지 않으므로 경고를 남기지 않는다.
             log.warn("KIS WebSocket 구독 대상 종목이 설정되어 있지 않습니다(market.websocket.target-stock-codes). "
                     + "연결에는 성공하더라도 어떤 종목도 구독하지 않습니다.");
         }
@@ -174,13 +175,20 @@ public class KisWebSocketClient {
     void shutdown() {
         shuttingDown = true;
         WebSocketSession session = currentSession.getAndSet(null);
-        if (session != null && session.isOpen()) {
-            try {
-                session.close(CloseStatus.NORMAL);
-            } catch (IOException exception) {
-                log.debug("KIS WebSocket 종료 중 세션 close에 실패했습니다. exceptionType={}",
-                        exception.getClass().getSimpleName());
-            }
+        if (session != null) {
+            closeQuietly(session);
+        }
+    }
+
+    private void closeQuietly(WebSocketSession session) {
+        if (!session.isOpen()) {
+            return;
+        }
+        try {
+            session.close(CloseStatus.NORMAL);
+        } catch (IOException exception) {
+            log.debug("KIS WebSocket 세션 close에 실패했습니다. exceptionType={}",
+                    exception.getClass().getSimpleName());
         }
     }
 
@@ -245,6 +253,14 @@ public class KisWebSocketClient {
 
         @Override
         public void afterConnectionEstablished(WebSocketSession session) {
+            if (shuttingDown) {
+                // shutdown()이 스케줄러의 destroyMethod보다 먼저 실행되는 것이 보장되므로, shutdown() 호출
+                // 이후 이미 진행 중이던 connect() 시도의 핸드셰이크가 뒤늦게 완료될 수 있다. 이 시점에 세션을
+                // currentSession에 등록하고 재구독까지 해버리면, 이후 아무도 이 세션을 닫지 않아 누수된다.
+                log.info("KIS WebSocket 종료 중 뒤늦게 연결이 수립되어 즉시 닫습니다. sessionId={}", session.getId());
+                closeQuietly(session);
+                return;
+            }
             log.info("KIS WebSocket 연결에 성공했습니다. sessionId={}", session.getId());
             currentSession.set(session);
             reconnectAttempts.set(0);
