@@ -1,10 +1,11 @@
 package com.sajo.trading_service.trading.service.query;
 
 import com.sajo.common.exception.BusinessException;
+import com.sajo.trading_service.trading.controller.dto.request.ExecutionSearchCondition;
 import com.sajo.trading_service.trading.controller.dto.response.ExecutionResponse;
-import com.sajo.trading_service.trading.domain.Execution;
 import com.sajo.trading_service.trading.exception.TradingErrorCode;
 import com.sajo.trading_service.trading.repository.query.ExecutionQueryRepository;
+import com.sajo.trading_service.trading.repository.query.projection.ExecutionQueryProjection;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -22,10 +23,15 @@ public class ExecutionQueryService {
 
     public Page<ExecutionResponse> findExecutionsByUserId(
             UUID userId,
+            ExecutionSearchCondition condition,
             Pageable pageable
     ) {
         return executionQueryRepository
-                .findByUserId(userId, pageable)
+                .findByUserId(userId,
+                        condition.orderId(),
+                        condition.autoTradingId(),
+                        condition.strategyId(),
+                        pageable)
                 .map(ExecutionResponse::from);
     }
 
@@ -33,7 +39,7 @@ public class ExecutionQueryService {
             UUID executionId,
             UUID userId
     ) {
-        Execution execution =
+        ExecutionQueryProjection projection =
                 executionQueryRepository
                         .findByIdAndUserId(
                                 executionId,
@@ -45,6 +51,6 @@ public class ExecutionQueryService {
                                 )
                         );
 
-        return ExecutionResponse.from(execution);
+        return ExecutionResponse.from(projection);
     }
 }

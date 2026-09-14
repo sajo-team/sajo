@@ -3,6 +3,7 @@ package com.sajo.trading_service.trading.controller;
 import com.sajo.common.config.CommonPageableAutoConfiguration;
 import com.sajo.common.exception.BusinessException;
 import com.sajo.common.exception.GlobalExceptionHandler;
+import com.sajo.trading_service.trading.controller.dto.request.ExecutionSearchCondition;
 import com.sajo.trading_service.trading.controller.dto.response.ExecutionResponse;
 import com.sajo.trading_service.trading.exception.TradingErrorCode;
 import com.sajo.trading_service.trading.service.query.ExecutionQueryService;
@@ -60,6 +61,9 @@ class ExecutionControllerTest {
                 new ExecutionResponse(
                         executionId,
                         orderId,
+                        UUID.randomUUID(),   // autoTradingId
+                        UUID.randomUUID(),   // strategyId
+                        "0000016037",        // brokerOrderNo
                         2,
                         new BigDecimal("69800"),
                         139_600L,
@@ -70,6 +74,7 @@ class ExecutionControllerTest {
 
         when(executionQueryService.findExecutionsByUserId(
                 eq(userId),
+                any(ExecutionSearchCondition.class),
                 any(Pageable.class)
         )).thenReturn(
                 new PageImpl<>(
@@ -125,6 +130,7 @@ class ExecutionControllerTest {
 
         when(executionQueryService.findExecutionsByUserId(
                 eq(userId),
+                any(ExecutionSearchCondition.class),
                 any(Pageable.class)
         )).thenReturn(Page.empty(pageable));
 
@@ -161,6 +167,9 @@ class ExecutionControllerTest {
                 new ExecutionResponse(
                         executionId,
                         orderId,
+                        UUID.randomUUID(),
+                        UUID.randomUUID(),
+                        "0000016037",
                         4,
                         new BigDecimal("70000"),
                         280_000L,
@@ -240,6 +249,7 @@ class ExecutionControllerTest {
 
         when(executionQueryService.findExecutionsByUserId(
                 eq(userId),
+                any(ExecutionSearchCondition.class),
                 any(Pageable.class)
         )).thenReturn(
                 Page.empty(
@@ -265,6 +275,7 @@ class ExecutionControllerTest {
         verify(executionQueryService)
                 .findExecutionsByUserId(
                         eq(userId),
+                        any(ExecutionSearchCondition.class),
                         pageableCaptor.capture()
                 );
 
@@ -287,5 +298,78 @@ class ExecutionControllerTest {
                         .value(false))
                 .andExpect(jsonPath("$.errorCode")
                         .value("COMMON_0001"));
+    }
+
+    @Test
+    @DisplayName("체결 목록 조회 시 검색 조건이 바인딩된다")
+    void getExecutions_withSearchCondition() throws Exception {
+        // given
+        UUID userId = UUID.randomUUID();
+        UUID orderId = UUID.randomUUID();
+        UUID autoTradingId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+
+        when(executionQueryService.findExecutionsByUserId(
+                eq(userId),
+                any(ExecutionSearchCondition.class),
+                any(Pageable.class)
+        )).thenReturn(Page.empty());
+
+        ArgumentCaptor<ExecutionSearchCondition> conditionCaptor =
+                ArgumentCaptor.forClass(ExecutionSearchCondition.class);
+
+        // when
+        mockMvc.perform(
+                        get("/api/v1/executions")
+                                .header(
+                                        "X-User-Id",
+                                        userId.toString()
+                                )
+                                .param(
+                                        "orderId",
+                                        orderId.toString()
+                                )
+                                .param(
+                                        "autoTradingId",
+                                        autoTradingId.toString()
+                                )
+                                .param(
+                                        "strategyId",
+                                        strategyId.toString()
+                                )
+                )
+                .andExpect(status().isOk());
+
+        // then
+        verify(executionQueryService)
+                .findExecutionsByUserId(
+                        eq(userId),
+                        conditionCaptor.capture(),
+                        any(Pageable.class)
+                );
+
+        ExecutionSearchCondition condition =
+                conditionCaptor.getValue();
+
+        assertThat(condition.orderId())
+                .isEqualTo(orderId);
+        assertThat(condition.autoTradingId())
+                .isEqualTo(autoTradingId);
+        assertThat(condition.strategyId())
+                .isEqualTo(strategyId);
+    }
+
+    @Test
+    @DisplayName("잘못된 체결 검색 UUID이면 400을 반환한다")
+    void getExecutions_invalidOrderId_returns400() throws Exception {
+        mockMvc.perform(
+                        get("/api/v1/executions")
+                                .header(
+                                        "X-User-Id",
+                                        UUID.randomUUID().toString()
+                                )
+                                .param("orderId", "invalid-uuid")
+                )
+                .andExpect(status().isBadRequest());
     }
 }
