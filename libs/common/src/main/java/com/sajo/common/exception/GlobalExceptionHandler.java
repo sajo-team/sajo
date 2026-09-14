@@ -74,14 +74,20 @@ public class GlobalExceptionHandler {
             BindException e,
             HttpServletRequest request
     ) {
-        log.warn(
-                "uri: {}, bindException: {}",
-                request.getRequestURI(),
-                e.getMessage()
-        );
+        Map<String, String> errors = new HashMap<>();
+
+        for (FieldError fieldError : e.getBindingResult().getFieldErrors()) {
+            errors.put(
+                    fieldError.getField(),
+                    fieldError.getDefaultMessage()
+            );
+        }
+
+        log.warn("uri: {}", request.getRequestURI(), e);
 
         return ErrorResponse.toResponseEntity(
-                ErrorResponseCode.INVALID_BAD_REQUEST
+                ErrorResponseCode.INVALID_BAD_REQUEST,
+                errors
         );
     }
 
