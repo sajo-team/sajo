@@ -5,9 +5,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sajo.market_service.market.client.kis.KisApiClient;
 import com.sajo.market_service.market.client.user.UserAccountFeignClient;
 import com.sajo.market_service.market.client.user.dto.UserKisTokenResponse;
-import com.sajo.market_service.market.config.MarketSchedulerProperties;
 import com.sajo.market_service.market.config.MarketWebSocketProperties;
 import com.sajo.market_service.market.dto.kis.KisSubscribeRequest;
+import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -23,6 +23,7 @@ import java.time.Duration;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -51,20 +52,20 @@ public class KisWebSocketClient {
     private final AtomicReference<WebSocketSession> currentSession = new AtomicReference<>();
     private final AtomicInteger reconnectAttempts = new AtomicInteger(0);
     private volatile String currentApprovalKey;
+    private volatile boolean shuttingDown = false;
     private final Object sendLock = new Object();
 
     @Autowired
     public KisWebSocketClient(
             @Qualifier("kisWebSocketTransportClient") WebSocketClient webSocketClient,
             MarketWebSocketProperties properties,
-            MarketSchedulerProperties schedulerProperties,
             KisApiClient kisApiClient,
             UserAccountFeignClient userAccountFeignClient,
             ObjectMapper objectMapper,
             @Qualifier("kisWebSocketReconnectScheduler") ScheduledExecutorService reconnectScheduler
     ) {
         this(webSocketClient, properties, kisApiClient, userAccountFeignClient, objectMapper,
-                reconnectScheduler, new KisWebSocketReconnectPolicy(properties), schedulerProperties.targetStockCodes());
+                reconnectScheduler, new KisWebSocketReconnectPolicy(properties), properties.targetStockCodes());
     }
 
     KisWebSocketClient(
@@ -86,6 +87,13 @@ public class KisWebSocketClient {
         this.reconnectPolicy = reconnectPolicy;
         if (initialTargetStockCodes != null) {
             initialTargetStockCodes.forEach(subscribedStockCodes::add);
+        }
+        if (subscribedStockCodes.isEmpty()) {
+            // market.websocket.target-stock-codes가 비어 있으면 연결/재연결은 계속 성공 로그를 남기지만
+            // 실제로는 어떤 종목도 구독하지 않는다. subscribe()를 호출하는 운영 코드 경로가 아직 없으므로
+            // 이 상태에서는 조용히 "연결만 되고 아무 것도 구독하지 않는" 상태가 되어 운영 중 발견이 어렵다.
+            log.warn("KIS WebSocket 구독 대상 종목이 설정되어 있지 않습니다(market.websocket.target-stock-codes). "
+                    + "연결에는 성공하더라도 어떤 종목도 구독하지 않습니다.");
         }
     }
 
@@ -154,6 +162,28 @@ public class KisWebSocketClient {
         return Set.copyOf(subscribedStockCodes);
     }
 
+    /**
+     * 애플리케이션 종료 시 재연결 시도를 멈추고 현재 세션을 정상적으로 닫는다.
+     *
+     * <p>{@code kisWebSocketReconnectScheduler} 빈은 {@code destroyMethod="shutdown"}으로 정리되는데,
+     * 컨텍스트 종료 순서상 스케줄러가 먼저 종료된 뒤 컨테이너가 세션을 닫으면 {@code afterConnectionClosed}가
+     * 이미 종료된 executor에 재연결을 예약하려다 {@link RejectedExecutionException}을 던질 수 있다.
+     * {@code shuttingDown} 플래그와 {@link #scheduleReconnect()}의 방어 처리로 이를 안전하게 무시한다.</p>
+     */
+    @PreDestroy
+    void shutdown() {
+        shuttingDown = true;
+        WebSocketSession session = currentSession.getAndSet(null);
+        if (session != null && session.isOpen()) {
+            try {
+                session.close(CloseStatus.NORMAL);
+            } catch (IOException exception) {
+                log.debug("KIS WebSocket 종료 중 세션 close에 실패했습니다. exceptionType={}",
+                        exception.getClass().getSimpleName());
+            }
+        }
+    }
+
     private UUID resolveSystemUserId() {
         String configuredUserId = properties.systemUserId();
         if (configuredUserId == null || configuredUserId.isBlank()) {
@@ -194,10 +224,20 @@ public class KisWebSocketClient {
     }
 
     private void scheduleReconnect() {
+        if (shuttingDown) {
+            log.debug("KIS WebSocket이 종료 중이어서 재연결을 예약하지 않습니다.");
+            return;
+        }
         int attempt = reconnectAttempts.getAndIncrement();
         Duration delay = reconnectPolicy.nextDelay(attempt);
         log.info("KIS WebSocket 재연결을 예약합니다. attempt={}, delayMillis={}", attempt + 1, delay.toMillis());
-        reconnectScheduler.schedule(this::connect, delay.toMillis(), TimeUnit.MILLISECONDS);
+        try {
+            reconnectScheduler.schedule(this::connect, delay.toMillis(), TimeUnit.MILLISECONDS);
+        } catch (RejectedExecutionException exception) {
+            // 애플리케이션 종료 시퀀스에서 kisWebSocketReconnectScheduler 빈이 이 컴포넌트보다 먼저
+            // shutdown되는 경합이 발생할 수 있다. 이 경우 재연결은 더 이상 의미가 없으므로 무시한다.
+            log.debug("KIS WebSocket 재연결 스케줄러가 이미 종료되어 재연결 예약을 건너뜁니다.");
+        }
     }
 
     /** 연결 생명주기 콜백만 담당한다. 메시지 정규화·저장은 이후 단계(15단계)에서 처리한다. */

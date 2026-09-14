@@ -16,12 +16,14 @@ import org.springframework.web.socket.client.WebSocketClient;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
@@ -147,6 +149,39 @@ class KisWebSocketClientTest {
         verify(webSocketClient, never()).execute(any(WebSocketHandler.class), anyString());
     }
 
+    @Test
+    void shutdownClosesOpenSessionAndSuppressesFurtherReconnects() throws Exception {
+        stubSuccessfulCredentials();
+        WebSocketSession session = openSession();
+        given(webSocketClient.execute(any(WebSocketHandler.class), anyString()))
+                .willReturn(CompletableFuture.completedFuture(session));
+
+        KisWebSocketClient client = client(List.of());
+        client.connect();
+        WebSocketHandler handler = capturedHandler();
+        handler.afterConnectionEstablished(session);
+
+        client.shutdown();
+
+        verify(session).close(CloseStatus.NORMAL);
+
+        // shutdown() 이후 전송 계층이 뒤늦게 afterConnectionClosed를 통지해도 재연결을 예약하지 않는다.
+        handler.afterConnectionClosed(session, CloseStatus.NORMAL);
+        verify(reconnectScheduler, never()).schedule(any(Runnable.class), anyLong(), any(TimeUnit.class));
+    }
+
+    @Test
+    void scheduleReconnectSwallowsRejectedExecutionWhenSchedulerAlreadyShutDown() {
+        given(userAccountFeignClient.getKisToken(any())).willThrow(new RuntimeException("user-service down"));
+        given(reconnectPolicy.nextDelay(0)).willReturn(Duration.ofMillis(500));
+        given(reconnectScheduler.schedule(any(Runnable.class), eq(500L), eq(TimeUnit.MILLISECONDS)))
+                .willThrow(new RejectedExecutionException("scheduler already shut down"));
+
+        KisWebSocketClient client = client(List.of());
+
+        client.connect();
+    }
+
     private void stubSuccessfulCredentials() {
         UserKisTokenResponse credentials = new UserKisTokenResponse("access-token", "app-key", "secret-key");
         given(userAccountFeignClient.getKisToken(any())).willReturn(credentials);
@@ -168,7 +203,8 @@ class KisWebSocketClientTest {
 
     private KisWebSocketClient client(List<String> initialTargetStockCodes) {
         MarketWebSocketProperties properties = new MarketWebSocketProperties(
-                true, "ws://localhost:31000", SYSTEM_USER_ID, Duration.ofMillis(10), Duration.ofSeconds(1), 2.0);
+                true, "ws://localhost:31000", SYSTEM_USER_ID, Duration.ofMillis(10), Duration.ofSeconds(1), 2.0,
+                List.of());
         return new KisWebSocketClient(
                 webSocketClient,
                 properties,
