@@ -11,6 +11,15 @@ spring:
       retry:
         max-attempts: 10
         initial-interval: 2000
+    openfeign:
+      client:
+        config:
+          user-service:
+            # KisWebSocketClient.connect()가 재연결 전용 단일 스레드 위에서 이 Feign 호출을 동기적으로
+            # 수행하므로, user-service 응답이 지연되면 그 사이 예약된 다른 재연결 작업까지 밀릴 수 있다.
+            # 기존 OpenFeign 기본 타임아웃(약 10s/60s)보다 짧게 명시한다.
+            connect-timeout: ${USER_SERVICE_CONNECT_TIMEOUT:2000}
+            read-timeout: ${USER_SERVICE_READ_TIMEOUT:3000}
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
 

@@ -11,6 +11,7 @@ import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
@@ -38,6 +39,7 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 @Slf4j
 @Component
+@ConditionalOnProperty(prefix = "market.websocket", name = "enabled", havingValue = "true")
 public class KisWebSocketClient {
 
     private final WebSocketClient webSocketClient;
