@@ -12,13 +12,14 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
+import org.springframework.validation.BindException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
-import org.springframework.web.bind.MissingRequestHeaderException;
-import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingRequestHeaderException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -65,6 +66,23 @@ public class GlobalExceptionHandler {
 
         log.warn("uri: {}", request.getRequestURI(), e);
         return ErrorResponse.toResponseEntity(ErrorResponseCode.MALFORMED_REQUEST);
+    }
+
+    // @ModelAttribute 바인딩 실패 시
+    @ExceptionHandler(BindException.class)
+    public ResponseEntity<ErrorResponse> handleBindException(
+            BindException e,
+            HttpServletRequest request
+    ) {
+        log.warn(
+                "uri: {}, bindException: {}",
+                request.getRequestURI(),
+                e.getMessage()
+        );
+
+        return ErrorResponse.toResponseEntity(
+                ErrorResponseCode.INVALID_BAD_REQUEST
+        );
     }
 
     // Required request headers and path/query type conversion failures are client input errors, not server failures.
