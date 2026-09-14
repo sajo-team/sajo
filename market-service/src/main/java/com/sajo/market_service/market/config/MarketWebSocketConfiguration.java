@@ -7,6 +7,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.web.socket.client.WebSocketClient;
 import org.springframework.web.socket.client.standard.StandardWebSocketClient;
 
+import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
@@ -21,8 +22,16 @@ public class MarketWebSocketConfiguration {
      */
     @Bean
     @ConditionalOnProperty(prefix = "market.websocket", name = "enabled", havingValue = "true")
-    WebSocketClient kisWebSocketTransportClient() {
-        return new StandardWebSocketClient();
+    WebSocketClient kisWebSocketTransportClient(MarketWebSocketProperties properties) {
+        StandardWebSocketClient client = new StandardWebSocketClient();
+        // Tomcat의 WsWebSocketContainer가 인식하는 전용 프로퍼티. CompletableFuture.orTimeout()은 우리 쪽에서
+        // "기다리기를 포기"할 뿐 실제 핸드셰이크 소켓 I/O를 멈추지는 못하므로(스레드 누수·뒤늦은 연결 성공의
+        // 원인), 소켓 자체에도 동일한 handshakeTimeout으로 타임아웃을 걸어 컨테이너 레벨에서 확실히 끊는다.
+        client.setUserProperties(Map.of(
+                "org.apache.tomcat.websocket.IO_TIMEOUT_MS",
+                String.valueOf(properties.handshakeTimeout().toMillis())
+        ));
+        return client;
     }
 
     /** 재연결 예약 전용 단일 스레드 스케줄러. KIS 호출/구독 처리량은 크지 않아 하나로 충분하다. */

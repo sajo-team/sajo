@@ -27,6 +27,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
@@ -79,36 +80,29 @@ class KisWebSocketClientTest {
     }
 
     @Test
-    void repeatedDisconnectsAcrossReconnectAttemptsIncreaseAttemptCountPassedToPolicy() throws Exception {
-        // afterConnectionClosed는 이제 "활성 세션이었던 연결이 닫혔을 때만" 재연결을 예약하므로(중복/폐기된
-        // 세션의 종료 통지로 인한 중복 예약 방지), 같은 세션을 두 번 닫는 것이 아니라 실제로 두 번의
-        // 연결 사이클(연결→종료→재연결→연결→종료)을 재현해야 한다.
+    void repeatedReconnectFailuresIncreaseAttemptCountPassedToPolicy() throws Exception {
+        // afterConnectionEstablished가 성공할 때마다 reconnectAttempts가 0으로 리셋되므로(정상적인
+        // 지수 백오프 설계), "재연결이 반복해서 실패하는" 상황이어야 attempt가 계속 증가한다.
+        // 1차: 정상 연결 후 끊김(attempt 0 소비, 다음 지연 100ms 예약) → 2차: 재연결 시도 자체가
+        // 실패(attempt 1 소비, 다음 지연 200ms 예약).
         stubSuccessfulCredentials();
         WebSocketSession session1 = openSession();
-        WebSocketSession session2 = openSession();
         given(webSocketClient.execute(any(WebSocketHandler.class), anyString()))
                 .willReturn(CompletableFuture.completedFuture(session1))
-                .willReturn(CompletableFuture.completedFuture(session2));
+                .willThrow(new IllegalArgumentException("connection refused"));
         given(reconnectPolicy.nextDelay(0)).willReturn(Duration.ofMillis(100));
         given(reconnectPolicy.nextDelay(1)).willReturn(Duration.ofMillis(200));
 
         KisWebSocketClient client = client(List.of());
 
         client.connect();
-        ArgumentCaptor<WebSocketHandler> firstCaptor = ArgumentCaptor.forClass(WebSocketHandler.class);
-        verify(webSocketClient, times(1)).execute(firstCaptor.capture(), anyString());
-        WebSocketHandler firstHandler = firstCaptor.getValue();
-        firstHandler.afterConnectionEstablished(session1);
-        firstHandler.afterConnectionClosed(session1, CloseStatus.GOING_AWAY);
+        WebSocketHandler handler = capturedHandler();
+        handler.afterConnectionEstablished(session1);
+        handler.afterConnectionClosed(session1, CloseStatus.GOING_AWAY);
 
         // 실제로는 reconnectScheduler가 예약된 delay 이후 connect()를 실행하지만, 스케줄러가 mock이라
-        // 여기서는 "다음 시도"를 직접 시뮬레이션한다.
+        // 여기서는 "다음 시도"를 직접 시뮬레이션한다. 이번 시도는 execute() 자체가 실패한다.
         client.connect();
-        ArgumentCaptor<WebSocketHandler> secondCaptor = ArgumentCaptor.forClass(WebSocketHandler.class);
-        verify(webSocketClient, times(2)).execute(secondCaptor.capture(), anyString());
-        WebSocketHandler secondHandler = secondCaptor.getValue();
-        secondHandler.afterConnectionEstablished(session2);
-        secondHandler.afterConnectionClosed(session2, CloseStatus.GOING_AWAY);
 
         verify(reconnectScheduler).schedule(any(Runnable.class), eq(100L), eq(TimeUnit.MILLISECONDS));
         verify(reconnectScheduler).schedule(any(Runnable.class), eq(200L), eq(TimeUnit.MILLISECONDS));
@@ -310,14 +304,17 @@ class KisWebSocketClientTest {
         // execute()가 절대 완료되지 않는 상황(네트워크 문제로 핸드셰이크가 계속 멈춘 경우)을 재현한다.
         // properties.handshakeTimeout()으로 강제 완료되지 않으면 whenComplete가 호출되지 않아
         // scheduleReconnect()도 영원히 호출되지 않는다.
+        // spy로 감싸 orTimeout 발생 시 connect()가 원본 future에 cancel(true)를 호출하는지도 함께 검증한다.
+        CompletableFuture<WebSocketSession> handshakeFuture = spy(new CompletableFuture<>());
         given(webSocketClient.execute(any(WebSocketHandler.class), anyString()))
-                .willReturn(new CompletableFuture<>());
+                .willReturn(handshakeFuture);
         given(reconnectPolicy.nextDelay(0)).willReturn(Duration.ofMillis(50));
 
         KisWebSocketClient client = client(List.of(), Duration.ofMillis(30));
         client.connect();
 
         verify(reconnectScheduler, timeout(2000)).schedule(any(Runnable.class), eq(50L), eq(TimeUnit.MILLISECONDS));
+        verify(handshakeFuture, timeout(2000)).cancel(true);
     }
 
     private void stubSuccessfulCredentials() {

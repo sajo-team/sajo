@@ -23,10 +23,7 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -140,10 +137,17 @@ public class KisWebSocketClient {
 
         long generation = connectionGeneration.incrementAndGet();
         try {
-            webSocketClient.execute(new KisMessageListener(generation), properties.url())
+            CompletableFuture<WebSocketSession> handshakeFuture =
+                    webSocketClient.execute(new KisMessageListener(generation), properties.url());
+            handshakeFuture
                     .orTimeout(properties.handshakeTimeout().toMillis(), TimeUnit.MILLISECONDS)
                     .whenComplete((session, throwable) -> {
                         if (throwable != null) {
+                            if (throwable instanceof TimeoutException) {
+                                // kisWebSocketTransportClient의 IO_TIMEOUT_MS가 먼저 걸리지 않는 경우를 대비한
+                                // 2차 방어. 이미 완료된 future에 대한 cancel()은 아무 효과 없이 false를 반환하므로 안전하다.
+                                handshakeFuture.cancel(true);
+                            }
                             log.warn("KIS WebSocket 연결에 실패했습니다. exceptionType={}", throwable.getClass().getSimpleName());
                             scheduleReconnect();
                         }
@@ -241,7 +245,8 @@ public class KisWebSocketClient {
 
     private String buildSubscribePayload(String stockCode) {
         try {
-            return objectMapper.writeValueAsString(KisSubscribeRequest.of(currentApprovalKey, stockCode));
+            String s = objectMapper.writeValueAsString(KisSubscribeRequest.of(currentApprovalKey, stockCode));
+            return s;
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("KIS WebSocket 구독 메시지 직렬화에 실패했습니다.", exception);
         }
