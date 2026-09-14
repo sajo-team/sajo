@@ -1,10 +1,12 @@
 package com.sajo.trading_service.trading.service.query;
 
 import com.sajo.common.exception.BusinessException;
+import com.sajo.trading_service.trading.controller.dto.request.ExecutionSearchCondition;
 import com.sajo.trading_service.trading.controller.dto.response.ExecutionResponse;
 import com.sajo.trading_service.trading.domain.Execution;
 import com.sajo.trading_service.trading.exception.TradingErrorCode;
 import com.sajo.trading_service.trading.repository.query.ExecutionQueryRepository;
+import com.sajo.trading_service.trading.repository.query.projection.ExecutionQueryProjection;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -48,20 +50,47 @@ class ExecutionQueryServiceTest {
     void findExecutionsByUserId_success() {
         // given
         UUID userId = UUID.randomUUID();
+        UUID executionId = UUID.randomUUID();
         UUID orderId = UUID.randomUUID();
+        UUID autoTradingId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
 
-        Execution execution =
-                createExecution(orderId);
+        Instant now = Instant.now();
+
+        ExecutionQueryProjection projection =
+                new ExecutionQueryProjection(
+                        executionId,
+                        orderId,
+                        autoTradingId,
+                        strategyId,
+                        "0000016037",
+                        2,
+                        new BigDecimal("69800"),
+                        139_600L,
+                        2,
+                        now,
+                        now
+                );
+
+        ExecutionSearchCondition condition =
+                new ExecutionSearchCondition(
+                        orderId,
+                        autoTradingId,
+                        strategyId
+                );
 
         PageRequest pageable =
                 PageRequest.of(0, 10);
 
         when(executionQueryRepository.findByUserId(
                 userId,
+                orderId,
+                autoTradingId,
+                strategyId,
                 pageable
         )).thenReturn(
                 new PageImpl<>(
-                        List.of(execution),
+                        List.of(projection),
                         pageable,
                         1
                 )
@@ -71,6 +100,7 @@ class ExecutionQueryServiceTest {
         Page<ExecutionResponse> result =
                 executionQueryService.findExecutionsByUserId(
                         userId,
+                        condition,
                         pageable
                 );
 
@@ -81,7 +111,11 @@ class ExecutionQueryServiceTest {
         ExecutionResponse response =
                 result.getContent().get(0);
 
+        assertThat(response.executionId()).isEqualTo(executionId);
         assertThat(response.orderId()).isEqualTo(orderId);
+        assertThat(response.autoTradingId()).isEqualTo(autoTradingId);
+        assertThat(response.strategyId()).isEqualTo(strategyId);
+        assertThat(response.brokerOrderNo()).isEqualTo("0000016037");
         assertThat(response.executedQuantity()).isEqualTo(2);
         assertThat(response.averageExecutionPrice())
                 .isEqualByComparingTo(new BigDecimal("69800"));
@@ -92,6 +126,9 @@ class ExecutionQueryServiceTest {
         verify(executionQueryRepository)
                 .findByUserId(
                         userId,
+                        condition.orderId(),
+                        condition.autoTradingId(),
+                        condition.strategyId(),
                         pageable
                 );
     }
@@ -101,22 +138,32 @@ class ExecutionQueryServiceTest {
     void findExecutionByIdAndUserId_success() {
         // given
         UUID userId = UUID.randomUUID();
-        UUID orderId = UUID.randomUUID();
         UUID executionId = UUID.randomUUID();
+        UUID orderId = UUID.randomUUID();
+        UUID autoTradingId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
 
-        Execution execution =
-                createExecution(orderId);
+        Instant now = Instant.now();
 
-        ReflectionTestUtils.setField(
-                execution,
-                "id",
-                executionId
-        );
+        ExecutionQueryProjection projection =
+                new ExecutionQueryProjection(
+                        executionId,
+                        orderId,
+                        autoTradingId,
+                        strategyId,
+                        "0000016037",
+                        2,
+                        new BigDecimal("69800"),
+                        139_600L,
+                        2,
+                        now,
+                        now
+                );
 
         when(executionQueryRepository.findByIdAndUserId(
                 executionId,
                 userId
-        )).thenReturn(Optional.of(execution));
+        )).thenReturn(Optional.of(projection));
 
         // when
         ExecutionResponse response =
@@ -130,6 +177,12 @@ class ExecutionQueryServiceTest {
                 .isEqualTo(executionId);
         assertThat(response.orderId())
                 .isEqualTo(orderId);
+        assertThat(response.autoTradingId())
+                .isEqualTo(autoTradingId);
+        assertThat(response.strategyId())
+                .isEqualTo(strategyId);
+        assertThat(response.brokerOrderNo())
+                .isEqualTo("0000016037");
         assertThat(response.executedQuantity())
                 .isEqualTo(2);
         assertThat(response.remainingQuantity())
