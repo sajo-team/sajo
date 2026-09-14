@@ -49,6 +49,12 @@ public enum MarketErrorCode implements ErrorCode {
             HttpStatus.NOT_FOUND,
             "MARKET_0007",
             "종목 투자지표를 찾을 수 없습니다"
+    ),
+
+    KIS_APPROVAL_KEY_ISSUE_FAILED(
+            HttpStatus.BAD_GATEWAY,
+            "MARKET_0008",
+            "KIS WebSocket 접속키 발급에 실패했습니다"
     );
 
     private final HttpStatus status;

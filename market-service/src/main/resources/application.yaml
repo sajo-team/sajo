@@ -11,6 +11,17 @@ spring:
       retry:
         max-attempts: 10
         initial-interval: 2000
+    openfeign:
+      client:
+        config:
+          kisWebSocketUserAccountFeignClient:
+            # KisWebSocketClient 전용 Feign 클라이언트(KisWebSocketUserAccountFeignClient)에만 적용되는
+            # 설정이다. 이 호출은 재연결 전용 단일 스레드 위에서 동기적으로 수행되므로 응답이 지연되면 그
+            # 사이 예약된 다른 재연결 작업까지 밀릴 수 있어, 기존 OpenFeign 기본 타임아웃(약 10s/60s)보다
+            # 짧게 명시한다. MarketQuoteQueryService 등 다른 user-service 호출부(UserAccountFeignClient,
+            # contextId=user-service)는 이 설정의 영향을 받지 않고 기존 기본값을 그대로 사용한다.
+            connect-timeout: ${KIS_WEBSOCKET_USER_SERVICE_CONNECT_TIMEOUT:2000}
+            read-timeout: ${KIS_WEBSOCKET_USER_SERVICE_READ_TIMEOUT:3000}
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
 
@@ -31,6 +42,16 @@ market:
     max-download-bytes: ${MARKET_STOCK_MASTER_SYNC_MAX_DOWNLOAD_BYTES:52428800}
     connect-timeout: ${MARKET_STOCK_MASTER_SYNC_CONNECT_TIMEOUT:3s}
     read-timeout: ${MARKET_STOCK_MASTER_SYNC_READ_TIMEOUT:10s}
+  websocket:
+    enabled: ${MARKET_WEBSOCKET_ENABLED:false}
+    url: ${MARKET_WEBSOCKET_URL:ws://ops.koreainvestment.com:31000}
+    system-user-id: ${MARKET_WEBSOCKET_SYSTEM_USER_ID:}
+    initial-backoff: ${MARKET_WEBSOCKET_INITIAL_BACKOFF:1s}
+    max-backoff: ${MARKET_WEBSOCKET_MAX_BACKOFF:30s}
+    backoff-multiplier: ${MARKET_WEBSOCKET_BACKOFF_MULTIPLIER:2.0}
+    target-stock-codes: ${MARKET_WEBSOCKET_TARGET_STOCK_CODES:}
+    handshake-timeout: ${MARKET_WEBSOCKET_HANDSHAKE_TIMEOUT:10s}
+    text-message-buffer-size: ${MARKET_WEBSOCKET_TEXT_MESSAGE_BUFFER_SIZE:131072}
 
 sajo:
   scheduler:
@@ -73,6 +94,8 @@ spring:
       client:
         config:
           user-service:
+            url: ${USER_SERVICE_URL:http://localhost:8081}
+          kisWebSocketUserAccountFeignClient:
             url: ${USER_SERVICE_URL:http://localhost:8081}
 
 # user-service/trading-service local 프로필과 반드시 동일해야 함 (internal API 호출/검증 쌍)

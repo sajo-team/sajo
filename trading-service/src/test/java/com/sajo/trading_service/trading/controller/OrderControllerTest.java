@@ -3,6 +3,7 @@ package com.sajo.trading_service.trading.controller;
 import com.sajo.common.config.CommonPageableAutoConfiguration;
 import com.sajo.common.exception.BusinessException;
 import com.sajo.common.exception.GlobalExceptionHandler;
+import com.sajo.trading_service.trading.controller.dto.request.OrderSearchCondition;
 import com.sajo.trading_service.trading.controller.dto.response.OrderDetailResponse;
 import com.sajo.trading_service.trading.controller.dto.response.OrderListResponse;
 import com.sajo.trading_service.trading.domain.enums.OrderStatus;
@@ -67,12 +68,16 @@ class OrderControllerTest {
                         7,
                         489300L,
                         OrderStatus.REQUESTED,
+                        null,
+                        null,
+                        null,
                         Instant.now()
                 );
- 
+
         when(orderQueryService.findOrdersByUserId(
                 eq(userId),
-                any()
+                any(OrderSearchCondition.class),
+                any(Pageable.class)
         )).thenReturn(
                 new PageImpl<>(List.of(response))
         );
@@ -113,10 +118,11 @@ class OrderControllerTest {
         UUID userId = UUID.randomUUID();
  
         PageRequest pageable = PageRequest.of(0, 10);
- 
+
         when(orderQueryService.findOrdersByUserId(
                 eq(userId),
-                any()
+                any(OrderSearchCondition.class),
+                any(Pageable.class)
         )).thenReturn(
                 Page.empty(pageable)
         );
@@ -228,11 +234,14 @@ class OrderControllerTest {
     void getAllOrders_defaultSortCreatedAtDesc() throws Exception {
         // given
         UUID userId = UUID.randomUUID();
- 
+
         when(orderQueryService.findOrdersByUserId(
                 eq(userId),
+                any(OrderSearchCondition.class),
                 any(Pageable.class)
-        )).thenReturn(Page.empty(PageRequest.of(0, 10)));
+        )).thenReturn(
+                Page.empty(PageRequest.of(0, 10))
+        );
  
         // when
         mockMvc.perform(
@@ -244,9 +253,10 @@ class OrderControllerTest {
         // then
         ArgumentCaptor<Pageable> pageableCaptor =
                 ArgumentCaptor.forClass(Pageable.class);
- 
+
         verify(orderQueryService).findOrdersByUserId(
                 eq(userId),
+                any(OrderSearchCondition.class),
                 pageableCaptor.capture()
         );
  
@@ -271,5 +281,66 @@ class OrderControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.success").value(false))
                 .andExpect(jsonPath("$.errorCode").value("COMMON_0001"));
+    }
+
+    @Test
+    @DisplayName("주문 목록 조회 시 검색 조건이 바인딩된다")
+    void getAllOrders_withSearchCondition() throws Exception {
+        // given
+        UUID userId = UUID.randomUUID();
+        UUID autoTradingId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+
+        when(orderQueryService.findOrdersByUserId(
+                eq(userId),
+                any(OrderSearchCondition.class),
+                any(Pageable.class)
+        )).thenReturn(
+                Page.empty(PageRequest.of(0, 10))
+        );
+
+        ArgumentCaptor<OrderSearchCondition> conditionCaptor =
+                ArgumentCaptor.forClass(OrderSearchCondition.class);
+
+        // when
+        mockMvc.perform(
+                        get("/api/v1/orders")
+                                .header("X-User-Id", userId.toString())
+                                .param("autoTradingId", autoTradingId.toString())
+                                .param("strategyId", strategyId.toString())
+                                .param("status", "FAILED")
+                                .param("stockCode", "005930")
+                                .param("orderType", "BUY")
+                )
+                .andExpect(status().isOk());
+
+        // then
+        verify(orderQueryService).findOrdersByUserId(
+                eq(userId),
+                conditionCaptor.capture(),
+                any(Pageable.class)
+        );
+
+        OrderSearchCondition condition = conditionCaptor.getValue();
+
+        assertThat(condition.autoTradingId()).isEqualTo(autoTradingId);
+        assertThat(condition.strategyId()).isEqualTo(strategyId);
+        assertThat(condition.status()).isEqualTo(OrderStatus.FAILED);
+        assertThat(condition.stockCode()).isEqualTo("005930");
+        assertThat(condition.orderType()).isEqualTo(OrderType.BUY);
+    }
+
+    @Test
+    @DisplayName("잘못된 주문 상태 검색 조건이면 400을 반환한다")
+    void getOrders_invalidStatus_returns400() throws Exception {
+        mockMvc.perform(
+                        get("/api/v1/orders")
+                                .header(
+                                        "X-User-Id",
+                                        UUID.randomUUID().toString()
+                                )
+                                .param("status", "INVALID")
+                )
+                .andExpect(status().isBadRequest());
     }
 }

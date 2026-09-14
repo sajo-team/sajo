@@ -4,6 +4,14 @@ server:
 spring:
   application:
     name: user-service
+  flyway:
+    enabled: true
+    schemas: user_account
+    default-schema: user_account
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    baseline-version: 0
+    validate-migration-naming: true
   config:
     import: "optional:configserver:${CONFIG_SERVER_URL:http://localhost:8888}"
   cloud:
@@ -90,7 +98,7 @@ spring:
       hibernate:
         default_schema: user_account
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
   data:
     redis:
       host: redis

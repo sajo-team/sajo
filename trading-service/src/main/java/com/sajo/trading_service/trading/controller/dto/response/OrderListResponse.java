@@ -19,6 +19,9 @@ public record OrderListResponse(
         Integer remainingQuantity,
         Long estimatedOrderAmount,
         OrderStatus status,
+        String brokerOrderNo,
+        String failureCode,
+        String failureMessage,
         Instant createdAt
 ) {
     public static OrderListResponse from(Order order){
@@ -34,6 +37,9 @@ public record OrderListResponse(
                 order.getRemainingQuantity(),
                 order.getEstimatedOrderAmount(),
                 order.getStatus(),
+                order.getBrokerOrderNo(),
+                order.getFailureCode(),
+                order.getFailureMessage(),
                 order.getCreatedAt()
         );
     }

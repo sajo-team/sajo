@@ -3,6 +3,7 @@ package com.sajo.trading_service.trading.controller;
 import com.sajo.common.code.GeneralResponseCode;
 import com.sajo.common.response.GeneralResponse;
 import com.sajo.common.response.PageResponse;
+import com.sajo.trading_service.trading.controller.dto.request.ExecutionSearchCondition;
 import com.sajo.trading_service.trading.controller.dto.response.ExecutionResponse;
 import com.sajo.trading_service.trading.service.query.ExecutionQueryService;
 import lombok.RequiredArgsConstructor;
@@ -23,11 +24,13 @@ public class ExecutionController {
     @GetMapping
     public ResponseEntity<GeneralResponse<PageResponse<ExecutionResponse>>> getExecutions(
             @RequestHeader("X-User-Id")UUID userId,
+            @ModelAttribute ExecutionSearchCondition condition,
             Pageable pageable
     ) {
         Page<ExecutionResponse> page =
                 executionQueryService.findExecutionsByUserId(
                         userId,
+                        condition,
                         pageable
                 );
 
