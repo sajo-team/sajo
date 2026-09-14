@@ -3,7 +3,7 @@ package com.sajo.market_service.market.websocket;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sajo.market_service.market.client.kis.KisApiClient;
-import com.sajo.market_service.market.client.user.UserAccountFeignClient;
+import com.sajo.market_service.market.client.user.KisWebSocketUserAccountFeignClient;
 import com.sajo.market_service.market.client.user.dto.UserKisTokenResponse;
 import com.sajo.market_service.market.config.MarketWebSocketProperties;
 import com.sajo.market_service.market.dto.kis.KisSubscribeRequest;
@@ -45,7 +45,7 @@ public class KisWebSocketClient {
     private final WebSocketClient webSocketClient;
     private final MarketWebSocketProperties properties;
     private final KisApiClient kisApiClient;
-    private final UserAccountFeignClient userAccountFeignClient;
+    private final KisWebSocketUserAccountFeignClient userAccountFeignClient;
     private final ObjectMapper objectMapper;
     private final ScheduledExecutorService reconnectScheduler;
     private final KisWebSocketReconnectPolicy reconnectPolicy;
@@ -62,7 +62,7 @@ public class KisWebSocketClient {
             @Qualifier("kisWebSocketTransportClient") WebSocketClient webSocketClient,
             MarketWebSocketProperties properties,
             KisApiClient kisApiClient,
-            UserAccountFeignClient userAccountFeignClient,
+            KisWebSocketUserAccountFeignClient userAccountFeignClient,
             ObjectMapper objectMapper,
             @Qualifier("kisWebSocketReconnectScheduler") ScheduledExecutorService reconnectScheduler
     ) {
@@ -74,7 +74,7 @@ public class KisWebSocketClient {
             WebSocketClient webSocketClient,
             MarketWebSocketProperties properties,
             KisApiClient kisApiClient,
-            UserAccountFeignClient userAccountFeignClient,
+            KisWebSocketUserAccountFeignClient userAccountFeignClient,
             ObjectMapper objectMapper,
             ScheduledExecutorService reconnectScheduler,
             KisWebSocketReconnectPolicy reconnectPolicy,
@@ -102,6 +102,13 @@ public class KisWebSocketClient {
 
     /** 인증정보 조회 → approval_key 발급 → WebSocket 연결을 시도한다. 실패하면 지수 백오프로 재시도를 예약한다. */
     public void connect() {
+        if (shuttingDown) {
+            // scheduleReconnect()로 이미 예약된 지연 작업은 shutdown()이 취소하지 않는다. 종료가 시작된
+            // 이후에 그 예약이 실행되면, 종료 도중 user-service Feign 호출/KIS approval_key 발급/WebSocket
+            // 핸드셰이크를 새로 시도하게 되어 이미 종료 중인 다른 빈에 불필요한 호출이 발생할 수 있다.
+            log.debug("KIS WebSocket이 종료 중이어서 예약된 재연결 시도를 건너뜁니다.");
+            return;
+        }
         UserKisTokenResponse credentials;
         try {
             credentials = userAccountFeignClient.getKisToken(resolveSystemUserId());

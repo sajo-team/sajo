@@ -14,12 +14,14 @@ spring:
     openfeign:
       client:
         config:
-          user-service:
-            # KisWebSocketClient.connect()가 재연결 전용 단일 스레드 위에서 이 Feign 호출을 동기적으로
-            # 수행하므로, user-service 응답이 지연되면 그 사이 예약된 다른 재연결 작업까지 밀릴 수 있다.
-            # 기존 OpenFeign 기본 타임아웃(약 10s/60s)보다 짧게 명시한다.
-            connect-timeout: ${USER_SERVICE_CONNECT_TIMEOUT:2000}
-            read-timeout: ${USER_SERVICE_READ_TIMEOUT:3000}
+          kisWebSocketUserAccountFeignClient:
+            # KisWebSocketClient 전용 Feign 클라이언트(KisWebSocketUserAccountFeignClient)에만 적용되는
+            # 설정이다. 이 호출은 재연결 전용 단일 스레드 위에서 동기적으로 수행되므로 응답이 지연되면 그
+            # 사이 예약된 다른 재연결 작업까지 밀릴 수 있어, 기존 OpenFeign 기본 타임아웃(약 10s/60s)보다
+            # 짧게 명시한다. MarketQuoteQueryService 등 다른 user-service 호출부(UserAccountFeignClient,
+            # contextId=user-service)는 이 설정의 영향을 받지 않고 기존 기본값을 그대로 사용한다.
+            connect-timeout: ${KIS_WEBSOCKET_USER_SERVICE_CONNECT_TIMEOUT:2000}
+            read-timeout: ${KIS_WEBSOCKET_USER_SERVICE_READ_TIMEOUT:3000}
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
 
@@ -91,6 +93,8 @@ spring:
       client:
         config:
           user-service:
+            url: ${USER_SERVICE_URL:http://localhost:8081}
+          kisWebSocketUserAccountFeignClient:
             url: ${USER_SERVICE_URL:http://localhost:8081}
 
 # user-service/trading-service local 프로필과 반드시 동일해야 함 (internal API 호출/검증 쌍)

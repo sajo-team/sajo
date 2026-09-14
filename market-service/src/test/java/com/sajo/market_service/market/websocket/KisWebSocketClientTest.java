@@ -2,7 +2,7 @@ package com.sajo.market_service.market.websocket;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sajo.market_service.market.client.kis.KisApiClient;
-import com.sajo.market_service.market.client.user.UserAccountFeignClient;
+import com.sajo.market_service.market.client.user.KisWebSocketUserAccountFeignClient;
 import com.sajo.market_service.market.client.user.dto.UserKisTokenResponse;
 import com.sajo.market_service.market.config.MarketWebSocketProperties;
 import org.junit.jupiter.api.Test;
@@ -37,7 +37,7 @@ class KisWebSocketClientTest {
 
     private final WebSocketClient webSocketClient = mock(WebSocketClient.class);
     private final KisApiClient kisApiClient = mock(KisApiClient.class);
-    private final UserAccountFeignClient userAccountFeignClient = mock(UserAccountFeignClient.class);
+    private final KisWebSocketUserAccountFeignClient userAccountFeignClient = mock(KisWebSocketUserAccountFeignClient.class);
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final ScheduledExecutorService reconnectScheduler = mock(ScheduledExecutorService.class);
     private final KisWebSocketReconnectPolicy reconnectPolicy = mock(KisWebSocketReconnectPolicy.class);
@@ -228,6 +228,20 @@ class KisWebSocketClientTest {
         KisWebSocketClient client = client(List.of());
 
         client.connect();
+    }
+
+    @Test
+    void connectDoesNothingWhenAlreadyShuttingDown() {
+        // scheduleReconnect()로 예약해 둔 지연 작업은 shutdown()이 취소하지 않는다. 종료 이후 그 예약이
+        // 실행되면 connect()가 shuttingDown을 확인하지 않는 한 종료 도중에도 user-service 호출/핸드셰이크가
+        // 새로 시도된다.
+        KisWebSocketClient client = client(List.of());
+        client.shutdown();
+
+        client.connect();
+
+        verify(userAccountFeignClient, never()).getKisToken(any());
+        verify(webSocketClient, never()).execute(any(WebSocketHandler.class), anyString());
     }
 
     @Test

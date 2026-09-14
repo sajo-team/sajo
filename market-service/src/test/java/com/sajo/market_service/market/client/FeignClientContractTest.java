@@ -1,6 +1,7 @@
 package com.sajo.market_service.market.client;
 
 import com.sajo.common.config.CommonFeignAutoConfiguration;
+import com.sajo.market_service.market.client.user.KisWebSocketUserAccountFeignClient;
 import com.sajo.market_service.market.client.user.UserAccountFeignClient;
 import com.sajo.market_service.strategy.client.market.MarketStockFeignClient;
 import feign.RequestInterceptor;
@@ -39,6 +40,22 @@ class FeignClientContractTest {
 
         assertThat(template.method()).isEqualTo("POST");
         assertThat(template.path()).startsWith("/internal/v1/");
+        assertThat(template.path()).isEqualTo("/internal/v1/accounts/{userId}/token");
+        assertThat(template.headers().get("X-Internal-Secret")).containsExactly("test-secret");
+        assertThat(template.headers()).doesNotContainKeys("X-User-Id", "X-User-Role");
+    }
+
+    @Test
+    void kisWebSocketUserAccountClientUsesSameInternalPathAsUserAccountClient() {
+        // KisWebSocketClient 전용으로 contextId만 분리한 클라이언트다. 엔드포인트/인터셉터 동작이
+        // UserAccountFeignClient와 동일해야 하며, 달라지는 것은 spring.cloud.openfeign.client.config의
+        // 타임아웃 설정뿐이어야 한다.
+        RequestTemplate template = templateFor(KisWebSocketUserAccountFeignClient.class, "getKisToken");
+
+        secretInterceptor.apply(template);
+        userHeaderInterceptor.apply(template);
+
+        assertThat(template.method()).isEqualTo("POST");
         assertThat(template.path()).isEqualTo("/internal/v1/accounts/{userId}/token");
         assertThat(template.headers().get("X-Internal-Secret")).containsExactly("test-secret");
         assertThat(template.headers()).doesNotContainKeys("X-User-Id", "X-User-Role");
