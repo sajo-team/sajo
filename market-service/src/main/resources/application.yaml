@@ -52,6 +52,7 @@ market:
     target-stock-codes: ${MARKET_WEBSOCKET_TARGET_STOCK_CODES:}
     handshake-timeout: ${MARKET_WEBSOCKET_HANDSHAKE_TIMEOUT:10s}
     text-message-buffer-size: ${MARKET_WEBSOCKET_TEXT_MESSAGE_BUFFER_SIZE:131072}
+    realtime-price-snapshot-cron: "${MARKET_WEBSOCKET_REALTIME_PRICE_SNAPSHOT_CRON:0 * * * * *}"
 
 sajo:
   scheduler:

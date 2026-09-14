@@ -5,6 +5,7 @@ import com.sajo.market_service.market.client.kis.KisApiClient;
 import com.sajo.market_service.market.client.user.KisWebSocketUserAccountFeignClient;
 import com.sajo.market_service.market.client.user.dto.UserKisTokenResponse;
 import com.sajo.market_service.market.config.MarketWebSocketProperties;
+import com.sajo.market_service.market.service.command.MarketRealtimePriceUpdateService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.web.socket.CloseStatus;
@@ -21,11 +22,13 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.never;
@@ -43,6 +46,8 @@ class KisWebSocketClientTest {
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final ScheduledExecutorService reconnectScheduler = mock(ScheduledExecutorService.class);
     private final KisWebSocketReconnectPolicy reconnectPolicy = mock(KisWebSocketReconnectPolicy.class);
+    private final MarketRealtimePriceUpdateService realtimePriceUpdateService =
+            mock(MarketRealtimePriceUpdateService.class);
 
     @Test
     void connectEstablishesSessionAndSubscribesInitialTargets() throws Exception {
@@ -336,6 +341,27 @@ class KisWebSocketClientTest {
         verify(handshakeFuture, timeout(2000)).cancel(true);
     }
 
+    @Test
+    void handleTextMessageDelegatesToRealtimePriceUpdateServiceAndSwallowsItsExceptions() throws Exception {
+        stubSuccessfulCredentials();
+        WebSocketSession session = openSession();
+        given(webSocketClient.execute(any(WebSocketHandler.class), anyString()))
+                .willReturn(CompletableFuture.completedFuture(session));
+        doThrow(new RuntimeException("boom")).when(realtimePriceUpdateService).updateFromRawMessage(anyString());
+
+        KisWebSocketClient client = client(List.of());
+        client.connect();
+        WebSocketHandler handler = capturedHandler();
+        handler.afterConnectionEstablished(session);
+
+        // handleTextMessage는 protected라 TextWebSocketHandler를 통해 직접 호출한다.
+        assertThatCode(() -> ((org.springframework.web.socket.handler.TextWebSocketHandler) handler)
+                .handleMessage(session, new TextMessage("0|H0STCNT0|001|dummy")))
+                .doesNotThrowAnyException();
+
+        verify(realtimePriceUpdateService).updateFromRawMessage("0|H0STCNT0|001|dummy");
+    }
+
     private void stubSuccessfulCredentials() {
         UserKisTokenResponse credentials = new UserKisTokenResponse("access-token", "app-key", "secret-key");
         given(userAccountFeignClient.getKisToken(any())).willReturn(credentials);
@@ -371,7 +397,8 @@ class KisWebSocketClientTest {
                 objectMapper,
                 reconnectScheduler,
                 reconnectPolicy,
-                initialTargetStockCodes
+                initialTargetStockCodes,
+                realtimePriceUpdateService
         );
     }
 }

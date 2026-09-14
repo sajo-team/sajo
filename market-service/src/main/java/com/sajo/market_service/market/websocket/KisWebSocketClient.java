@@ -7,6 +7,7 @@ import com.sajo.market_service.market.client.user.KisWebSocketUserAccountFeignCl
 import com.sajo.market_service.market.client.user.dto.UserKisTokenResponse;
 import com.sajo.market_service.market.config.MarketWebSocketProperties;
 import com.sajo.market_service.market.dto.kis.KisSubscribeRequest;
+import com.sajo.market_service.market.service.command.MarketRealtimePriceUpdateService;
 import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,8 +33,9 @@ import java.util.concurrent.atomic.AtomicReference;
  * KIS WebSocket 실시간 체결가 연결을 관리한다.
  *
  * <p>연결 수립 시 approval_key를 새로 발급받아 구독 중인(또는 구독 예정인) 종목을 (재)구독하고,
- * 연결이 끊기면 지수 백오프로 재연결을 예약한다. 수신 메시지의 파싱·정규화·Redis/DB 반영은
- * 이 클래스의 책임이 아니다(추후 단계에서 별도로 처리한다).</p>
+ * 연결이 끊기면 지수 백오프로 재연결을 예약한다. 수신 메시지의 파싱·정규화·Redis 반영은
+ * {@link MarketRealtimePriceUpdateService}에 위임한다(PostgreSQL 저장은 이 클래스도,
+ * 그 서비스도 아닌 별도의 1분 주기 스케줄러 책임이다).</p>
  */
 @Slf4j
 @Component
@@ -47,6 +49,7 @@ public class KisWebSocketClient {
     private final ObjectMapper objectMapper;
     private final ScheduledExecutorService reconnectScheduler;
     private final KisWebSocketReconnectPolicy reconnectPolicy;
+    private final MarketRealtimePriceUpdateService realtimePriceUpdateService;
 
     private final Set<String> subscribedStockCodes = ConcurrentHashMap.newKeySet();
     private final AtomicReference<WebSocketSession> currentSession = new AtomicReference<>();
@@ -66,10 +69,12 @@ public class KisWebSocketClient {
             KisApiClient kisApiClient,
             KisWebSocketUserAccountFeignClient userAccountFeignClient,
             ObjectMapper objectMapper,
-            @Qualifier("kisWebSocketReconnectScheduler") ScheduledExecutorService reconnectScheduler
+            @Qualifier("kisWebSocketReconnectScheduler") ScheduledExecutorService reconnectScheduler,
+            MarketRealtimePriceUpdateService realtimePriceUpdateService
     ) {
         this(webSocketClient, properties, kisApiClient, userAccountFeignClient, objectMapper,
-                reconnectScheduler, new KisWebSocketReconnectPolicy(properties), properties.targetStockCodes());
+                reconnectScheduler, new KisWebSocketReconnectPolicy(properties), properties.targetStockCodes(),
+                realtimePriceUpdateService);
     }
 
     KisWebSocketClient(
@@ -80,7 +85,8 @@ public class KisWebSocketClient {
             ObjectMapper objectMapper,
             ScheduledExecutorService reconnectScheduler,
             KisWebSocketReconnectPolicy reconnectPolicy,
-            Iterable<String> initialTargetStockCodes
+            Iterable<String> initialTargetStockCodes,
+            MarketRealtimePriceUpdateService realtimePriceUpdateService
     ) {
         this.webSocketClient = webSocketClient;
         this.properties = properties;
@@ -89,6 +95,7 @@ public class KisWebSocketClient {
         this.objectMapper = objectMapper;
         this.reconnectScheduler = reconnectScheduler;
         this.reconnectPolicy = reconnectPolicy;
+        this.realtimePriceUpdateService = realtimePriceUpdateService;
         if (initialTargetStockCodes != null) {
             initialTargetStockCodes.forEach(subscribedStockCodes::add);
         }
@@ -179,7 +186,8 @@ public class KisWebSocketClient {
         }
     }
 
-    Set<String> subscribedStockCodes() {
+    /** 구독 중인 종목 코드 스냅샷. MarketRealtimePriceScheduler가 1분 스냅샷 대상 결정에 사용한다. */
+    public Set<String> subscribedStockCodes() {
         return Set.copyOf(subscribedStockCodes);
     }
 
@@ -323,6 +331,14 @@ public class KisWebSocketClient {
         @Override
         protected void handleTextMessage(WebSocketSession session, TextMessage message) {
             log.debug("KIS WebSocket 메시지를 수신했습니다. payloadLength={}", message.getPayloadLength());
+            try {
+                realtimePriceUpdateService.updateFromRawMessage(message.getPayload());
+            } catch (Exception exception) {
+                // 정규화/Redis 실패로 이 핸들러 스레드(Tomcat의 WebSocketClient-AsyncIO-*)가 죽으면 안 된다 —
+                // 죽으면 이후 메시지도 못 받게 되어 연결이 살아있는데도 시세가 멈춘 것처럼 보인다.
+                log.warn("KIS WebSocket 메시지 처리 중 예외가 발생했습니다. exceptionType={}",
+                        exception.getClass().getSimpleName());
+            }
         }
 
         @Override
