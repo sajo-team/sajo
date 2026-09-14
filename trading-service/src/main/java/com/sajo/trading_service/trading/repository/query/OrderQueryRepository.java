@@ -133,4 +133,18 @@ public interface OrderQueryRepository extends
             @Param("autoTradingId") UUID autoTradingId
     );
 
+    Optional<Order> findFirstByAutoTradingIdAndDeletedAtIsNullOrderByCreatedAtDesc(
+            UUID autoTradingId
+    );
+
+    @Query(value = """
+    SELECT DISTINCT ON (o.auto_trading_id) o.*
+    FROM trading.p_orders o
+    WHERE o.auto_trading_id IN (:autoTradingIds)
+      AND o.deleted_at IS NULL
+    ORDER BY o.auto_trading_id, o.created_at DESC, o.id DESC
+    """, nativeQuery = true)
+    List<Order> findLatestOrdersByAutoTradingIds(
+            @Param("autoTradingIds") List<UUID> autoTradingIds
+    );
 }

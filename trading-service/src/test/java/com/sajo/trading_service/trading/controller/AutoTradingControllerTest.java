@@ -9,6 +9,7 @@ import com.sajo.trading_service.trading.controller.dto.response.AutoTradingCreat
 import com.sajo.trading_service.trading.controller.dto.response.AutoTradingQueryResponse;
 import com.sajo.trading_service.trading.controller.dto.response.AutoTradingUpdateResponse;
 import com.sajo.trading_service.trading.domain.enums.AutoTradingDirection;
+import com.sajo.trading_service.trading.domain.enums.OrderStatus;
 import com.sajo.trading_service.trading.exception.TradingErrorCode;
 import com.sajo.trading_service.trading.service.command.AutoTradingCommandService;
 import com.sajo.trading_service.trading.service.query.AutoTradingQueryService;
@@ -244,6 +245,11 @@ class AutoTradingControllerTest {
                         strategyId,
                         AutoTradingDirection.BOTH,
                         true,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
                         Instant.now(),
                         Instant.now()
                 );
@@ -300,6 +306,11 @@ class AutoTradingControllerTest {
                         strategyId,
                         AutoTradingDirection.BOTH,
                         true,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
                         Instant.now(),
                         Instant.now()
                 );
@@ -423,5 +434,56 @@ class AutoTradingControllerTest {
                                 .header("X-User-Id", userId)
                 )
                 .andExpect(status().isConflict());
+    }
+
+    @Test
+    @DisplayName("자동매매 설정 단건 조회 시 최근 주문 정보를 함께 반환한다")
+    void getAutoTradingWithLatestOrder_success() throws Exception {
+        // given
+        UUID userId = UUID.randomUUID();
+        UUID autoTradingId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+        UUID latestOrderId = UUID.randomUUID();
+
+        Instant latestOrderCreatedAt = Instant.now();
+
+        AutoTradingQueryResponse response =
+                new AutoTradingQueryResponse(
+                        autoTradingId,
+                        strategyId,
+                        AutoTradingDirection.BOTH,
+                        true,
+                        latestOrderId,
+                        OrderStatus.FAILED,
+                        latestOrderCreatedAt,
+                        "KIS_ORDER_REJECTED",
+                        "주문이 거절되었습니다.",
+                        Instant.now(),
+                        Instant.now()
+                );
+
+        when(autoTradingQueryService.findById(
+                autoTradingId,
+                userId
+        )).thenReturn(response);
+
+        // when & then
+        mockMvc.perform(
+                        get(
+                                "/api/v1/auto-tradings/{autoTradingId}",
+                                autoTradingId
+                        )
+                                .header("X-User-Id", userId.toString())
+                )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.latestOrderId")
+                        .value(latestOrderId.toString()))
+                .andExpect(jsonPath("$.data.latestOrderStatus")
+                        .value("FAILED"))
+                .andExpect(jsonPath("$.data.latestFailureCode")
+                        .value("KIS_ORDER_REJECTED"))
+                .andExpect(jsonPath("$.data.latestFailureMessage")
+                        .value("주문이 거절되었습니다."));
     }
 }
