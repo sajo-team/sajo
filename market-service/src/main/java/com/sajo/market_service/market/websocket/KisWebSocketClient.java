@@ -295,6 +295,10 @@ public class KisWebSocketClient {
                 return;
             }
             log.info("KIS WebSocket 연결에 성공했습니다. sessionId={}", session.getId());
+            // 기본 텍스트 메시지 버퍼(보통 8KB)로는 KIS가 여러 종목을 한 프레임에 이어붙여 보내는 경우를
+            // 감당하지 못해 세션이 closeStatus 1009(too big for the output buffer)로 강제 종료되는 것이
+            // 실제로 관측되었다. 메시지를 실제로 받기 전에 반드시 먼저 늘려둔다.
+            session.setTextMessageSizeLimit(properties.textMessageBufferSize());
             WebSocketSession previous = currentSession.getAndSet(session);
             if (isDiscarded()) {
                 // 위 검사와 currentSession 등록 사이에 shutdown() 또는 새 시도(더 높은 generation)가

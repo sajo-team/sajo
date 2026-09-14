@@ -14,7 +14,7 @@ class MarketWebSocketConfigurationTest {
     void kisWebSocketTransportClientConfiguresTomcatIoTimeoutFromHandshakeTimeout() {
         MarketWebSocketProperties properties = new MarketWebSocketProperties(
                 false, "ws://localhost:31000", "11111111-1111-1111-1111-111111111111",
-                Duration.ofMillis(10), Duration.ofSeconds(1), 2.0, List.of(), Duration.ofSeconds(7));
+                Duration.ofMillis(10), Duration.ofSeconds(1), 2.0, List.of(), Duration.ofSeconds(7), 0);
 
         StandardWebSocketClient client =
                 (StandardWebSocketClient) new MarketWebSocketConfiguration().kisWebSocketTransportClient(properties);

@@ -20,7 +20,8 @@ public record MarketWebSocketProperties(
         Duration maxBackoff,
         double backoffMultiplier,
         List<String> targetStockCodes,
-        Duration handshakeTimeout
+        Duration handshakeTimeout,
+        int textMessageBufferSize
 ) {
 
     private static final String DEFAULT_URL = "ws://ops.koreainvestment.com:31000";
@@ -29,6 +30,11 @@ public record MarketWebSocketProperties(
     private static final double DEFAULT_BACKOFF_MULTIPLIER = 2.0;
     private static final Duration DEFAULT_HANDSHAKE_TIMEOUT = Duration.ofSeconds(10);
     private static final Pattern STOCK_CODE_PATTERN = Pattern.compile("\\d{6}");
+    // KIS 실시간 체결가 메시지는 여러 종목을 구독하면 하나의 프레임에 다건이 이어붙어 오는 경우가 있어,
+    // WebSocketSession(jakarta.websocket)의 기본 텍스트 메시지 버퍼(보통 8KB)를 초과해 세션이 강제로
+    // 닫히는 것(closeStatus 1009, "too big for the output buffer")이 실제로 관측되었다. 넉넉하게 128KB를
+    // 기본값으로 둔다.
+    private static final int DEFAULT_TEXT_MESSAGE_BUFFER_SIZE = 131_072;
 
     public MarketWebSocketProperties {
         url = (url == null || url.isBlank()) ? DEFAULT_URL : url;
@@ -79,6 +85,14 @@ public record MarketWebSocketProperties(
         handshakeTimeout = (handshakeTimeout == null || handshakeTimeout.isZero() || handshakeTimeout.isNegative())
                 ? DEFAULT_HANDSHAKE_TIMEOUT
                 : handshakeTimeout;
+
+        // 0 이하로 설정되면 세션이 아예 메시지를 받을 수 없게 되므로(즉시 1009로 닫힘) 조용히 기본값으로
+        // 대체하지 않고 알아챌 수 있도록 WARN을 남긴다.
+        if (textMessageBufferSize <= 0) {
+            log.warn("market.websocket.text-message-buffer-size({})는 0보다 커야 하므로 기본값({})으로 대체합니다.",
+                    textMessageBufferSize, DEFAULT_TEXT_MESSAGE_BUFFER_SIZE);
+            textMessageBufferSize = DEFAULT_TEXT_MESSAGE_BUFFER_SIZE;
+        }
     }
 
     private static void validateSystemUserId(String systemUserId) {

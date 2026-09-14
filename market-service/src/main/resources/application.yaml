@@ -51,6 +51,7 @@ market:
     backoff-multiplier: ${MARKET_WEBSOCKET_BACKOFF_MULTIPLIER:2.0}
     target-stock-codes: ${MARKET_WEBSOCKET_TARGET_STOCK_CODES:}
     handshake-timeout: ${MARKET_WEBSOCKET_HANDSHAKE_TIMEOUT:10s}
+    text-message-buffer-size: ${MARKET_WEBSOCKET_TEXT_MESSAGE_BUFFER_SIZE:131072}
 
 sajo:
   scheduler:

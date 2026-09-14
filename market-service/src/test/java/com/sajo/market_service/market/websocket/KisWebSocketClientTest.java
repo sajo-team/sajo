@@ -62,6 +62,25 @@ class KisWebSocketClientTest {
     }
 
     @Test
+    void connectEstablishesSessionAppliesConfiguredTextMessageSizeLimit() throws Exception {
+        // KIS가 여러 종목의 체결가를 한 프레임에 이어붙여 보내는 경우 기본 텍스트 메시지 버퍼(보통 8KB)를
+        // 넘겨 closeStatus 1009(too big for the output buffer)로 세션이 강제 종료되는 것이 실제로
+        // 관측되었다. 메시지를 실제로 받기 전에 반드시 먼저 버퍼 크기를 늘려두는지 검증한다.
+        stubSuccessfulCredentials();
+        WebSocketSession session = openSession();
+        given(webSocketClient.execute(any(WebSocketHandler.class), anyString()))
+                .willReturn(CompletableFuture.completedFuture(session));
+
+        KisWebSocketClient client = client(List.of());
+        client.connect();
+
+        WebSocketHandler handler = capturedHandler();
+        handler.afterConnectionEstablished(session);
+
+        verify(session).setTextMessageSizeLimit(131_072);
+    }
+
+    @Test
     void afterConnectionClosedSchedulesReconnectWithPolicyDelay() throws Exception {
         stubSuccessfulCredentials();
         WebSocketSession session = openSession();
@@ -343,7 +362,7 @@ class KisWebSocketClientTest {
     private KisWebSocketClient client(List<String> initialTargetStockCodes, Duration handshakeTimeout) {
         MarketWebSocketProperties properties = new MarketWebSocketProperties(
                 true, "ws://localhost:31000", SYSTEM_USER_ID, Duration.ofMillis(10), Duration.ofSeconds(1), 2.0,
-                List.of(), handshakeTimeout);
+                List.of(), handshakeTimeout, 0);
         return new KisWebSocketClient(
                 webSocketClient,
                 properties,
