@@ -42,7 +42,7 @@ class KisWebSocketReconnectPolicyTest {
 
     private KisWebSocketReconnectPolicy policy(Duration initial, Duration max, double multiplier) {
         MarketWebSocketProperties properties =
-                new MarketWebSocketProperties(true, "ws://localhost", "", initial, max, multiplier, java.util.List.of());
+                new MarketWebSocketProperties(false, "ws://localhost", "", initial, max, multiplier, java.util.List.of());
         return new KisWebSocketReconnectPolicy(properties);
     }
 }
