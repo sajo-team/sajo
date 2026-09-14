@@ -1,4 +1,12 @@
 spring:
+  flyway:
+    enabled: true
+    schemas: user_account
+    default-schema: user_account
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    baseline-version: 0
+    validate-migration-naming: true
   datasource:
     url: jdbc:postgresql://127.0.0.1:5432/sajo?currentSchema=user_account
     username: postgres

@@ -17,7 +17,7 @@ public class KisRestClientConfiguration {
         // 타임 아웃 설정
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(Duration.ofSeconds(3));
-        requestFactory.setReadTimeout(Duration.ofSeconds(5));
+        requestFactory.setReadTimeout(Duration.ofSeconds(10));
 
         return RestClient.builder().requestFactory(requestFactory);
     }
