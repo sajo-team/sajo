@@ -50,7 +50,8 @@ public class AutoTradingCreateTransactionService {
         AutoTrading autoTrading =
                 AutoTrading.create(
                         userId,
-                        request.strategyId()
+                        request.strategyId(),
+                        request.direction()
                 );
 
         try {
