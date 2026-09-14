@@ -48,6 +48,7 @@ market:
     max-backoff: ${MARKET_WEBSOCKET_MAX_BACKOFF:30s}
     backoff-multiplier: ${MARKET_WEBSOCKET_BACKOFF_MULTIPLIER:2.0}
     target-stock-codes: ${MARKET_WEBSOCKET_TARGET_STOCK_CODES:}
+    handshake-timeout: ${MARKET_WEBSOCKET_HANDSHAKE_TIMEOUT:10s}
 
 sajo:
   scheduler:

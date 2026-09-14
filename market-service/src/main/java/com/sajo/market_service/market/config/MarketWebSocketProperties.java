@@ -19,13 +19,15 @@ public record MarketWebSocketProperties(
         Duration initialBackoff,
         Duration maxBackoff,
         double backoffMultiplier,
-        List<String> targetStockCodes
+        List<String> targetStockCodes,
+        Duration handshakeTimeout
 ) {
 
     private static final String DEFAULT_URL = "ws://ops.koreainvestment.com:31000";
     private static final Duration DEFAULT_INITIAL_BACKOFF = Duration.ofSeconds(1);
     private static final Duration DEFAULT_MAX_BACKOFF = Duration.ofSeconds(30);
     private static final double DEFAULT_BACKOFF_MULTIPLIER = 2.0;
+    private static final Duration DEFAULT_HANDSHAKE_TIMEOUT = Duration.ofSeconds(10);
     private static final Pattern STOCK_CODE_PATTERN = Pattern.compile("\\d{6}");
 
     public MarketWebSocketProperties {
@@ -68,6 +70,15 @@ public record MarketWebSocketProperties(
         if (enabled) {
             validateSystemUserId(systemUserId);
         }
+
+        // StandardWebSocketClient의 기본 taskExecutor(SimpleAsyncTaskExecutor)는 시도마다 논-데몬 스레드를
+        // 새로 만들고, 핸드셰이크 자체에는 KIS REST 호출(3s/5s)이나 user-service Feign(2s/3s)과 달리
+        // 명시적인 타임아웃이 없다. 네트워크 문제로 핸드셰이크가 계속 멈추면 이 단일 시도를 우리 쪽에서
+        // 영원히 기다리게 되어 재연결 사이클 자체가 멈출 수 있으므로, connect()에서 이 값으로 완료를
+        // 강제하고 초과 시 실패로 간주해 재연결을 예약한다.
+        handshakeTimeout = (handshakeTimeout == null || handshakeTimeout.isZero() || handshakeTimeout.isNegative())
+                ? DEFAULT_HANDSHAKE_TIMEOUT
+                : handshakeTimeout;
     }
 
     private static void validateSystemUserId(String systemUserId) {

@@ -28,6 +28,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.verify;
 
 class KisWebSocketClientTest {
@@ -193,6 +194,31 @@ class KisWebSocketClientTest {
     }
 
     @Test
+    void afterConnectionEstablishedClosesSessionWhenShutdownRunsWhileRegisteringSession() throws Exception {
+        stubSuccessfulCredentials();
+        WebSocketSession session = openSession();
+        given(webSocketClient.execute(any(WebSocketHandler.class), anyString()))
+                .willReturn(CompletableFuture.completedFuture(session));
+
+        KisWebSocketClient client = client(List.of());
+        client.connect();
+        WebSocketHandler handler = capturedHandler();
+
+        // afterConnectionEstablished가 세션을 currentSession에 등록하기 직전(로그의 session.getId() 평가
+        // 시점)에 마침 shutdown()이 호출되는 경합을 재현한다. shutdown()의 getAndSet(null)은 아직 등록되지
+        // 않은 이 세션을 보지 못하므로, 등록 이후 재검사가 없으면 이 세션은 아무도 닫지 못한 채 leak된다.
+        given(session.getId()).willAnswer(invocation -> {
+            client.shutdown();
+            return "session-1";
+        });
+
+        handler.afterConnectionEstablished(session);
+
+        verify(session).close(CloseStatus.NORMAL);
+        verify(session, never()).sendMessage(any(TextMessage.class));
+    }
+
+    @Test
     void scheduleReconnectSwallowsRejectedExecutionWhenSchedulerAlreadyShutDown() {
         given(userAccountFeignClient.getKisToken(any())).willThrow(new RuntimeException("user-service down"));
         given(reconnectPolicy.nextDelay(0)).willReturn(Duration.ofMillis(500));
@@ -202,6 +228,22 @@ class KisWebSocketClientTest {
         KisWebSocketClient client = client(List.of());
 
         client.connect();
+    }
+
+    @Test
+    void handshakeExceedingConfiguredTimeoutSchedulesReconnect() {
+        stubSuccessfulCredentials();
+        // execute()가 절대 완료되지 않는 상황(네트워크 문제로 핸드셰이크가 계속 멈춘 경우)을 재현한다.
+        // properties.handshakeTimeout()으로 강제 완료되지 않으면 whenComplete가 호출되지 않아
+        // scheduleReconnect()도 영원히 호출되지 않는다.
+        given(webSocketClient.execute(any(WebSocketHandler.class), anyString()))
+                .willReturn(new CompletableFuture<>());
+        given(reconnectPolicy.nextDelay(0)).willReturn(Duration.ofMillis(50));
+
+        KisWebSocketClient client = client(List.of(), Duration.ofMillis(30));
+        client.connect();
+
+        verify(reconnectScheduler, timeout(2000)).schedule(any(Runnable.class), eq(50L), eq(TimeUnit.MILLISECONDS));
     }
 
     private void stubSuccessfulCredentials() {
@@ -224,9 +266,13 @@ class KisWebSocketClientTest {
     }
 
     private KisWebSocketClient client(List<String> initialTargetStockCodes) {
+        return client(initialTargetStockCodes, Duration.ofSeconds(5));
+    }
+
+    private KisWebSocketClient client(List<String> initialTargetStockCodes, Duration handshakeTimeout) {
         MarketWebSocketProperties properties = new MarketWebSocketProperties(
                 true, "ws://localhost:31000", SYSTEM_USER_ID, Duration.ofMillis(10), Duration.ofSeconds(1), 2.0,
-                List.of());
+                List.of(), handshakeTimeout);
         return new KisWebSocketClient(
                 webSocketClient,
                 properties,

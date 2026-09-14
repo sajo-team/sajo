@@ -128,6 +128,7 @@ public class KisWebSocketClient {
 
         try {
             webSocketClient.execute(new KisMessageListener(), properties.url())
+                    .orTimeout(properties.handshakeTimeout().toMillis(), TimeUnit.MILLISECONDS)
                     .whenComplete((session, throwable) -> {
                         if (throwable != null) {
                             log.warn("KIS WebSocket 연결에 실패했습니다. exceptionType={}", throwable.getClass().getSimpleName());
@@ -266,6 +267,18 @@ public class KisWebSocketClient {
             log.info("KIS WebSocket 연결에 성공했습니다. sessionId={}", session.getId());
             currentSession.set(session);
             reconnectAttempts.set(0);
+            if (shuttingDown) {
+                // 위 shuttingDown 검사와 currentSession.set(session) 사이에 shutdown()이 끼어들면,
+                // shutdown()의 getAndSet(null)이 아직 등록되지 않은 이 세션을 보지 못해 아무도 닫지 않는
+                // 세션이 남을 수 있다. 등록 직후 한 번 더 확인해서 그 창(window)을 마저 닫는다.
+                // compareAndSet은 그 사이 shutdown()이 이미 이 세션을 가져가 닫았다면(false) 다시 닫지
+                // 않도록 막아준다.
+                if (currentSession.compareAndSet(session, null)) {
+                    log.info("KIS WebSocket 세션 등록 직후 종료가 감지되어 즉시 닫습니다. sessionId={}", session.getId());
+                    closeQuietly(session);
+                }
+                return;
+            }
             resubscribeAll(session);
         }
 
