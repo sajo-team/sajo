@@ -358,4 +358,18 @@ class ExecutionControllerTest {
         assertThat(condition.strategyId())
                 .isEqualTo(strategyId);
     }
+
+    @Test
+    @DisplayName("잘못된 체결 검색 UUID이면 400을 반환한다")
+    void getExecutions_invalidOrderId_returns400() throws Exception {
+        mockMvc.perform(
+                        get("/api/v1/executions")
+                                .header(
+                                        "X-User-Id",
+                                        UUID.randomUUID().toString()
+                                )
+                                .param("orderId", "invalid-uuid")
+                )
+                .andExpect(status().isBadRequest());
+    }
 }

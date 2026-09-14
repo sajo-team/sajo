@@ -329,4 +329,18 @@ class OrderControllerTest {
         assertThat(condition.stockCode()).isEqualTo("005930");
         assertThat(condition.orderType()).isEqualTo(OrderType.BUY);
     }
+
+    @Test
+    @DisplayName("잘못된 주문 상태 검색 조건이면 400을 반환한다")
+    void getOrders_invalidStatus_returns400() throws Exception {
+        mockMvc.perform(
+                        get("/api/v1/orders")
+                                .header(
+                                        "X-User-Id",
+                                        UUID.randomUUID().toString()
+                                )
+                                .param("status", "INVALID")
+                )
+                .andExpect(status().isBadRequest());
+    }
 }
