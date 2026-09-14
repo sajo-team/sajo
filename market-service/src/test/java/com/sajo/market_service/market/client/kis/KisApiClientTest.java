@@ -28,6 +28,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
+import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.queryParam;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
@@ -414,6 +415,86 @@ class KisApiClientTest {
         ));
 
         assertEquals(MarketErrorCode.INVALID_MARKET_STOCK_PRICE, exception.getErrorCode());
+    }
+
+    @Test
+    void issuesApprovalKeyUsingAppKeyAndSecretKey() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        KisApiClient client = new KisApiClient(builder, new KisApiProperties("https://kis.example"));
+
+        server.expect(requestTo("https://kis.example/oauth2/Approval"))
+                .andExpect(method(HttpMethod.POST))
+                .andExpect(content().json("""
+                        {"grant_type":"client_credentials","appkey":"app-key","secretkey":"secret-key"}
+                        """))
+                .andRespond(withSuccess("""
+                        {"approval_key":"issued-approval-key"}
+                        """, MediaType.APPLICATION_JSON));
+
+        String approvalKey = client.issueApprovalKey(CREDENTIALS);
+
+        assertEquals("issued-approval-key", approvalKey);
+        server.verify();
+    }
+
+    @Test
+    void rejectsBlankApprovalKeyInResponse() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        KisApiClient client = new KisApiClient(builder, new KisApiProperties("https://kis.example"));
+
+        server.expect(requestTo("https://kis.example/oauth2/Approval"))
+                .andRespond(withSuccess("""
+                        {"approval_key":""}
+                        """, MediaType.APPLICATION_JSON));
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> client.issueApprovalKey(CREDENTIALS)
+        );
+
+        assertEquals(MarketErrorCode.KIS_APPROVAL_KEY_ISSUE_FAILED, exception.getErrorCode());
+        server.verify();
+    }
+
+    @Test
+    void convertsApprovalKeyHttpErrorToBusinessException() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        KisApiClient client = new KisApiClient(builder, new KisApiProperties("https://kis.example"));
+
+        server.expect(requestTo("https://kis.example/oauth2/Approval"))
+                .andRespond(withServerError());
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> client.issueApprovalKey(CREDENTIALS)
+        );
+
+        assertEquals(MarketErrorCode.KIS_APPROVAL_KEY_ISSUE_FAILED, exception.getErrorCode());
+        assertTrue(exception.getMessage().contains("httpStatus=500"));
+        server.verify();
+    }
+
+    @Test
+    void convertsApprovalKeyConnectionFailureToBusinessException() {
+        RestClient.Builder builder = RestClient.builder();
+        MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
+        KisApiClient client = new KisApiClient(builder, new KisApiProperties("https://kis.example"));
+
+        server.expect(requestTo("https://kis.example/oauth2/Approval"))
+                .andRespond(request -> {
+                    throw new ResourceAccessException("KIS connection timed out");
+                });
+
+        BusinessException exception = assertThrows(
+                BusinessException.class,
+                () -> client.issueApprovalKey(CREDENTIALS)
+        );
+
+        assertEquals(MarketErrorCode.KIS_APPROVAL_KEY_ISSUE_FAILED, exception.getErrorCode());
+        server.verify();
     }
 
     private static String dailyPriceUrl(String startDate, String endDate) {
