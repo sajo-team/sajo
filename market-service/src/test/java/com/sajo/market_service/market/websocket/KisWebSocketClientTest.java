@@ -124,6 +124,29 @@ class KisWebSocketClientTest {
         assertThat(client.subscribedStockCodes()).containsExactly("000660");
     }
 
+    @Test
+    void handshakeCallThrowingSynchronouslySchedulesReconnect() {
+        stubSuccessfulCredentials();
+        given(webSocketClient.execute(any(WebSocketHandler.class), anyString()))
+                .willThrow(new IllegalArgumentException("malformed URI"));
+        given(reconnectPolicy.nextDelay(0)).willReturn(Duration.ofMillis(750));
+
+        KisWebSocketClient client = client(List.of());
+        client.connect();
+
+        verify(reconnectScheduler).schedule(any(Runnable.class), eq(750L), eq(TimeUnit.MILLISECONDS));
+    }
+
+    @Test
+    void connectAsyncSubmitsConnectToReconnectSchedulerWithoutBlockingCaller() {
+        KisWebSocketClient client = client(List.of());
+
+        client.connectAsync();
+
+        verify(reconnectScheduler).execute(any(Runnable.class));
+        verify(webSocketClient, never()).execute(any(WebSocketHandler.class), anyString());
+    }
+
     private void stubSuccessfulCredentials() {
         UserKisTokenResponse credentials = new UserKisTokenResponse("access-token", "app-key", "secret-key");
         given(userAccountFeignClient.getKisToken(any())).willReturn(credentials);

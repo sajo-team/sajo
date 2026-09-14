@@ -51,6 +51,7 @@ public class KisWebSocketClient {
     private final AtomicReference<WebSocketSession> currentSession = new AtomicReference<>();
     private final AtomicInteger reconnectAttempts = new AtomicInteger(0);
     private volatile String currentApprovalKey;
+    private final Object sendLock = new Object();
 
     @Autowired
     public KisWebSocketClient(
@@ -114,13 +115,27 @@ public class KisWebSocketClient {
         }
         this.currentApprovalKey = approvalKey;
 
-        webSocketClient.execute(new KisMessageListener(), properties.url())
-                .whenComplete((session, throwable) -> {
-                    if (throwable != null) {
-                        log.warn("KIS WebSocket 연결에 실패했습니다. exceptionType={}", throwable.getClass().getSimpleName());
-                        scheduleReconnect();
-                    }
-                });
+        try {
+            webSocketClient.execute(new KisMessageListener(), properties.url())
+                    .whenComplete((session, throwable) -> {
+                        if (throwable != null) {
+                            log.warn("KIS WebSocket 연결에 실패했습니다. exceptionType={}", throwable.getClass().getSimpleName());
+                            scheduleReconnect();
+                        }
+                    });
+        } catch (Exception exception) {
+            // market.websocket.url이 잘못된 URI 형식인 경우 등 execute() 호출 자체가 동기적으로 던질 수 있다.
+            // 이 경로를 잡아두지 않으면 재연결 예약(scheduleReconnect)이 아예 호출되지 않아
+            // 재연결 루프가 영구적으로 멈춘다.
+            log.warn("KIS WebSocket 연결 시도(handshake) 호출 자체에서 예외가 발생했습니다. exceptionType={}",
+                    exception.getClass().getSimpleName());
+            scheduleReconnect();
+        }
+    }
+
+    /** 별도 스레드에서 최초 연결을 시작한다. 기동 스레드를 블로킹하지 않기 위해 기존 재연결 스케줄러를 재사용한다. */
+    public void connectAsync() {
+        reconnectScheduler.execute(this::connect);
     }
 
     /** 종목을 구독 대상에 추가한다. 이미 연결되어 있으면 즉시 구독 요청을 보낸다. */
@@ -153,13 +168,20 @@ public class KisWebSocketClient {
         }
     }
 
+    /**
+     * 표준 WebSocket 구현체는 같은 세션에 대한 동시 텍스트 전송을 보장하지 않는다.
+     * subscribe()(임의 외부 스레드)와 resubscribeAll()(WebSocket 콜백 스레드)이 동시에 호출될 수 있으므로
+     * 전송을 직렬화한다.
+     */
     private void sendSubscribeFrame(WebSocketSession session, String stockCode) {
-        try {
-            session.sendMessage(new TextMessage(buildSubscribePayload(stockCode)));
-            log.info("KIS WebSocket 종목 구독 요청을 보냈습니다. stockCode={}", stockCode);
-        } catch (IOException exception) {
-            log.warn("KIS WebSocket 종목 구독 요청 전송에 실패했습니다. stockCode={}, exceptionType={}",
-                    stockCode, exception.getClass().getSimpleName());
+        synchronized (sendLock) {
+            try {
+                session.sendMessage(new TextMessage(buildSubscribePayload(stockCode)));
+                log.info("KIS WebSocket 종목 구독 요청을 보냈습니다. stockCode={}", stockCode);
+            } catch (IOException exception) {
+                log.warn("KIS WebSocket 종목 구독 요청 전송에 실패했습니다. stockCode={}, exceptionType={}",
+                        stockCode, exception.getClass().getSimpleName());
+            }
         }
     }
 

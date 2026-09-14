@@ -19,6 +19,6 @@ public class KisWebSocketRunner implements ApplicationRunner {
     @Override
     public void run(ApplicationArguments args) {
         log.info("KIS WebSocket 연결을 시작합니다.");
-        kisWebSocketClient.connect();
+        kisWebSocketClient.connectAsync();
     }
 }
