@@ -37,3 +37,27 @@ scrape_configs:
       - targets: ["trading-service:8083"]
         labels:
           application: trading-service
+
+  - job_name: redis
+    static_configs:
+      - targets: ["redis-exporter:9121"]
+        labels:
+          application: redis
+
+  - job_name: postgres
+    static_configs:
+      - targets: ["postgres-exporter:9187"]
+        labels:
+          application: postgres
+
+  - job_name: kafka
+    static_configs:
+      - targets: ["kafka-exporter:9308"]
+        labels:
+          application: kafka
+
+  - job_name: mongo
+    static_configs:
+      - targets: ["mongo-exporter:9216"]
+        labels:
+          application: mongo
