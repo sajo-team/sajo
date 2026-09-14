@@ -28,6 +28,7 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -53,6 +54,10 @@ public class KisWebSocketClient {
     private final Set<String> subscribedStockCodes = ConcurrentHashMap.newKeySet();
     private final AtomicReference<WebSocketSession> currentSession = new AtomicReference<>();
     private final AtomicInteger reconnectAttempts = new AtomicInteger(0);
+    // connect() 시도마다 증가하는 세대(generation) 식별자. 핸드셰이크 타임아웃으로 폐기된 시도가 뒤늦게
+    // 성공하더라도(예: 네트워크 지연으로 handshakeTimeout을 넘겨 새 시도가 이미 시작된 뒤 원래 시도가
+    // 완료), 자신의 세대가 최신 세대와 다르면 즉시 닫아서 이미 맺어진 활성 세션을 덮어쓰지 않게 한다.
+    private final AtomicLong connectionGeneration = new AtomicLong(0);
     private volatile String currentApprovalKey;
     private volatile boolean shuttingDown = false;
     private final Object sendLock = new Object();
@@ -133,8 +138,9 @@ public class KisWebSocketClient {
         }
         this.currentApprovalKey = approvalKey;
 
+        long generation = connectionGeneration.incrementAndGet();
         try {
-            webSocketClient.execute(new KisMessageListener(), properties.url())
+            webSocketClient.execute(new KisMessageListener(generation), properties.url())
                     .orTimeout(properties.handshakeTimeout().toMillis(), TimeUnit.MILLISECONDS)
                     .whenComplete((session, throwable) -> {
                         if (throwable != null) {
@@ -261,31 +267,47 @@ public class KisWebSocketClient {
     /** 연결 생명주기 콜백만 담당한다. 메시지 정규화·저장은 이후 단계(15단계)에서 처리한다. */
     final class KisMessageListener extends TextWebSocketHandler {
 
+        /** 이 리스너를 만든 connect() 시도의 세대. {@link #connectionGeneration}과 비교해 폐기 여부를 판단한다. */
+        private final long generation;
+
+        KisMessageListener(long generation) {
+            this.generation = generation;
+        }
+
+        private boolean isDiscarded() {
+            return shuttingDown || generation != connectionGeneration.get();
+        }
+
         @Override
         public void afterConnectionEstablished(WebSocketSession session) {
-            if (shuttingDown) {
-                // shutdown()이 스케줄러의 destroyMethod보다 먼저 실행되는 것이 보장되므로, shutdown() 호출
-                // 이후 이미 진행 중이던 connect() 시도의 핸드셰이크가 뒤늦게 완료될 수 있다. 이 시점에 세션을
-                // currentSession에 등록하고 재구독까지 해버리면, 이후 아무도 이 세션을 닫지 않아 누수된다.
-                log.info("KIS WebSocket 종료 중 뒤늦게 연결이 수립되어 즉시 닫습니다. sessionId={}", session.getId());
+            if (isDiscarded()) {
+                // shutdown()되었거나, 이 시도가 핸드셰이크 타임아웃 등으로 이미 폐기되고 새 시도(더 높은
+                // generation)가 시작된 뒤 뒤늦게 연결에 성공한 경우다. currentSession을 건드리지 않고
+                // 바로 닫아서, 이미 맺어져 있을 수 있는 활성 세션을 덮어쓰지 않는다.
+                log.info("KIS WebSocket 이미 폐기된 시도가 뒤늦게 연결에 성공해 즉시 닫습니다. sessionId={}, generation={}",
+                        session.getId(), generation);
                 closeQuietly(session);
                 return;
             }
             log.info("KIS WebSocket 연결에 성공했습니다. sessionId={}", session.getId());
-            currentSession.set(session);
-            reconnectAttempts.set(0);
-            if (shuttingDown) {
-                // 위 shuttingDown 검사와 currentSession.set(session) 사이에 shutdown()이 끼어들면,
-                // shutdown()의 getAndSet(null)이 아직 등록되지 않은 이 세션을 보지 못해 아무도 닫지 않는
-                // 세션이 남을 수 있다. 등록 직후 한 번 더 확인해서 그 창(window)을 마저 닫는다.
-                // compareAndSet은 그 사이 shutdown()이 이미 이 세션을 가져가 닫았다면(false) 다시 닫지
-                // 않도록 막아준다.
-                if (currentSession.compareAndSet(session, null)) {
-                    log.info("KIS WebSocket 세션 등록 직후 종료가 감지되어 즉시 닫습니다. sessionId={}", session.getId());
-                    closeQuietly(session);
-                }
+            WebSocketSession previous = currentSession.getAndSet(session);
+            if (isDiscarded()) {
+                // 위 검사와 currentSession 등록 사이에 shutdown() 또는 새 시도(더 높은 generation)가
+                // 끼어든 경우다. 그 새 시도가 아직 등록되지 않은 이 세션을 보지 못했을 수 있으므로, 등록
+                // 직후 재확인해서 원래 값(previous)으로 되돌리고 우리 세션은 닫는다. 그 사이 currentSession이
+                // 이미 다른 값으로 또 바뀌어 있다면(더 최신 시도가 이미 등록을 마쳤다면) 복원을 건너뛴다.
+                currentSession.compareAndSet(session, previous);
+                log.info("KIS WebSocket 세션 등록 직후 종료/폐기가 감지되어 즉시 닫습니다. sessionId={}", session.getId());
+                closeQuietly(session);
                 return;
             }
+            if (previous != null && previous != session) {
+                // 정상 경로라면 비어 있어야 하지만, 방어적으로 남아있는 이전 세션이 있다면 함께 정리한다.
+                log.warn("KIS WebSocket 세션 등록 시 이전 세션이 아직 남아있어 함께 정리합니다. previousSessionId={}",
+                        previous.getId());
+                closeQuietly(previous);
+            }
+            reconnectAttempts.set(0);
             resubscribeAll(session);
         }
 
@@ -303,7 +325,14 @@ public class KisWebSocketClient {
         @Override
         public void afterConnectionClosed(WebSocketSession session, CloseStatus closeStatus) {
             log.warn("KIS WebSocket 연결이 종료되었습니다. sessionId={}, closeStatus={}", session.getId(), closeStatus);
-            currentSession.compareAndSet(session, null);
+            boolean wasActiveSession = currentSession.compareAndSet(session, null);
+            if (!wasActiveSession) {
+                // 이미 다른(더 최신) 시도로 대체되었거나, 세션 등록 경합/폐기 처리로 우리가 직접 닫은
+                // 세션이다. 활성 연결이 아니므로 중복 재연결을 예약하지 않는다.
+                log.debug("KIS WebSocket 활성 세션이 아닌 연결의 종료 통지라 재연결을 예약하지 않습니다. sessionId={}",
+                        session.getId());
+                return;
+            }
             scheduleReconnect();
         }
     }

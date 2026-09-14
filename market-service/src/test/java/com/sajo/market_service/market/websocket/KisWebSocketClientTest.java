@@ -29,6 +29,7 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.timeout;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 class KisWebSocketClientTest {
@@ -78,24 +79,83 @@ class KisWebSocketClientTest {
     }
 
     @Test
-    void repeatedDisconnectsIncreaseAttemptCountPassedToPolicy() throws Exception {
+    void repeatedDisconnectsAcrossReconnectAttemptsIncreaseAttemptCountPassedToPolicy() throws Exception {
+        // afterConnectionClosed는 이제 "활성 세션이었던 연결이 닫혔을 때만" 재연결을 예약하므로(중복/폐기된
+        // 세션의 종료 통지로 인한 중복 예약 방지), 같은 세션을 두 번 닫는 것이 아니라 실제로 두 번의
+        // 연결 사이클(연결→종료→재연결→연결→종료)을 재현해야 한다.
         stubSuccessfulCredentials();
-        WebSocketSession session = openSession();
+        WebSocketSession session1 = openSession();
+        WebSocketSession session2 = openSession();
         given(webSocketClient.execute(any(WebSocketHandler.class), anyString()))
-                .willReturn(CompletableFuture.completedFuture(session));
+                .willReturn(CompletableFuture.completedFuture(session1))
+                .willReturn(CompletableFuture.completedFuture(session2));
         given(reconnectPolicy.nextDelay(0)).willReturn(Duration.ofMillis(100));
         given(reconnectPolicy.nextDelay(1)).willReturn(Duration.ofMillis(200));
 
         KisWebSocketClient client = client(List.of());
-        client.connect();
-        WebSocketHandler handler = capturedHandler();
-        handler.afterConnectionEstablished(session);
 
-        handler.afterConnectionClosed(session, CloseStatus.GOING_AWAY);
-        handler.afterConnectionClosed(session, CloseStatus.GOING_AWAY);
+        client.connect();
+        ArgumentCaptor<WebSocketHandler> firstCaptor = ArgumentCaptor.forClass(WebSocketHandler.class);
+        verify(webSocketClient, times(1)).execute(firstCaptor.capture(), anyString());
+        WebSocketHandler firstHandler = firstCaptor.getValue();
+        firstHandler.afterConnectionEstablished(session1);
+        firstHandler.afterConnectionClosed(session1, CloseStatus.GOING_AWAY);
+
+        // 실제로는 reconnectScheduler가 예약된 delay 이후 connect()를 실행하지만, 스케줄러가 mock이라
+        // 여기서는 "다음 시도"를 직접 시뮬레이션한다.
+        client.connect();
+        ArgumentCaptor<WebSocketHandler> secondCaptor = ArgumentCaptor.forClass(WebSocketHandler.class);
+        verify(webSocketClient, times(2)).execute(secondCaptor.capture(), anyString());
+        WebSocketHandler secondHandler = secondCaptor.getValue();
+        secondHandler.afterConnectionEstablished(session2);
+        secondHandler.afterConnectionClosed(session2, CloseStatus.GOING_AWAY);
 
         verify(reconnectScheduler).schedule(any(Runnable.class), eq(100L), eq(TimeUnit.MILLISECONDS));
         verify(reconnectScheduler).schedule(any(Runnable.class), eq(200L), eq(TimeUnit.MILLISECONDS));
+    }
+
+    @Test
+    void lateHandshakeSuccessFromSupersededAttemptClosesItselfWithoutAffectingActiveSession() throws Exception {
+        // handshakeTimeout으로 폐기된 시도(생성 1)의 실제 핸드셰이크가, 그 다음 시도(생성 2)가 이미 정상
+        // 연결/재구독을 마친 뒤에야 뒤늦게 "성공"하는 경합을 재현한다. generation 검사가 없다면 뒤늦은
+        // 세션이 currentSession을 덮어써서 활성 세션이 누수되고 동일 종목을 두 세션이 동시에 구독하게 된다.
+        stubSuccessfulCredentials();
+        WebSocketSession staleSession = openSession();
+        WebSocketSession activeSession = openSession();
+        given(webSocketClient.execute(any(WebSocketHandler.class), anyString()))
+                .willReturn(new CompletableFuture<>()) // 1차 시도: 절대 완료되지 않는 핸드셰이크(네트워크 지연 재현)
+                .willReturn(CompletableFuture.completedFuture(activeSession)); // 2차 시도(타임아웃 후 재연결): 정상 성공
+        given(reconnectPolicy.nextDelay(0)).willReturn(Duration.ofMillis(10));
+
+        KisWebSocketClient client = client(List.of("005930"), Duration.ofMillis(30));
+        client.connect(); // 1차 시도(생성=1)
+
+        // 1차 시도가 handshakeTimeout(30ms)을 넘겨 실패로 처리되고 재연결이 예약될 때까지 기다린다.
+        verify(reconnectScheduler, timeout(2000)).schedule(any(Runnable.class), eq(10L), eq(TimeUnit.MILLISECONDS));
+
+        // 실제로는 reconnectScheduler가 예약된 delay 이후 connect()를 실행하지만, 여기서는 그 "다음 시도"를
+        // 직접 시뮬레이션한다.
+        client.connect(); // 2차 시도(생성=2)
+
+        ArgumentCaptor<WebSocketHandler> captor = ArgumentCaptor.forClass(WebSocketHandler.class);
+        verify(webSocketClient, times(2)).execute(captor.capture(), anyString());
+        WebSocketHandler staleHandler = captor.getAllValues().get(0);
+        WebSocketHandler activeHandler = captor.getAllValues().get(1);
+
+        // 2차 시도(활성)가 먼저 정상적으로 연결·재구독을 마친다.
+        activeHandler.afterConnectionEstablished(activeSession);
+
+        // 그 후에야 1차 시도(생성=1, 이미 폐기됨)의 원래 핸드셰이크가 뒤늦게 "성공"한다.
+        staleHandler.afterConnectionEstablished(staleSession);
+
+        verify(staleSession).close(CloseStatus.NORMAL);
+        verify(activeSession, never()).close(any(CloseStatus.class));
+        verify(activeSession).sendMessage(any(TextMessage.class));
+
+        // 뒤늦게 닫힌 stale 세션에 대한 종료 통지가 활성 세션과 무관하게 중복 재연결을 예약하지 않는지도 확인한다.
+        // scheduleReconnect()가 다시 실행됐다면 reconnectPolicy.nextDelay(1)이 호출됐을 것이다.
+        staleHandler.afterConnectionClosed(staleSession, CloseStatus.NORMAL);
+        verify(reconnectPolicy, never()).nextDelay(1);
     }
 
     @Test
