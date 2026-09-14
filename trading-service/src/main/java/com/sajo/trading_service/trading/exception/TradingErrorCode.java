@@ -34,6 +34,7 @@ public enum TradingErrorCode implements ErrorCode {
     AUTO_TRADING_HAS_OPEN_POSITION(HttpStatus.CONFLICT, "AUTO_TRADING_0023", "미청산 수량이 존재하여 자동매매 설정을 삭제할 수 없습니다."),
     AUTO_TRADING_HAS_ACTIVE_ORDER(HttpStatus.CONFLICT, "AUTO_TRADING_0024", "진행 중인 주문이 존재하여 자동매매 설정을 삭제할 수 없습니다."),
     AUTO_TRADING_DIRECTION_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "AUTO_TRADING_0025", "자동매매 설정에서 허용하지 않은 주문 방향입니다."),
+    STRATEGY_NOT_ACTIVE(HttpStatus.CONFLICT, "AUTO_TRADING_0026", "활성 상태의 전략만 자동매매를 활성화할 수 있습니다."),
 
     ;
 
