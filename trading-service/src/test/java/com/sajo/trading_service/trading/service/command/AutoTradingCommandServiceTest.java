@@ -9,6 +9,7 @@ import com.sajo.trading_service.trading.controller.dto.request.AutoTradingUpdate
 import com.sajo.trading_service.trading.controller.dto.response.AutoTradingCreateResponse;
 import com.sajo.trading_service.trading.controller.dto.response.AutoTradingUpdateResponse;
 import com.sajo.trading_service.trading.domain.AutoTrading;
+import com.sajo.trading_service.trading.domain.enums.AutoTradingDirection;
 import com.sajo.trading_service.trading.exception.TradingErrorCode;
 import com.sajo.trading_service.trading.repository.command.AutoTradingCommandRepository;
 import com.sajo.trading_service.trading.repository.command.TradingLimitCommandRepository;
@@ -58,10 +59,10 @@ class AutoTradingCommandServiceTest {
         UUID strategyId = UUID.randomUUID();
 
         AutoTradingCreateRequest request =
-                new AutoTradingCreateRequest(strategyId);
+                new AutoTradingCreateRequest(strategyId, AutoTradingDirection.BOTH);
 
         AutoTrading autoTrading =
-                AutoTrading.create(userId, strategyId);
+                AutoTrading.create(userId, strategyId, AutoTradingDirection.BOTH);
 
         AutoTradingCreateResponse expectedResponse =
                 AutoTradingCreateResponse.from(autoTrading);
@@ -90,8 +91,11 @@ class AutoTradingCommandServiceTest {
         assertThat(response.strategyId())
                 .isEqualTo(strategyId);
 
+        assertThat(response.direction())
+                .isEqualTo(AutoTradingDirection.BOTH);
+
         assertThat(response.enabled())
-                .isTrue();
+                .isFalse();
 
         verify(autoTradingCreateTransactionService)
                 .create(userId, request);
@@ -105,7 +109,7 @@ class AutoTradingCommandServiceTest {
         UUID strategyId = UUID.randomUUID();
 
         AutoTradingCreateRequest request =
-                new AutoTradingCreateRequest(strategyId);
+                new AutoTradingCreateRequest(strategyId, AutoTradingDirection.BOTH);
 
         given(strategyClient.getStrategy(strategyId))
                 .willThrow(
@@ -147,7 +151,7 @@ class AutoTradingCommandServiceTest {
         UUID strategyId = UUID.randomUUID();
 
         AutoTradingCreateRequest request =
-                new AutoTradingCreateRequest(strategyId);
+                new AutoTradingCreateRequest(strategyId, AutoTradingDirection.BOTH);
 
         given(strategyClient.getStrategy(strategyId))
                 .willReturn(
@@ -187,7 +191,7 @@ class AutoTradingCommandServiceTest {
         UUID strategyId = UUID.randomUUID();
 
         AutoTradingCreateRequest request =
-                new AutoTradingCreateRequest(strategyId);
+                new AutoTradingCreateRequest(strategyId, AutoTradingDirection.BOTH);
 
         FeignApiException exception =
                 new FeignApiException(
@@ -220,10 +224,10 @@ class AutoTradingCommandServiceTest {
         UUID strategyId = UUID.randomUUID();
 
         AutoTrading autoTrading =
-                AutoTrading.create(userId, strategyId);
+                AutoTrading.create(userId, strategyId, AutoTradingDirection.BOTH);
 
         AutoTradingUpdateRequest request =
-                new AutoTradingUpdateRequest(false);
+                new AutoTradingUpdateRequest(false, AutoTradingDirection.BOTH);
 
         given(autoTradingCommandRepository
                 .findByIdAndUserIdAndDeletedAtIsNull(
@@ -250,7 +254,7 @@ class AutoTradingCommandServiceTest {
         UUID autoTradingId = UUID.randomUUID();
 
         AutoTradingUpdateRequest request =
-                new AutoTradingUpdateRequest(false);
+                new AutoTradingUpdateRequest(false, AutoTradingDirection.BOTH);
 
         given(autoTradingCommandRepository
                 .findByIdAndUserIdAndDeletedAtIsNull(
@@ -286,10 +290,10 @@ class AutoTradingCommandServiceTest {
         UUID strategyId = UUID.randomUUID();
 
         AutoTrading autoTrading =
-                AutoTrading.create(userId, strategyId);
+                AutoTrading.create(userId, strategyId, AutoTradingDirection.BOTH);
 
         AutoTradingUpdateRequest request =
-                new AutoTradingUpdateRequest(true);
+                new AutoTradingUpdateRequest(true, AutoTradingDirection.BOTH);
 
         given(autoTradingCommandRepository
                 .findByIdAndUserIdAndDeletedAtIsNull(
@@ -330,7 +334,8 @@ class AutoTradingCommandServiceTest {
         AutoTrading autoTrading =
                 AutoTrading.create(
                         userId,
-                        strategyId
+                        strategyId,
+                        AutoTradingDirection.BOTH
                 );
 
         given(autoTradingCommandRepository
@@ -403,7 +408,8 @@ class AutoTradingCommandServiceTest {
         AutoTrading autoTrading =
                 AutoTrading.create(
                         userId,
-                        strategyId
+                        strategyId,
+                        AutoTradingDirection.BOTH
                 );
 
         given(autoTradingCommandRepository
@@ -454,7 +460,8 @@ class AutoTradingCommandServiceTest {
         AutoTrading autoTrading =
                 AutoTrading.create(
                         userId,
-                        strategyId
+                        strategyId,
+                        AutoTradingDirection.BOTH
                 );
 
         given(autoTradingCommandRepository
@@ -487,5 +494,36 @@ class AutoTradingCommandServiceTest {
 
         assertThat(autoTrading.getDeletedAt())
                 .isNull();
+    }
+
+    @Test
+    @DisplayName("수정할 값이 없으면 자동매매 설정을 수정할 수 없다")
+    void updateAutoTradingEmptyRequest() {
+        UUID userId = UUID.randomUUID();
+        UUID autoTradingId = UUID.randomUUID();
+
+        AutoTradingUpdateRequest request =
+                new AutoTradingUpdateRequest(
+                        null,
+                        null
+                );
+
+        assertThatThrownBy(() ->
+                autoTradingCommandService.updateAutoTrading(
+                        userId,
+                        autoTradingId,
+                        request
+                )
+        )
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException =
+                            (BusinessException) exception;
+
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(
+                                    TradingErrorCode.INVALID_AUTO_TRADING
+                            );
+                });
     }
 }

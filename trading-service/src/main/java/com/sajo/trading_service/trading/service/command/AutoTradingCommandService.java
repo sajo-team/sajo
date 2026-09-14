@@ -71,6 +71,13 @@ public class AutoTradingCommandService {
             UUID autoTradingId,
             AutoTradingUpdateRequest request
     ) {
+        if (request.enabled() == null
+                && request.direction() == null) {
+            throw new BusinessException(
+                    TradingErrorCode.INVALID_AUTO_TRADING
+            );
+        }
+
         AutoTrading autoTrading =
                 autoTradingCommandRepository
                         .findByIdAndUserIdAndDeletedAtIsNull(
@@ -91,7 +98,10 @@ public class AutoTradingCommandService {
             );
         }
 
-        autoTrading.update(request.enabled());
+        autoTrading.update(
+                request.enabled(),
+                request.direction()
+        );
 
         return AutoTradingUpdateResponse.from(autoTrading);
     }
