@@ -1,4 +1,6 @@
--- Manual migration: Flyway/Liquibase is not configured, so this file is NOT executed automatically.
+-- Baseline migration (Flyway adoption, #218): this change was already applied manually via psql
+-- before Flyway was introduced. It is kept here for history only — Flyway's baselineVersion=105
+-- (see application.yaml) means this file is NOT re-executed on any existing market_strategy schema.
 ALTER TABLE market_strategy.m_market_stocks_price
     DROP CONSTRAINT IF EXISTS uk_market_stock_price_stock_date_time_source;
 

@@ -1,4 +1,6 @@
--- Manual migration: this project does not execute Flyway/Liquibase migrations automatically.
+-- Baseline migration (Flyway adoption, #218): this change was already applied manually via psql
+-- before Flyway was introduced. It is kept here for history only — Flyway's baselineVersion=105
+-- (see application.yaml) means this file is NOT re-executed on any existing market_strategy schema.
 ALTER TABLE market_strategy.m_market_stocks_indicator
     ALTER COLUMN reference_date DROP NOT NULL,
     ADD COLUMN IF NOT EXISTS valuation_fetched_at TIMESTAMP WITH TIME ZONE,
