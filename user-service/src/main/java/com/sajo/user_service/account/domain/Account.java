@@ -13,21 +13,18 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.util.UUID;
 
+// user_id/account_no_hash 유니크 제약은 JPA가 아니라 V3 Flyway 마이그레이션의
+// partial unique index(WHERE deleted_at IS NULL)로 DB 레벨에서만 강제된다.
 @Getter
 @Entity
-@Table(name = "p_accounts", uniqueConstraints = {
-        @UniqueConstraint(name = "uq_account_user_id", columnNames = {"user_id", "unique_column"}),
-        @UniqueConstraint(name = "uq_account_no_hash", columnNames = {"account_no_hash", "unique_column"})
-})
+@Table(name = "p_accounts")
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
-//Todo: DDL 작성 시 partial unique index 적용
 public class Account extends BaseUpdatableEntity {
 
     private static final String ACCOUNT_NO_PATTERN = "^[0-9]{8}-[0-9]{2}$";
@@ -58,13 +55,6 @@ public class Account extends BaseUpdatableEntity {
     @Enumerated(value = EnumType.STRING)
     private AccountType accountType;
 
-    // soft delete된 row끼리는 유니크 제약에서 서로 겹치지 않도록 하기 위한 컬럼
-    // 활성 상태: 고정값(0) 공유, 삭제 상태: 자기 자신의 id로 교체
-    // 추후 ddl 작성 하게 되면 PostgreSQL partial unique index로 교체
-    //Todo: DDL 작성 시 partial unique index 적용
-    @Column(name = "unique_column", nullable = false)
-    private UUID uniqueColumn;
-
     @Column(nullable = false)
     @Enumerated(value = EnumType.STRING)
     private AccountStatus status;
@@ -80,7 +70,6 @@ public class Account extends BaseUpdatableEntity {
         this.accountNo = accountNo;
         this.accountNoHash = accountNoHash;
         this.accountType = accountType;
-        this.uniqueColumn = new UUID(0L, 0L);
         this.status = AccountStatus.ACTIVE;
     }
 
@@ -108,7 +97,6 @@ public class Account extends BaseUpdatableEntity {
     @Override
     public void softDelete(UUID deletedBy) {
         super.softDelete(deletedBy);
-        this.uniqueColumn = this.id;
         this.status = AccountStatus.DELETED;
     }
 
