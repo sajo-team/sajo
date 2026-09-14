@@ -70,7 +70,8 @@ services:
   mongo-exporter:
     image: percona/mongodb_exporter:0.53.0
     container_name: sajo-mongo-exporter
-    command: ["--mongodb.uri=mongodb://root:${MONGO_PASSWORD}@mongo-ai-risk:27017/?authSource=admin"]
+    environment:
+      MONGODB_URI: "mongodb://root:${MONGO_PASSWORD}@mongo-ai-risk:27017/?authSource=admin"
     ports:
       - "127.0.0.1:9216:9216"
     networks:
