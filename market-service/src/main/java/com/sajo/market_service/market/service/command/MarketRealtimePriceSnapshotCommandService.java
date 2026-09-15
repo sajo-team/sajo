@@ -6,6 +6,7 @@ import com.sajo.market_service.market.dto.response.QuoteResponse;
 import com.sajo.market_service.market.repository.command.MarketStockPriceCommandRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.hibernate.exception.ConstraintViolationException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
@@ -36,6 +37,13 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class MarketRealtimePriceSnapshotCommandService {
+
+    /**
+     * V106 partial unique index. 이 이름으로 걸린 {@link DataIntegrityViolationException}만
+     * "같은 분(minute)에 대한 중복 스냅샷"으로 간주해 조용히 건너뛴다. 그 외의 제약(FK, NOT NULL 등)
+     * 위반은 실제 데이터 문제일 수 있으므로 WARN 로그를 남기고 그대로 전파한다(코드 리뷰 반영).
+     */
+    private static final String WEBSOCKET_MINUTE_UNIQUE_INDEX = "uk_market_stock_price_websocket_minute";
 
     private final MarketStockPriceCommandRepository marketStockPriceCommandRepository;
 
@@ -68,8 +76,30 @@ public class MarketRealtimePriceSnapshotCommandService {
             marketStockPriceCommandRepository.save(price);
             return true;
         } catch (DataIntegrityViolationException exception) {
-            log.debug("이미 같은 분에 대한 실시간 시세 스냅샷이 존재해 건너뜁니다. stockId={}", stockId);
-            return false;
+            if (isWebsocketMinuteUniqueViolation(exception)) {
+                log.debug("이미 같은 분에 대한 실시간 시세 스냅샷이 존재해 건너뜁니다. stockId={}", stockId);
+                return false;
+            }
+
+            log.warn(
+                    "실시간 시세 스냅샷 저장 중 예상치 못한 데이터 무결성 제약 위반이 발생했습니다. stockId={}",
+                    stockId, exception
+            );
+            throw exception;
         }
+    }
+
+    private boolean isWebsocketMinuteUniqueViolation(DataIntegrityViolationException exception) {
+        Throwable cause = exception;
+
+        while (cause != null) {
+            if (cause instanceof ConstraintViolationException constraintViolationException) {
+                return WEBSOCKET_MINUTE_UNIQUE_INDEX.equals(constraintViolationException.getConstraintName());
+            }
+
+            cause = cause.getCause();
+        }
+
+        return false;
     }
 }

@@ -4,6 +4,7 @@ import com.sajo.market_service.market.domain.MarketStockPrice;
 import com.sajo.market_service.market.domain.PriceSource;
 import com.sajo.market_service.market.dto.response.QuoteResponse;
 import com.sajo.market_service.market.repository.command.MarketStockPriceCommandRepository;
+import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -20,6 +21,7 @@ import java.time.LocalTime;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
@@ -75,15 +77,43 @@ class MarketRealtimePriceSnapshotCommandServiceTest {
     }
 
     @Test
-    @DisplayName("같은 분에 대한 스냅샷이 이미 존재해 유니크 제약을 위반하면 예외 없이 false를 반환한다")
-    void returnsFalseWithoutPropagatingWhenDuplicateSnapshotViolatesUniqueConstraint() {
+    @DisplayName("같은 분에 대한 스냅샷이 이미 존재해 uk_market_stock_price_websocket_minute을 위반하면 예외 없이 false를 반환한다")
+    void returnsFalseWithoutPropagatingWhenDuplicateSnapshotViolatesMinuteUniqueIndex() {
         QuoteResponse quote = sampleQuote();
         given(marketStockPriceCommandRepository.save(any(MarketStockPrice.class)))
-                .willThrow(new DataIntegrityViolationException("duplicate key"));
+                .willThrow(duplicateSnapshotViolation("uk_market_stock_price_websocket_minute"));
 
         boolean saved = service.saveWebsocketSnapshot(stockId, date, time, quote);
 
         assertThat(saved).isFalse();
+    }
+
+    @Test
+    @DisplayName("의도한 유니크 제약이 아닌 다른 데이터 무결성 위반은 삼키지 않고 그대로 전파한다")
+    void propagatesDataIntegrityViolationWhenConstraintIsNotTheExpectedMinuteUniqueIndex() {
+        QuoteResponse quote = sampleQuote();
+        DataIntegrityViolationException exception = duplicateSnapshotViolation("fk_market_stock_price_stock_id");
+        given(marketStockPriceCommandRepository.save(any(MarketStockPrice.class))).willThrow(exception);
+
+        assertThatThrownBy(() -> service.saveWebsocketSnapshot(stockId, date, time, quote))
+                .isSameAs(exception);
+    }
+
+    @Test
+    @DisplayName("원인 체인에 ConstraintViolationException이 없는 데이터 무결성 위반도 그대로 전파한다")
+    void propagatesDataIntegrityViolationWithoutConstraintViolationCause() {
+        QuoteResponse quote = sampleQuote();
+        DataIntegrityViolationException exception = new DataIntegrityViolationException("unexpected failure");
+        given(marketStockPriceCommandRepository.save(any(MarketStockPrice.class))).willThrow(exception);
+
+        assertThatThrownBy(() -> service.saveWebsocketSnapshot(stockId, date, time, quote))
+                .isSameAs(exception);
+    }
+
+    private DataIntegrityViolationException duplicateSnapshotViolation(String constraintName) {
+        ConstraintViolationException constraintViolationException = new ConstraintViolationException(
+                "duplicate snapshot", null, constraintName);
+        return new DataIntegrityViolationException("snapshot conflict", constraintViolationException);
     }
 
     private QuoteResponse sampleQuote() {

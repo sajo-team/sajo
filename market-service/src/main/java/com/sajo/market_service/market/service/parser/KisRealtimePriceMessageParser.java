@@ -6,6 +6,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
 
 /**
  * KIS WebSocket이 보내는 원문 텍스트 프레임을 {@link KisRealtimePriceMessage} 목록으로 변환한다.
@@ -25,8 +26,9 @@ import java.util.List;
 public class KisRealtimePriceMessageParser {
 
     private static final String TRADE_CONDITION_TR_ID = "H0STCNT0";
-    private static final String FRAME_DELIMITER = "\\|";
-    private static final String FIELD_DELIMITER = "\\^";
+    // WebSocket 수신 스레드의 핫 패스이므로 String.split()이 매번 컴파일하지 않도록 미리 컴파일해둔다(코드 리뷰 반영).
+    private static final Pattern FRAME_DELIMITER = Pattern.compile("\\|");
+    private static final Pattern FIELD_DELIMITER = Pattern.compile("\\^");
 
     public List<KisRealtimePriceMessage> parse(String rawPayload) {
         if (rawPayload == null || rawPayload.isBlank()) {
@@ -37,13 +39,13 @@ public class KisRealtimePriceMessageParser {
             return List.of();
         }
 
-        String[] frameParts = rawPayload.split(FRAME_DELIMITER, 4);
+        String[] frameParts = FRAME_DELIMITER.split(rawPayload, 4);
         if (frameParts.length < 4 || !TRADE_CONDITION_TR_ID.equals(frameParts[1])) {
             log.debug("H0STCNT0가 아닌 프레임이라 건너뜁니다. trId={}", frameParts.length > 1 ? frameParts[1] : null);
             return List.of();
         }
 
-        String[] allFields = frameParts[3].split(FIELD_DELIMITER, -1);
+        String[] allFields = FIELD_DELIMITER.split(frameParts[3], -1);
         int recordCount = allFields.length / KisRealtimePriceMessage.FIELD_COUNT_PER_RECORD;
         if (recordCount == 0 || allFields.length % KisRealtimePriceMessage.FIELD_COUNT_PER_RECORD != 0) {
             log.warn("KIS 실시간 체결가 프레임의 필드 개수가 예상과 달라 건너뜁니다. fieldCount={}, expectedPerRecord={}",
