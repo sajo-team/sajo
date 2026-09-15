@@ -45,7 +45,7 @@ class AiPromptVersionQueryControllerTest {
         AiPromptVersionHistoryResponse response =
                 new AiPromptVersionHistoryResponse(
                         UUID.randomUUID(),
-                        AiPromptKey.RISK_ANALYSIS,
+                        AiPromptKey.STRATEGY_RISK_ANALYSIS,
                         "v1",
                         AiPromptStatus.ACTIVE,
                         Instant.now(),

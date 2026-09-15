@@ -87,7 +87,7 @@ public class AiPromptVersionConcurrencyTest {
 
         //기존 ACTIVE 프롬프트(v1)이 존재하는 상황을 만든다.
         AiPromptVersion initial = AiPromptVersion.create(
-                AiPromptKey.RISK_ANALYSIS,
+                AiPromptKey.STRATEGY_RISK_ANALYSIS,
                 "v1",
                 "기존 프롬프트",
                 "최초 등록"
@@ -128,7 +128,7 @@ public class AiPromptVersionConcurrencyTest {
                     start.await();
 
                     AiPromptVersionCreateRequest request = new AiPromptVersionCreateRequest(
-                            AiPromptKey.RISK_ANALYSIS,
+                            AiPromptKey.STRATEGY_RISK_ANALYSIS,
                             "동시 요청 프롬프트" + index,
                             "동시성 테스트"
                     );
@@ -173,7 +173,7 @@ public class AiPromptVersionConcurrencyTest {
         );
 
         long activeCount = prompts.stream()
-                .filter(p -> p.getPromptKey() == AiPromptKey.RISK_ANALYSIS)
+                .filter(p -> p.getPromptKey() == AiPromptKey.STRATEGY_RISK_ANALYSIS)
                 .filter(p -> p.getStatus() == AiPromptStatus.ACTIVE)
                 .count();
 
@@ -225,7 +225,7 @@ public class AiPromptVersionConcurrencyTest {
 
                     AiPromptVersionCreateRequest request =
                             new AiPromptVersionCreateRequest(
-                                    AiPromptKey.RISK_ANALYSIS,
+                                    AiPromptKey.STRATEGY_RISK_ANALYSIS,
                                     "최초 동시 요청 프롬프트 " + index,
                                     "동시성 테스트"
                             );
@@ -250,7 +250,7 @@ public class AiPromptVersionConcurrencyTest {
                 promptVersionCommandRepository.findAll();
 
         long activeCount = prompts.stream()
-                .filter(p -> p.getPromptKey() == AiPromptKey.RISK_ANALYSIS)
+                .filter(p -> p.getPromptKey() == AiPromptKey.STRATEGY_RISK_ANALYSIS)
                 .filter(p -> p.getStatus() == AiPromptStatus.ACTIVE)
                 .count();
 

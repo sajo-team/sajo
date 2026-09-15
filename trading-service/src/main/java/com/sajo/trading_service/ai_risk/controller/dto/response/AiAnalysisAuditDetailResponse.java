@@ -3,6 +3,7 @@ package com.sajo.trading_service.ai_risk.controller.dto.response;
 import com.sajo.trading_service.ai_risk.document.AiAnalysisHistory;
 import com.sajo.trading_service.ai_risk.domain.AiAnalysisFailureType;
 import com.sajo.trading_service.ai_risk.domain.AiAnalysisStatus;
+import com.sajo.trading_service.ai_risk.domain.AiPromptKey;
 
 import java.time.Instant;
 import java.util.List;
@@ -40,6 +41,7 @@ public record AiAnalysisAuditDetailResponse(
     }
 
     public record PromptResponse(
+            AiPromptKey promptKey,
             String version,
             String content
     ) {
@@ -49,6 +51,7 @@ public record AiAnalysisAuditDetailResponse(
                 return null;
             }
             return new PromptResponse(
+                    prompt.promptKey(),
                     prompt.version(),
                     prompt.content()
             );

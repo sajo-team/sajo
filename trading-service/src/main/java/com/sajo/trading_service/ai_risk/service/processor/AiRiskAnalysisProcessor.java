@@ -45,6 +45,7 @@ public class AiRiskAnalysisProcessor {
                         "backtest", event.backtest()
                 ))
                 .prompt(new AiAnalysisHistory.PromptSnapshot(
+                        output.promptKey(),
                         output.promptVersion(),
                         output.promptContent()
                 ))
@@ -91,6 +92,7 @@ public class AiRiskAnalysisProcessor {
                         "backtest", event.backtest()
                 ))
                 .prompt(new AiAnalysisHistory.PromptSnapshot(
+                        output.promptKey(),
                         output.promptVersion(),
                         output.promptContent()
                 ))
@@ -129,6 +131,7 @@ public class AiRiskAnalysisProcessor {
                         "backtest", event.backtest()
                 ))
                 .prompt(new AiAnalysisHistory.PromptSnapshot(
+                        exception.getPromptKey(),
                         exception.getPromptVersion(),
                         exception.getPromptContent()
                 ))
@@ -180,6 +183,7 @@ public class AiRiskAnalysisProcessor {
                         "backtest", event.backtest()
                 ))
                 .prompt(new AiAnalysisHistory.PromptSnapshot(
+                        exception.getPromptKey(),
                         exception.getPromptVersion(),
                         exception.getPromptContent()
                 ))
@@ -265,6 +269,7 @@ public class AiRiskAnalysisProcessor {
         if(output != null){
             builder
                     .prompt(new AiAnalysisHistory.PromptSnapshot(
+                            output.promptKey(),
                             output.promptVersion(),
                             output.promptContent()
                     ))

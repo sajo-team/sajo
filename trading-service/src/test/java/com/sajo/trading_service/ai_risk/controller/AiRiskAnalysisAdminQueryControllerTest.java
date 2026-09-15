@@ -7,6 +7,7 @@ import com.sajo.trading_service.ai_risk.controller.dto.response.AiAnalysisAuditD
 import com.sajo.trading_service.ai_risk.controller.dto.response.AiRiskAnalysisFailureHistoryItemResponse;
 import com.sajo.trading_service.ai_risk.domain.AiAnalysisFailureType;
 import com.sajo.trading_service.ai_risk.domain.AiAnalysisStatus;
+import com.sajo.trading_service.ai_risk.domain.AiPromptKey;
 import com.sajo.trading_service.ai_risk.exception.AiRiskErrorCode;
 import com.sajo.trading_service.ai_risk.service.query.AiAnalysisHistoryQueryService;
 import com.sajo.trading_service.ai_risk.service.query.AiRiskAnalysisQueryService;
@@ -116,6 +117,7 @@ class AiRiskAnalysisAdminQueryControllerTest {
                         UUID.randomUUID(),
                         Map.of("strategy", Map.of("name", "test-strategy")),
                         new AiAnalysisAuditDetailResponse.PromptResponse(
+                                AiPromptKey.STRATEGY_RISK_ANALYSIS,
                                 "v1",
                                 "위험도를 분석해주세요."
                         ),

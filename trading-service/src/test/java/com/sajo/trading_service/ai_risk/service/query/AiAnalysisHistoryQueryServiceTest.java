@@ -4,6 +4,7 @@ import com.sajo.common.exception.BusinessException;
 import com.sajo.trading_service.ai_risk.document.AiAnalysisHistory;
 import com.sajo.trading_service.ai_risk.domain.AiAnalysisFailureType;
 import com.sajo.trading_service.ai_risk.domain.AiAnalysisStatus;
+import com.sajo.trading_service.ai_risk.domain.AiPromptKey;
 import com.sajo.trading_service.ai_risk.exception.AiRiskErrorCode;
 import com.sajo.trading_service.ai_risk.repository.query.AiAnalysisHistoryQueryRepository;
 import org.junit.jupiter.api.Tag;
@@ -51,6 +52,7 @@ class AiAnalysisHistoryQueryServiceTest {
                         "strategy", Map.of("name", "test-strategy")
                 ))
                 .prompt(new AiAnalysisHistory.PromptSnapshot(
+                        AiPromptKey.STRATEGY_RISK_ANALYSIS,
                         "v1",
                         "위험도를 분석해주세요."
                 ))

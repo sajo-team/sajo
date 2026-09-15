@@ -94,13 +94,13 @@ class AiRiskAnalyzerTest {
         aiRiskAnalyzer = new AiRiskAnalyzer(chatClient, promptVersionQueryService);
 
         AiPromptVersion activePrompt = AiPromptVersion.create(
-                AiPromptKey.RISK_ANALYSIS,
+                AiPromptKey.STRATEGY_RISK_ANALYSIS,
                 "v3",
                 "주식 자동매매 전략의 위험을 분석하세요.",
                 "테스트 프롬프트"
         );
 
-        when(promptVersionQueryService.getActivePrompt(AiPromptKey.RISK_ANALYSIS))
+        when(promptVersionQueryService.getActivePrompt(AiPromptKey.STRATEGY_RISK_ANALYSIS))
                 .thenReturn(activePrompt);
 
         UUID userId = UUID.randomUUID();
@@ -301,7 +301,7 @@ class AiRiskAnalyzerTest {
                 );
 
         when(promptVersionQueryService.getActivePrompt(
-                AiPromptKey.RISK_ANALYSIS
+                AiPromptKey.STRATEGY_RISK_ANALYSIS
         )).thenThrow(cause);
 
         assertThatThrownBy(() ->

@@ -175,7 +175,7 @@ Content-Type: application/json
 Authorization: Bearer {{adminAccessToken}}
 
 {
-  "promptKey": "RISK_ANALYSIS",
+  "promptKey": "STRATEGY_RISK_ANALYSIS",
   "promptContent": "당신은 주식 투자 전략의 위험 요소를 분석하는 AI입니다. 사용자가 설정한 투자 전략과 백테스트 결과를 기반으로 위험 수준을 평가하세요. 반드시 입력으로 제공된 데이터만을 근거로 판단하며 수익을 보장하거나 특정 종목의 매수 또는 매도를 권유해서는 안 됩니다. riskLevel은 LOW, MEDIUM, HIGH 중 하나로 반환하세요. summary에는 전략의 전반적인 위험을 요약하고, riskFactors에는 주요 위험 요소를 목록으로 작성하세요. reasoning에는 위험 등급을 판단한 근거를 작성하고, recommendations에는 사용자가 전략을 재검토할 때 고려할 사항을 작성하세요. 반드시 지정된 JSON 형식으로만 응답하세요.",
   "changeSummary": "AI 위험 분석 초기 프롬프트"
 }

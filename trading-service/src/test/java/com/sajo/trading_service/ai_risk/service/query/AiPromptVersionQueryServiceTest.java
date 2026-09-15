@@ -56,6 +56,7 @@ class AiPromptVersionQueryServiceTest {
                 .strategyId(UUID.randomUUID())
                 .backtestId(UUID.randomUUID())
                 .prompt(new AiAnalysisHistory.PromptSnapshot(
+                        AiPromptKey.STRATEGY_RISK_ANALYSIS,
                         version,
                         "테스트 프롬프트"
                 ))
@@ -71,21 +72,21 @@ class AiPromptVersionQueryServiceTest {
     void getActivePrompt() {
         // given
         AiPromptVersion promptVersion = AiPromptVersion.create(
-                AiPromptKey.RISK_ANALYSIS,
+                AiPromptKey.STRATEGY_RISK_ANALYSIS,
                 "v1",
                 "위험 분석 프롬프트",
                 "최초 등록"
         );
 
         given(promptVersionQueryRepository.findByPromptKeyAndStatus(
-                AiPromptKey.RISK_ANALYSIS,
+                AiPromptKey.STRATEGY_RISK_ANALYSIS,
                 AiPromptStatus.ACTIVE
         )).willReturn(Optional.of(promptVersion));
 
         // when
         AiPromptVersion result =
                 promptVersionQueryService.getActivePrompt(
-                        AiPromptKey.RISK_ANALYSIS
+                        AiPromptKey.STRATEGY_RISK_ANALYSIS
                 );
 
         // then
@@ -97,7 +98,7 @@ class AiPromptVersionQueryServiceTest {
     void getActivePromptNotFound() {
         // given
         given(promptVersionQueryRepository.findByPromptKeyAndStatus(
-                AiPromptKey.RISK_ANALYSIS,
+                AiPromptKey.STRATEGY_RISK_ANALYSIS,
                 AiPromptStatus.ACTIVE
         )).willReturn(Optional.empty());
 
@@ -105,7 +106,7 @@ class AiPromptVersionQueryServiceTest {
         BusinessException exception = assertThrows(
                 BusinessException.class,
                 () -> promptVersionQueryService.getActivePrompt(
-                        AiPromptKey.RISK_ANALYSIS
+                        AiPromptKey.STRATEGY_RISK_ANALYSIS
                 )
         );
 
@@ -119,7 +120,7 @@ class AiPromptVersionQueryServiceTest {
     void getPromptVersionHistories() {
         // given
         AiPromptVersion promptVersion = AiPromptVersion.create(
-                AiPromptKey.RISK_ANALYSIS,
+                AiPromptKey.STRATEGY_RISK_ANALYSIS,
                 "v1",
                 "위험 분석 프롬프트",
                 "최초 등록"
