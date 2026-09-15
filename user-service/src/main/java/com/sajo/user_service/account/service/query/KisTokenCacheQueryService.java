@@ -93,7 +93,7 @@ public class KisTokenCacheQueryService {
             try {
                 locked = kisTokenCacheLock.tryLock(key, lockToken, KIS_LOCK_TTL);
             } catch (DataAccessException e) {
-                log.warn("Redis 락 획득 실패해 KIS를 직접 호출합니다. key={}", key, e);
+                log.warn("Redis 자체 장애로 락 획득 시도가 실패해 fail-open으로 KIS를 직접 호출합니다. key={}", key, e);
                 return fetchAndCache(userId, accountId, tokenType, key, fetcher);
             }
 
@@ -136,7 +136,7 @@ public class KisTokenCacheQueryService {
         try {
             return new TokenLookup(redisTemplate.opsForValue().get(key), true);
         } catch (DataAccessException e) {
-            log.warn("Redis 캐시 조회 실패해 KIS를 직접 호출합니다. key={}", key, e);
+            log.warn("Redis 자체 장애로 캐시 조회가 실패해 fail-open으로 KIS를 직접 호출합니다. key={}", key, e);
             return new TokenLookup(null, false);
         }
     }

@@ -46,8 +46,11 @@ public class KisTrClient extends AbstractKisClient {
         RestClient restClient = selectRestClient(accountType);
         String trId = accountType == AccountType.REAL ? BALANCE_TR_ID_REAL : BALANCE_TR_ID_VIRTUAL;
 
-        boolean isFirstCall = (ctxAreaFk100 == null || ctxAreaFk100.isBlank())
-                && (ctxAreaNk100 == null || ctxAreaNk100.isBlank());
+
+        String normalizedFk100 = ctxAreaFk100 == null ? "" : ctxAreaFk100;
+        String normalizedNk100 = ctxAreaNk100 == null ? "" : ctxAreaNk100;
+
+        boolean isFirstCall = normalizedFk100.isBlank() && normalizedNk100.isBlank();
         String trCont = isFirstCall ? "" : "N"; // 공백: 초기 조회, N: 다음 데이터 조회
 
         String uri = UriComponentsBuilder.fromPath(INQUIRE_BALANCE)
@@ -60,8 +63,8 @@ public class KisTrClient extends AbstractKisClient {
                 .queryParam("FUND_STTL_ICLD_YN", "N") // 펀드결제분포함여부 - N: 포함하지 않음, Y: 포함
                 .queryParam("FNCG_AMT_AUTO_RDPT_YN", "N") // 융자금액자동상환여부 - N: 기본값
                 .queryParam("PRCS_DVSN", "00") // 처리구분 - 00: 전일매매포함, 01: 전일매매미포함
-                .queryParam("CTX_AREA_FK100", isFirstCall ? "" : ctxAreaFk100) // 연속조회검색조건100
-                .queryParam("CTX_AREA_NK100", isFirstCall ? "" : ctxAreaNk100) // 연속조회키100
+                .queryParam("CTX_AREA_FK100", isFirstCall ? "" : normalizedFk100) // 연속조회검색조건100
+                .queryParam("CTX_AREA_NK100", isFirstCall ? "" : normalizedNk100) // 연속조회키100
                 .build()
                 .toUriString();
 

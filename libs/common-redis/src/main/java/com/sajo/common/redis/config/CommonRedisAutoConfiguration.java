@@ -1,11 +1,14 @@
 package com.sajo.common.redis.config;
 
+import io.lettuce.core.ClientOptions;
+import io.lettuce.core.SocketOptions;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration;
+import org.springframework.boot.data.redis.autoconfigure.LettuceClientConfigurationBuilderCustomizer;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
@@ -30,6 +33,22 @@ import java.util.stream.Collectors;
 @EnableCaching
 @EnableConfigurationProperties(RedisCacheProperties.class)
 public class CommonRedisAutoConfiguration {
+
+    // 기본값(커맨드 60초/연결 10초/DEFAULT 큐잉)이면 Redis 장애 시 요청 스레드가 그만큼 붙잡힌다
+    // commandTimeout/connectTimeout을 짧게 잡고, REJECT_COMMANDS로
+    // 끊김이 이미 감지된 동안엔 큐잉 없이 즉시 실패시킨다. 서비스가 다르게 쓰려면 이 타입 빈을 직접 정의.
+    @Bean
+    @ConditionalOnMissingBean(LettuceClientConfigurationBuilderCustomizer.class)
+    public LettuceClientConfigurationBuilderCustomizer lettuceTimeoutCustomizer() {
+        return builder -> builder
+                .commandTimeout(Duration.ofSeconds(1))
+                .clientOptions(ClientOptions.builder()
+                        .socketOptions(SocketOptions.builder()
+                                .connectTimeout(Duration.ofSeconds(2))
+                                .build())
+                        .disconnectedBehavior(ClientOptions.DisconnectedBehavior.REJECT_COMMANDS)
+                        .build());
+    }
 
     @Bean
     @ConditionalOnMissingBean(name = "redisTemplate")

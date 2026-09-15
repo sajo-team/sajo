@@ -140,6 +140,41 @@ class AccountKisQueryServiceTest {
                 });
     }
 
+    @Test
+    @DisplayName("KIS 응답의 output2 필드가 숫자로 파싱 불가능하면 KIS_BALANCE_INQUIRY_FAILED 예외를 던진다")
+    void getDepositFailsWhenFieldIsUnparsable() {
+        // given
+        UUID userId = UUID.randomUUID();
+        Account account = Account.createAccount(
+                userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
+        KisBalanceResponse kisBalanceResponse = new KisBalanceResponse(
+                "0", "MSG_CD", "정상처리 되었습니다", null, null, List.of(), List.of(unparsableDepositSummary()));
+
+        given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
+        given(kisTokenCacheQueryService.getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL))
+                .willReturn("issued-token");
+        given(kisTrClient.inquireBalance(
+                "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.REAL))
+                .willReturn(kisBalanceResponse);
+
+        // when & then
+        assertThatThrownBy(() -> accountKisQueryService.getDeposit(userId))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(AccountErrorCode.KIS_BALANCE_INQUIRY_FAILED);
+                });
+    }
+
+    private static KisBalanceSummaryResponse unparsableDepositSummary() {
+        return new KisBalanceSummaryResponse(
+                "숫자아님", // dnca_tot_amt - 정상이면 Long.parseLong 가능한 숫자 문자열이어야 함
+                "900000", "800000", null, null, null, null, null, null, null, null, null, null, null,
+                "1500000", "1400000", null, null, null, "50000", null, null, null, null
+        );
+    }
+
     private static KisBalanceSummaryResponse depositSummary() {
         return new KisBalanceSummaryResponse(
                 "1000000", // dnca_tot_amt
@@ -233,40 +268,60 @@ class AccountKisQueryServiceTest {
     }
 
     @Test
-    @DisplayName("ctxAreaFk100/ctxAreaNk100 중 하나만 오면 INVALID_CONTINUATION_CURSOR 예외를 던지고 아무것도 조회하지 않는다")
-    void getHoldingsFailsWhenOnlyOneCursorProvided() {
+    @DisplayName("ctxAreaFk100/ctxAreaNk100 중 하나만 값이 있어도 검증 없이 그대로 KIS에 전달한다 ")
+    void getHoldingsPassesThroughCursorEvenWhenOnlyOneIsBlank() {
         // given
         UUID userId = UUID.randomUUID();
+        Account account = Account.createAccount(
+                userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
+        KisBalanceResponse kisBalanceResponse = new KisBalanceResponse(
+                "0", "MSG_CD", "정상처리 되었습니다", "", "next-nk-2",
+                List.of(holding()), List.of());
+        KisContinuationResult<KisBalanceResponse> continuationResult =
+                new KisContinuationResult<>(kisBalanceResponse, true);
 
-        // when & then
-        assertThatThrownBy(() -> accountKisQueryService.getHoldings(userId, "only-fk", null))
-                .isInstanceOf(BusinessException.class)
-                .satisfies(exception -> {
-                    BusinessException businessException = (BusinessException) exception;
-                    assertThat(businessException.getErrorCode())
-                            .isEqualTo(AccountErrorCode.INVALID_CONTINUATION_CURSOR);
-                });
+        given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
+        given(kisTokenCacheQueryService.getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL))
+                .willReturn("issued-token");
+        given(kisTrClient.inquireBalance(
+                "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.REAL, "", "next-nk"))
+                .willReturn(continuationResult);
 
-        verifyNoInteractions(accountQueryService, kisTokenCacheQueryService, kisTrClient);
+        // when
+        AccountHoldingsResponse result = accountKisQueryService.getHoldings(userId, "", "next-nk");
+
+        // then
+        assertThat(result.holdings()).hasSize(1);
+        assertThat(result.nextCtxAreaNk100()).isEqualTo("next-nk-2");
     }
 
     @Test
-    @DisplayName("ctxAreaFk100은 빈 문자열, ctxAreaNk100은 정상 값이면 INVALID_CONTINUATION_CURSOR 예외를 던진다 "
-            + "(빈 문자열도 null과 동일하게 '커서 없음'으로 취급)")
-    void getHoldingsFailsWhenOneCursorIsBlank() {
+    @DisplayName("보유종목 응답의 필드가 숫자로 파싱 불가능하면 KIS_BALANCE_INQUIRY_FAILED 예외를 던진다")
+    void getHoldingsFailsWhenFieldIsUnparsable() {
         // given
         UUID userId = UUID.randomUUID();
+        Account account = Account.createAccount(
+                userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
+        KisBalanceResponse kisBalanceResponse = new KisBalanceResponse(
+                "0", "MSG_CD", "정상처리 되었습니다", null, null, List.of(unparsableHolding()), List.of());
+        KisContinuationResult<KisBalanceResponse> continuationResult =
+                new KisContinuationResult<>(kisBalanceResponse, false);
+
+        given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
+        given(kisTokenCacheQueryService.getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL))
+                .willReturn("issued-token");
+        given(kisTrClient.inquireBalance(
+                "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.REAL, null, null))
+                .willReturn(continuationResult);
 
         // when & then
-        assertThatThrownBy(() -> accountKisQueryService.getHoldings(userId, "", "next-nk"))
+        assertThatThrownBy(() -> accountKisQueryService.getHoldings(userId, null, null))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(exception -> {
                     BusinessException businessException = (BusinessException) exception;
                     assertThat(businessException.getErrorCode())
-                            .isEqualTo(AccountErrorCode.INVALID_CONTINUATION_CURSOR);
+                            .isEqualTo(AccountErrorCode.KIS_BALANCE_INQUIRY_FAILED);
                 });
-
-        verifyNoInteractions(accountQueryService, kisTokenCacheQueryService, kisTrClient);
     }
 
     @Test
@@ -317,6 +372,15 @@ class AccountKisQueryServiceTest {
                 null, // grta_rt_name
                 null, // sbst_pric
                 null // stck_loan_unpr
+        );
+    }
+
+    private static KisBalanceHoldingResponse unparsableHolding() {
+        return new KisBalanceHoldingResponse(
+                "005930", "삼성전자", null, null, null, null, null,
+                "숫자아님", // hldg_qty - 정상이면 Long.parseLong 가능한 숫자 문자열이어야 함
+                "10", "70000.5", null, "75000", "750000", "49995", "7.14",
+                null, null, null, null, null, null, null, null, null, null, null
         );
     }
 
