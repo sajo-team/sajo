@@ -7,6 +7,7 @@ import com.sajo.market_service.market.controller.dto.response.InternalStockQuote
 import com.sajo.market_service.market.controller.dto.response.InternalStockIndicatorResponse;
 import com.sajo.market_service.market.service.query.MarketInternalQueryService;
 import com.sajo.market_service.market.domain.FinancialPeriodType;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -39,11 +40,26 @@ class MarketInternalQueryControllerTest {
     void returnsKisBaseTimeWithSeoulOffset() throws Exception {
         UUID userId = UUID.randomUUID();
         given(marketInternalQueryService.getQuote(userId, "005930"))
-                .willReturn(new InternalStockQuoteResponse("005930", 71_800L, OffsetDateTime.parse("2026-09-04T14:30:00+09:00")));
+                .willReturn(new InternalStockQuoteResponse(
+                        "005930", 71_800L, 70_500L, OffsetDateTime.parse("2026-09-04T14:30:00+09:00")));
 
         mockMvc.perform(get("/internal/v1/stocks/005930/quote").header("X-User-Id", userId))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.baseTime").value("2026-09-04T14:30:00+09:00"));
+                .andExpect(jsonPath("$.data.baseTime").value("2026-09-04T14:30:00+09:00"))
+                .andExpect(jsonPath("$.data.previousClosePrice").value(70_500));
+    }
+
+    @Test
+    @DisplayName("previousClosePrice가 null이면 응답에서도 null로 내려간다(#228, Trading이 가격 검증 불가로 판단)")
+    void returnsNullPreviousClosePriceWhenNotYetAvailable() throws Exception {
+        UUID userId = UUID.randomUUID();
+        given(marketInternalQueryService.getQuote(userId, "005930"))
+                .willReturn(new InternalStockQuoteResponse(
+                        "005930", 71_800L, null, OffsetDateTime.parse("2026-09-04T14:30:00+09:00")));
+
+        mockMvc.perform(get("/internal/v1/stocks/005930/quote").header("X-User-Id", userId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.previousClosePrice").value(org.hamcrest.Matchers.nullValue()));
     }
 
     @Test
