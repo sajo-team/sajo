@@ -1,6 +1,7 @@
 package com.sajo.market_service.market.service.query;
 
 import com.sajo.common.exception.BusinessException;
+import com.sajo.market_service.market.cache.MarketQuoteCacheKey;
 import com.sajo.market_service.market.cache.MarketQuoteCacheLock;
 import com.sajo.market_service.market.client.kis.KisApiClient;
 import com.sajo.market_service.market.client.user.UserAccountFeignClient;
@@ -23,7 +24,6 @@ import java.util.UUID;
 @Slf4j
 public class MarketQuoteQueryService {
 
-    private static final String QUOTE_CACHE_KEY_PREFIX = "market:quote:";
     private static final Duration LOCK_RETRY_INTERVAL = Duration.ofMillis(50);
 
     private final RedisTemplate<String, QuoteResponse> quoteRedisTemplate;
@@ -135,7 +135,7 @@ public class MarketQuoteQueryService {
     }
 
     private String createCacheKey(String stockCode) {
-        return QUOTE_CACHE_KEY_PREFIX + stockCode;
+        return MarketQuoteCacheKey.of(stockCode);
     }
 
     private boolean isCacheableQuote(QuoteResponse quote) {

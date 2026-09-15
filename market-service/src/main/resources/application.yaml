@@ -5,6 +5,15 @@ spring:
   application:
     name: market-service
 
+  # 커스텀 TaskScheduler를 따로 두지 않으면 Spring Boot 기본값(단일 스레드)을 모든 @Scheduled 빈이
+  # 공유한다. MarketDailyPriceScheduler(종목별 500ms 간격 순차 호출, 장시간 실행)와
+  # MarketStockIndicatorScheduler가 도는 동안 1분 정확도가 중요한 MarketRealtimePriceScheduler가
+  # 밀리거나 tick을 건너뛸 수 있어(코드 리뷰 반영), 스케줄러 개수(3개)보다 여유 있게 풀 크기를 키운다.
+  task:
+    scheduling:
+      pool:
+        size: ${MARKET_SCHEDULING_POOL_SIZE:4}
+
   flyway:
     enabled: true
     schemas: market_strategy
@@ -62,6 +71,7 @@ market:
     target-stock-codes: ${MARKET_WEBSOCKET_TARGET_STOCK_CODES:}
     handshake-timeout: ${MARKET_WEBSOCKET_HANDSHAKE_TIMEOUT:10s}
     text-message-buffer-size: ${MARKET_WEBSOCKET_TEXT_MESSAGE_BUFFER_SIZE:131072}
+    realtime-price-snapshot-cron: "${MARKET_WEBSOCKET_REALTIME_PRICE_SNAPSHOT_CRON:0 * * * * *}"
 
 sajo:
   scheduler:
