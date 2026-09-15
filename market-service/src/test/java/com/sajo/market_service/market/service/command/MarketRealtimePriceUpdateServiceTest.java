@@ -1,5 +1,6 @@
 package com.sajo.market_service.market.service.command;
 
+import com.sajo.market_service.market.cache.MarketQuoteCacheLock;
 import com.sajo.market_service.market.config.MarketQuoteCacheProperties;
 import com.sajo.market_service.market.dto.response.QuoteResponse;
 import com.sajo.market_service.market.service.parser.KisRealtimePriceMessageParser;
@@ -39,13 +40,15 @@ class MarketRealtimePriceUpdateServiceTest {
     private final ValueOperations<String, QuoteResponse> valueOperations = mock(ValueOperations.class);
     private final MarketQuoteCacheProperties cacheProperties =
             new MarketQuoteCacheProperties(Duration.ofSeconds(60), null, null);
+    private final MarketQuoteCacheLock cacheLock = mock(MarketQuoteCacheLock.class);
     private final Clock clock = Clock.fixed(Instant.parse("2026-09-14T15:07:46Z"), ZoneOffset.UTC);
 
     private final MarketRealtimePriceUpdateService service =
-            new MarketRealtimePriceUpdateService(parser, quoteRedisTemplate, cacheProperties, clock);
+            new MarketRealtimePriceUpdateService(parser, quoteRedisTemplate, cacheProperties, cacheLock, clock);
 
     @Test
     void updatesRedisCacheWithNormalizedQuoteAndConfiguredTtl() {
+        given(cacheLock.tryLock(eq("005930"), anyString(), any(Duration.class))).willReturn(true);
         given(quoteRedisTemplate.opsForValue()).willReturn(valueOperations);
         given(valueOperations.get("market:quote:005930")).willReturn(null);
 
@@ -58,16 +61,20 @@ class MarketRealtimePriceUpdateServiceTest {
         assertThat(saved.stockCode()).isEqualTo("005930");
         assertThat(saved.currentPrice()).isEqualTo(249250L);
         assertThat(saved.fetchedAt()).isEqualTo(Instant.parse("2026-09-14T15:07:46Z"));
+        verify(cacheLock).unlock(eq("005930"), anyString());
     }
 
     @Test
     void doesNotPropagateWhenRedisReadFails() {
+        given(cacheLock.tryLock(eq("005930"), anyString(), any(Duration.class))).willReturn(true);
         given(quoteRedisTemplate.opsForValue()).willReturn(valueOperations);
         given(valueOperations.get(anyString())).willThrow(new QueryTimeoutException("timeout"));
 
         service.updateFromRawMessage(RAW_SINGLE_RECORD);
 
         verify(valueOperations, never()).set(anyString(), any(QuoteResponse.class), any(Duration.class));
+        // 락은 실패 시에도 반드시 해제되어야 한다.
+        verify(cacheLock).unlock(eq("005930"), anyString());
     }
 
     @Test
@@ -75,5 +82,16 @@ class MarketRealtimePriceUpdateServiceTest {
         service.updateFromRawMessage("{\"header\":{\"tr_id\":\"H0STCNT0\"}}");
 
         verifyNoInteractions(quoteRedisTemplate);
+        verifyNoInteractions(cacheLock);
+    }
+
+    @Test
+    void skipsCacheUpdateWhenRestPathAlreadyHoldsTheLock() {
+        given(cacheLock.tryLock(eq("005930"), anyString(), any(Duration.class))).willReturn(false);
+
+        service.updateFromRawMessage(RAW_SINGLE_RECORD);
+
+        verifyNoInteractions(quoteRedisTemplate);
+        verify(cacheLock, never()).unlock(anyString(), anyString());
     }
 }

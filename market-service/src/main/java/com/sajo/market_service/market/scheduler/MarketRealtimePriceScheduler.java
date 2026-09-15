@@ -80,8 +80,7 @@ public class MarketRealtimePriceScheduler {
                 log.warn("실시간 시세 스냅샷 대상 종목을 찾을 수 없습니다. stockCode={}", stockCode);
                 return false;
             }
-            saveSnapshot(stockId, now, quote);
-            return true;
+            return saveSnapshot(stockId, now, quote);
         } catch (DataAccessException exception) {
             log.warn("실시간 시세 스냅샷 저장 중 Redis/DB 접근에 실패했습니다. stockCode={}", stockCode, exception);
             return false;
@@ -90,7 +89,10 @@ public class MarketRealtimePriceScheduler {
 
     // JpaRepository.save()는 SimpleJpaRepository 자체가 @Transactional이라 별도 트랜잭션 래핑이
     // 필요 없다(같은 빈 안에서 @Transactional 메서드를 직접 호출하면 프록시를 안 거쳐 적용도 안 된다).
-    private void saveSnapshot(UUID stockId, LocalDateTime now, QuoteResponse quote) {
+    // 반환값(저장 성공 여부)을 snapshotOne()까지 그대로 돌려줘야, 위 snapshotRealtimePrices()의
+    // savedCount/skippedCount 통계에서 "같은 분 중복이라 건너뜀"이 "저장됨"으로 잘못 집계되지 않는다
+    // (코드 리뷰 반영 — 동작에는 영향 없는 로그 통계 정확도 문제였다).
+    private boolean saveSnapshot(UUID stockId, LocalDateTime now, QuoteResponse quote) {
         try {
             MarketStockPrice price = MarketStockPrice.create(
                     stockId,
@@ -111,10 +113,12 @@ public class MarketRealtimePriceScheduler {
                     PriceSource.WEBSOCKET
             );
             marketStockPriceCommandRepository.save(price);
+            return true;
         } catch (DataIntegrityViolationException exception) {
             // 같은 분(minute)에 대한 스냅샷이 이미 저장돼 있는 경우다(유니크 제약, V106 마이그레이션).
             // 단일 인스턴스 운영을 전제로 하지만, 재시도/재기동 등으로 겹치는 경우를 대비한 방어다.
             log.debug("이미 같은 분에 대한 실시간 시세 스냅샷이 존재해 건너뜁니다. stockId={}", stockId);
+            return false;
         }
     }
 }
