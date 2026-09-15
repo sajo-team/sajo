@@ -66,10 +66,8 @@ public class KisTokenLogCommandService {
         }
     }
 
-    // 관리자 목록 조회(getTokenStatuses)가 이력 전체를 훑지 않고 이 "현재 상태" 테이블만
-    // 보게 하기 위한 upsert. 로그 저장과 같은 트랜잭션 안에서 처리해 항상 같이 성공/실패한다.
-    // DB의 ON CONFLICT로 원자적으로 처리되므로 동시에 같은 user+tokenType 이벤트가 들어와도
-    // unique violation 없이 안전하다 (KisTokenStatusCommandRepository.upsert 참고).
+    // 관리자 목록 조회(getTokenStatuses)가 이력 전체를 훑지 않고 이 "현재 상태" 테이블만 보게
+    // 하기 위한 upsert. 로그 저장과 같은 트랜잭션 안에서 처리해 항상 같이 성공/실패한다.
     private void upsertStatus(KisTokenLog tokenLog) {
         Instant now = tokenLog.getCreatedAt() != null ? tokenLog.getCreatedAt() : Instant.now();
         kisTokenStatusCommandRepository.upsert(
