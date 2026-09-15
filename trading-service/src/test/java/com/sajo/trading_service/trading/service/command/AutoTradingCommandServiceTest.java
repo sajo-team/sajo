@@ -827,7 +827,7 @@ class AutoTradingCommandServiceTest {
     }
 
     @Test
-    @DisplayName("이미 활성화된 자동매매를 다시 활성화하면 전략을 재조회하지 않는다")
+    @DisplayName("enabled true 요청은 현재 활성 상태와 관계없이 활성화 안전 검증을 수행한다")
     void updateAlreadyEnabledAutoTrading() {
         // given
         UUID userId = UUID.randomUUID();
@@ -856,25 +856,43 @@ class AutoTradingCommandServiceTest {
                 ))
                 .willReturn(Optional.of(autoTrading));
 
+        given(tradingLimitCommandRepository.existsByUserId(userId))
+                .willReturn(true);
+
+        given(strategyClient.getStrategy(strategyId))
+                .willReturn(
+                        new StrategyClientResponse(
+                                strategyId,
+                                userId,
+                                StrategyStatus.ACTIVE
+                        )
+                );
+
         given(autoTradingUpdateTransactionService.update(
                 userId,
                 autoTradingId,
                 request
-        )).willReturn(AutoTradingUpdateResponse.from(autoTrading));
-
-        // when
-        autoTradingCommandService.updateAutoTrading(
-                userId,
-                autoTradingId,
-                request
+        )).willReturn(
+                AutoTradingUpdateResponse.from(autoTrading)
         );
 
-        // then
-        verify(strategyClient, never())
-                .getStrategy(any());
+        // when
+        AutoTradingUpdateResponse response =
+                autoTradingCommandService.updateAutoTrading(
+                        userId,
+                        autoTradingId,
+                        request
+                );
 
-        verify(tradingLimitCommandRepository, never())
-                .existsByUserId(any());
+        // then
+        assertThat(response.enabled())
+                .isTrue();
+
+        verify(tradingLimitCommandRepository)
+                .existsByUserId(userId);
+
+        verify(strategyClient)
+                .getStrategy(strategyId);
 
         verify(autoTradingUpdateTransactionService)
                 .update(

@@ -77,11 +77,7 @@ public class AutoTradingCommandService {
                                 )
                         );
 
-        boolean enabling =
-                Boolean.TRUE.equals(request.enabled())
-                        && !Boolean.TRUE.equals(autoTrading.getEnabled());
-
-        if (enabling) {
+        if (Boolean.TRUE.equals(request.enabled())) {
             if (!tradingLimitCommandRepository.existsByUserId(userId)) {
                 throw new BusinessException(
                         TradingErrorCode.TRADING_LIMIT_REQUIRED

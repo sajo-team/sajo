@@ -26,7 +26,7 @@ public class AutoTradingUpdateTransactionService {
     ) {
         AutoTrading autoTrading =
                 autoTradingCommandRepository
-                        .findByIdAndUserIdAndDeletedAtIsNull(
+                        .findByIdAndUserIdForUpdate(
                                 autoTradingId,
                                 userId
                         )

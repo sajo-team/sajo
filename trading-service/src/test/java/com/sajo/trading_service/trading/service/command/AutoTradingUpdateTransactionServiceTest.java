@@ -52,7 +52,7 @@ class AutoTradingUpdateTransactionServiceTest {
                 );
 
         given(autoTradingCommandRepository
-                .findByIdAndUserIdAndDeletedAtIsNull(
+                .findByIdAndUserIdForUpdate(
                         autoTradingId,
                         userId
                 ))
@@ -99,7 +99,7 @@ class AutoTradingUpdateTransactionServiceTest {
                 );
 
         given(autoTradingCommandRepository
-                .findByIdAndUserIdAndDeletedAtIsNull(
+                .findByIdAndUserIdForUpdate(
                         autoTradingId,
                         userId
                 ))
@@ -138,7 +138,7 @@ class AutoTradingUpdateTransactionServiceTest {
                 );
 
         given(autoTradingCommandRepository
-                .findByIdAndUserIdAndDeletedAtIsNull(
+                .findByIdAndUserIdForUpdate(
                         autoTradingId,
                         userId
                 ))
