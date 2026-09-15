@@ -1,12 +1,12 @@
 package com.sajo.market_service.market.scheduler;
 
 import com.sajo.market_service.market.cache.MarketQuoteCacheKey;
-import com.sajo.market_service.market.domain.MarketStock;
 import com.sajo.market_service.market.domain.MarketStockPrice;
 import com.sajo.market_service.market.domain.PriceSource;
 import com.sajo.market_service.market.dto.response.QuoteResponse;
-import com.sajo.market_service.market.repository.command.MarketStockCommandRepository;
 import com.sajo.market_service.market.repository.command.MarketStockPriceCommandRepository;
+import com.sajo.market_service.market.repository.query.MarketStockCollectionTarget;
+import com.sajo.market_service.market.repository.query.MarketStockQueryRepository;
 import com.sajo.market_service.market.websocket.KisWebSocketClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,8 +19,10 @@ import org.springframework.stereotype.Component;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * 구독 중인 종목들의 Redis 최신 시세를 1분마다 스냅샷해 {@code m_market_stocks_price}에
@@ -42,7 +44,7 @@ import java.util.UUID;
 public class MarketRealtimePriceScheduler {
 
     private final KisWebSocketClient kisWebSocketClient;
-    private final MarketStockCommandRepository marketStockCommandRepository;
+    private final MarketStockQueryRepository marketStockQueryRepository;
     private final MarketStockPriceCommandRepository marketStockPriceCommandRepository;
     private final RedisTemplate<String, QuoteResponse> quoteRedisTemplate;
     private final Clock clock;
@@ -54,11 +56,19 @@ public class MarketRealtimePriceScheduler {
             return;
         }
 
+        // stockCode → stockId 매핑은 종목별로 매분 개별 SELECT를 하지 않고 한 번의 IN 조회로 가져온다
+        // (코드 리뷰 반영). 조회 전용이라 CommandRepository가 아닌 QueryRepository를 사용한다.
+        Map<String, UUID> stockIdsByCode = marketStockQueryRepository.findCollectionTargetsByStockCodes(stockCodes)
+                .stream()
+                .collect(Collectors.toMap(
+                        MarketStockCollectionTarget::getStockCode,
+                        MarketStockCollectionTarget::getStockId));
+
         LocalDateTime now = LocalDateTime.now(clock).withSecond(0).withNano(0);
         int savedCount = 0;
         int skippedCount = 0;
         for (String stockCode : stockCodes) {
-            if (snapshotOne(stockCode, now)) {
+            if (snapshotOne(stockCode, stockIdsByCode.get(stockCode), now)) {
                 savedCount++;
             } else {
                 skippedCount++;
@@ -67,15 +77,12 @@ public class MarketRealtimePriceScheduler {
         log.debug("실시간 시세 1분 스냅샷을 완료했습니다. savedCount={}, skippedCount={}", savedCount, skippedCount);
     }
 
-    private boolean snapshotOne(String stockCode, LocalDateTime now) {
+    private boolean snapshotOne(String stockCode, UUID stockId, LocalDateTime now) {
         try {
             QuoteResponse quote = quoteRedisTemplate.opsForValue().get(MarketQuoteCacheKey.of(stockCode));
             if (quote == null || quote.currentPrice() == null) {
                 return false;
             }
-            UUID stockId = marketStockCommandRepository.findByStockCode(stockCode)
-                    .map(MarketStock::getId)
-                    .orElse(null);
             if (stockId == null) {
                 log.warn("실시간 시세 스냅샷 대상 종목을 찾을 수 없습니다. stockCode={}", stockCode);
                 return false;

@@ -1,24 +1,23 @@
 package com.sajo.market_service.market.scheduler;
 
-import com.sajo.market_service.market.domain.MarketStock;
 import com.sajo.market_service.market.domain.MarketStockPrice;
 import com.sajo.market_service.market.domain.PriceSource;
 import com.sajo.market_service.market.dto.response.QuoteResponse;
-import com.sajo.market_service.market.repository.command.MarketStockCommandRepository;
 import com.sajo.market_service.market.repository.command.MarketStockPriceCommandRepository;
+import com.sajo.market_service.market.repository.query.MarketStockCollectionTarget;
+import com.sajo.market_service.market.repository.query.MarketStockQueryRepository;
 import com.sajo.market_service.market.websocket.KisWebSocketClient;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
-import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
-import java.util.Optional;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -32,7 +31,7 @@ class MarketRealtimePriceSchedulerTest {
     private static final UUID STOCK_ID = UUID.fromString("22222222-2222-2222-2222-222222222222");
 
     private final KisWebSocketClient kisWebSocketClient = mock(KisWebSocketClient.class);
-    private final MarketStockCommandRepository marketStockCommandRepository = mock(MarketStockCommandRepository.class);
+    private final MarketStockQueryRepository marketStockQueryRepository = mock(MarketStockQueryRepository.class);
     private final MarketStockPriceCommandRepository marketStockPriceCommandRepository =
             mock(MarketStockPriceCommandRepository.class);
     @SuppressWarnings("unchecked")
@@ -42,7 +41,7 @@ class MarketRealtimePriceSchedulerTest {
     private final Clock clock = Clock.fixed(Instant.parse("2026-09-14T15:07:00Z"), ZoneOffset.UTC);
 
     private final MarketRealtimePriceScheduler scheduler = new MarketRealtimePriceScheduler(
-            kisWebSocketClient, marketStockCommandRepository, marketStockPriceCommandRepository,
+            kisWebSocketClient, marketStockQueryRepository, marketStockPriceCommandRepository,
             quoteRedisTemplate, clock);
 
     @Test
@@ -50,9 +49,8 @@ class MarketRealtimePriceSchedulerTest {
         given(kisWebSocketClient.subscribedStockCodes()).willReturn(Set.of("005930"));
         given(quoteRedisTemplate.opsForValue()).willReturn(valueOperations);
         given(valueOperations.get("market:quote:005930")).willReturn(sampleQuote());
-        MarketStock stock = MarketStock.create("005930", "삼성전자", "KOSPI", null, null, null);
-        ReflectionTestUtils.setField(stock, "id", STOCK_ID);
-        given(marketStockCommandRepository.findByStockCode("005930")).willReturn(Optional.of(stock));
+        given(marketStockQueryRepository.findCollectionTargetsByStockCodes(Set.of("005930")))
+                .willReturn(List.of(target("005930", STOCK_ID)));
 
         scheduler.snapshotRealtimePrices();
 
@@ -90,7 +88,8 @@ class MarketRealtimePriceSchedulerTest {
         given(kisWebSocketClient.subscribedStockCodes()).willReturn(Set.of("005930"));
         given(quoteRedisTemplate.opsForValue()).willReturn(valueOperations);
         given(valueOperations.get("market:quote:005930")).willReturn(sampleQuote());
-        given(marketStockCommandRepository.findByStockCode("005930")).willReturn(Optional.empty());
+        given(marketStockQueryRepository.findCollectionTargetsByStockCodes(Set.of("005930")))
+                .willReturn(List.of());
 
         scheduler.snapshotRealtimePrices();
 
@@ -102,13 +101,19 @@ class MarketRealtimePriceSchedulerTest {
         given(kisWebSocketClient.subscribedStockCodes()).willReturn(Set.of("005930"));
         given(quoteRedisTemplate.opsForValue()).willReturn(valueOperations);
         given(valueOperations.get("market:quote:005930")).willReturn(sampleQuote());
-        MarketStock stock = MarketStock.create("005930", "삼성전자", "KOSPI", null, null, null);
-        ReflectionTestUtils.setField(stock, "id", STOCK_ID);
-        given(marketStockCommandRepository.findByStockCode("005930")).willReturn(Optional.of(stock));
+        given(marketStockQueryRepository.findCollectionTargetsByStockCodes(Set.of("005930")))
+                .willReturn(List.of(target("005930", STOCK_ID)));
         given(marketStockPriceCommandRepository.save(any())).willThrow(new DataIntegrityViolationException("dup"));
 
         org.assertj.core.api.Assertions.assertThatCode(scheduler::snapshotRealtimePrices)
                 .doesNotThrowAnyException();
+    }
+
+    private MarketStockCollectionTarget target(String stockCode, UUID stockId) {
+        return new MarketStockCollectionTarget() {
+            public UUID getStockId() { return stockId; }
+            public String getStockCode() { return stockCode; }
+        };
     }
 
     private QuoteResponse sampleQuote() {
