@@ -31,6 +31,7 @@ public class AutoTradingCommandService {
     private final TradingLimitCommandRepository tradingLimitCommandRepository;
     private final StrategyClient strategyClient;
     private final AutoTradingCreateTransactionService autoTradingCreateTransactionService;
+    private final AutoTradingUpdateTransactionService autoTradingUpdateTransactionService;
     private final OrderQueryRepository orderQueryRepository;
 
     public AutoTradingCreateResponse createAutoTrading(
@@ -52,7 +53,6 @@ public class AutoTradingCommandService {
         );
     }
 
-    @Transactional
     public AutoTradingUpdateResponse updateAutoTrading(
             UUID userId,
             UUID autoTradingId,
@@ -77,8 +77,11 @@ public class AutoTradingCommandService {
                                 )
                         );
 
-        if (Boolean.TRUE.equals(request.enabled())) {
+        boolean enabling =
+                Boolean.TRUE.equals(request.enabled())
+                        && !Boolean.TRUE.equals(autoTrading.getEnabled());
 
+        if (enabling) {
             if (!tradingLimitCommandRepository.existsByUserId(userId)) {
                 throw new BusinessException(
                         TradingErrorCode.TRADING_LIMIT_REQUIRED
@@ -97,12 +100,11 @@ public class AutoTradingCommandService {
             }
         }
 
-        autoTrading.update(
-                request.enabled(),
-                request.direction()
+        return autoTradingUpdateTransactionService.update(
+                userId,
+                autoTradingId,
+                request
         );
-
-        return AutoTradingUpdateResponse.from(autoTrading);
     }
 
     @Transactional
@@ -139,13 +141,16 @@ public class AutoTradingCommandService {
         autoTrading.softDelete(userId);
     }
 
-    private StrategyClientResponse getStrategyOrThrow(UUID strategyId) {
+    private StrategyClientResponse getStrategyOrThrow(
+            UUID strategyId
+    ) {
         try {
             return strategyClient.getStrategy(strategyId);
 
         } catch (FeignApiException e) {
             if (e.getStatus() == 404
                     && MARKET_STRATEGY_NOT_FOUND.equals(e.getErrorCode())) {
+
                 throw new BusinessException(
                         TradingErrorCode.STRATEGY_NOT_FOUND
                 );
