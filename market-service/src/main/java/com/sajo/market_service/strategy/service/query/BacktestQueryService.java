@@ -85,14 +85,24 @@ public class BacktestQueryService {
 
         return BacktestInternalResponse.from(backtest);
     }
-
+    
     private Backtest getBacktestByOwner(UUID userId, UUID strategyId, UUID backtestId) {
-        return backtestQueryRepository
-                .findByIdAndStrategyIdAndUserIdAndDeletedAtIsNull(backtestId, strategyId, userId)
+        Backtest backtest = backtestQueryRepository.findByIdAndDeletedAtIsNull(backtestId)
                 .orElseThrow(() -> {
-                    log.warn("백테스트 조회 실패: 백테스트를 찾을 수 없습니다. strategyId={}, backtestId={}",
-                            strategyId, backtestId);
+                    log.warn("백테스트를 찾을 수 없습니다.\n backtestId = {}", backtestId);
                     return new BusinessException(StrategyErrorCode.BACKTEST_NOT_FOUND);
                 });
+
+        if (!backtest.getStrategyId().equals(strategyId)) {
+            log.warn("백테스트를 찾을 수 없습니다.\n backtestId = {}", backtestId);
+            throw new BusinessException(StrategyErrorCode.BACKTEST_NOT_FOUND);
+        }
+
+        if (!backtest.getUserId().equals(userId)) {
+            log.warn("백테스트 접근 거부 : 소유자가 아닙니다.\n backtestId={}, requestUserId={}, userId={}", backtestId, userId, backtest.getUserId());
+            throw new BusinessException(StrategyErrorCode.BACKTEST_ACCESS_DENIED);
+        }
+
+        return backtest;
     }
 }

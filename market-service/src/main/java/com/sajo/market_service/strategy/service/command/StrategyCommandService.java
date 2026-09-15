@@ -71,11 +71,7 @@ public class StrategyCommandService {
     ) {
         log.info("전략 수정 요청 시작. strategyId={}", strategyId);
 
-        Strategy strategy = strategyCommandRepository.findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId)
-                .orElseThrow(() -> {
-                    log.warn("전략 수정 실패: 전략을 찾을 수 없습니다. strategyId={}", strategyId);
-                    return new BusinessException(StrategyErrorCode.STRATEGY_NOT_FOUND);
-                });
+        Strategy strategy = getOwnedStrategy(strategyId, userId);
 
         strategy.update(
                 request.strategyName(),
@@ -99,11 +95,7 @@ public class StrategyCommandService {
     public void deleteStrategy(UUID userId, UUID strategyId) {
         log.info("전략 삭제 요청 시작. strategyId={}", strategyId);
 
-        Strategy strategy = strategyCommandRepository.findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId)
-                .orElseThrow(() -> {
-                    log.warn("전략 삭제 실패: 전략을 찾을 수 없습니다. strategyId={}", strategyId);
-                    return new BusinessException(StrategyErrorCode.STRATEGY_NOT_FOUND);
-                });
+        Strategy strategy = getOwnedStrategy(strategyId, userId);
 
         strategy.delete(userId);
         log.info("전략 삭제 완료. strategyId={}", strategyId);
@@ -117,11 +109,7 @@ public class StrategyCommandService {
     ) {
         log.info("전략 상태 변경 요청 시작. strategyId={}, active={}", strategyId, request.active());
 
-        Strategy strategy = strategyCommandRepository.findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId)
-                .orElseThrow(() -> {
-                    log.warn("전략 상태 변경 실패: 전략을 찾을 수 없습니다. strategyId={}", strategyId);
-                    return new BusinessException(StrategyErrorCode.STRATEGY_NOT_FOUND);
-                });
+        Strategy strategy = getOwnedStrategy(strategyId, userId);
 
         StrategyActivationSnapshot snapshot = StrategyActivationSnapshot.from(strategy);
 
@@ -207,5 +195,20 @@ public class StrategyCommandService {
                     indicatorName + " 지표가 없어 전략을 활성화할 수 없습니다."
             );
         }
+    }
+
+    private Strategy getOwnedStrategy(UUID strategyId, UUID userId) {
+        Strategy strategy = strategyCommandRepository.findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId)
+                .orElseThrow(() -> {
+                    log.warn("전략을 찾을 수 없습니다.\n strategyId = {}", strategyId);
+                    return new BusinessException(StrategyErrorCode.STRATEGY_NOT_FOUND);
+                });
+
+        if (!strategy.getUserId().equals(userId)) {
+            log.warn("전략 접근 거부 : 소유자가 아닙니다.\n strategyId={}, requestUserId={}, userId={}", strategyId, userId, strategy.getUserId());
+            throw new BusinessException(StrategyErrorCode.STRATEGY_ACCESS_DENIED);
+        }
+
+        return strategy;
     }
 }
