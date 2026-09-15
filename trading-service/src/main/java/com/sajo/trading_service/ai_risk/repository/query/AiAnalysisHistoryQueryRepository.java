@@ -1,6 +1,7 @@
 package com.sajo.trading_service.ai_risk.repository.query;
 
 import com.sajo.trading_service.ai_risk.document.AiAnalysisHistory;
+import com.sajo.trading_service.ai_risk.domain.AiPromptKey;
 import org.springframework.data.mongodb.repository.MongoRepository;
 
 import java.util.Collection;
@@ -12,5 +13,8 @@ public interface AiAnalysisHistoryQueryRepository extends MongoRepository<AiAnal
 
     Optional<AiAnalysisHistory> findByAnalysisId(UUID analysisId);
 
-    List<AiAnalysisHistory> findAllByPrompt_VersionIn(Collection<String> versions);
+    List<AiAnalysisHistory> findAllByPrompt_PromptKeyAndPrompt_VersionIn(
+            AiPromptKey promptKey,
+            Collection<String> versions
+    );
 }

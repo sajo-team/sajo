@@ -131,7 +131,7 @@ public class AiPromptVersionHistoryIntegrationTest {
                 .andExpect(jsonPath("$.data.content.length()").value(1))
 
                 .andExpect(jsonPath("$.data.content[0].promptKey")
-                        .value("RISK_ANALYSIS"))
+                        .value("STRATEGY_RISK_ANALYSIS"))
                 .andExpect(jsonPath("$.data.content[0].version")
                         .value("v1"))
                 .andExpect(jsonPath("$.data.content[0].status")

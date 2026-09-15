@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -22,6 +23,12 @@ public class AiPromptVersionQueryService {
 
     private final AiPromptVersionQueryRepository promptVersionQueryRepository;
     private final AiAnalysisHistoryQueryRepository aiAnalysisHistoryQueryRepository;
+
+    private record PromptStatKey(
+            AiPromptKey promptKey,
+            String version
+    ){
+    }
 
     private static class PromptStatistics {
 
@@ -57,11 +64,7 @@ public class AiPromptVersionQueryService {
     public Page<AiPromptVersionHistoryResponse> getPromptVersionHistories(Pageable pageable){
         Page<AiPromptVersion> promptVersions = promptVersionQueryRepository.findAll(pageable);
 
-        List<String> versions = promptVersions.getContent().stream()
-                .map(AiPromptVersion :: getVersion)
-                .toList();
-
-        if(versions.isEmpty()){
+        if(promptVersions.isEmpty()){
             return promptVersions.map(promptVersion ->
                     AiPromptVersionHistoryResponse.of(
                             promptVersion,
@@ -72,7 +75,17 @@ public class AiPromptVersionQueryService {
             );
         }
 
-        List<AiAnalysisHistory> histories = aiAnalysisHistoryQueryRepository.findAllByPrompt_VersionIn(versions);
+        Map<AiPromptKey, List<String>> versionsByPromptKey = promptVersions.getContent().stream()
+                .collect(Collectors.groupingBy(
+                        AiPromptVersion::getPromptKey,
+                        Collectors.mapping(
+                                AiPromptVersion::getVersion,
+                                Collectors.toList()
+                        )
+                ));
+
+        List<AiAnalysisHistory> histories = versionsByPromptKey.entrySet().stream()
+                .flatMap(entry -> aiAnalysisHistoryQueryRepository.findAllByPrompt_PromptKeyAndPrompt_VersionIn(entry.getKey(), entry.getValue()).stream()).toList();
 
         if(histories.isEmpty()){
             return promptVersions.map(promptVersion ->
@@ -85,7 +98,7 @@ public class AiPromptVersionQueryService {
             );
         }
 
-        Map<String, PromptStatistics> statisticsMap = new HashMap<>();
+        Map<PromptStatKey, PromptStatistics> statisticsMap = new HashMap<>();
 
         for (AiAnalysisHistory history : histories){
 
@@ -93,14 +106,22 @@ public class AiPromptVersionQueryService {
                 continue;
             }
 
-            String version = history.getPrompt().version();
+            PromptStatKey key = new PromptStatKey(
+                    history.getPrompt().promptKey(),
+                    history.getPrompt().version()
+            );
 
-            statisticsMap.computeIfAbsent(version, key -> new PromptStatistics())
+            statisticsMap.computeIfAbsent(key, ignored -> new PromptStatistics())
                     .add(history.getResult());
         }
 
         return promptVersions.map(promptVersion -> {
-            PromptStatistics statistics = statisticsMap.get(promptVersion.getVersion());
+            PromptStatKey key = new PromptStatKey(
+                    promptVersion.getPromptKey(),
+                    promptVersion.getVersion()
+            );
+
+            PromptStatistics statistics = statisticsMap.get(key);
 
             if(statistics == null){
                 return AiPromptVersionHistoryResponse.of(
