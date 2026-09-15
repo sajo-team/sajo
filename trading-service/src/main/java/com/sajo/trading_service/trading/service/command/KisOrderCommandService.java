@@ -4,11 +4,13 @@ import com.sajo.common.exception.BusinessException;
 import com.sajo.common.feign.FeignApiException;
 import com.sajo.trading_service.trading.client.AccountClient;
 import com.sajo.trading_service.trading.client.KisOrderClient;
+import com.sajo.trading_service.trading.client.MarketStockClient;
 import com.sajo.trading_service.trading.client.dto.request.KisOrderRequest;
 import com.sajo.trading_service.trading.client.dto.response.*;
 import com.sajo.trading_service.trading.domain.Order;
 import com.sajo.trading_service.trading.domain.enums.AccountType;
 import com.sajo.trading_service.trading.domain.enums.OrderType;
+import com.sajo.trading_service.trading.validation.KisOrderPriceValidator;
 import feign.FeignException;
 import feign.RetryableException;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +27,8 @@ public class KisOrderCommandService {
     private final AccountClient accountClient;
     private final KisOrderClient kisOrderClient;
     private final OrderStatusCommandService orderStatusCommandService;
+    private final MarketStockClient marketStockClient;
+    private final KisOrderPriceValidator kisOrderPriceValidator;
 
     public void executeOrder(UUID orderId) {
 
@@ -180,6 +184,84 @@ public class KisOrderCommandService {
                 );
                 return;
             }
+        }
+        /*
+         * 주문 가격 사전 검증
+         */
+        MarketStockQuoteResponse quoteResponse;
+
+        try {
+            quoteResponse =
+                    marketStockClient.getQuote(
+                            order.getUserId(),
+                            order.getStockCode()
+                    );
+
+        } catch (RetryableException e) {
+            log.warn(
+                    "Market Service 일시 장애로 주문을 재시도 상태로 복구합니다. orderId={}",
+                    orderId,
+                    e
+            );
+
+            orderStatusCommandService.retry(orderId);
+            return;
+
+        } catch (FeignException e) {
+
+            if (e.status() >= 500 || e.status() == 429) {
+                log.warn(
+                        "Market Service 일시 오류로 주문을 재시도 상태로 복구합니다. orderId={}, status={}",
+                        orderId,
+                        e.status(),
+                        e
+                );
+
+                orderStatusCommandService.retry(orderId);
+
+            } else {
+                orderStatusCommandService.fail(
+                        orderId,
+                        "MARKET_SERVICE_HTTP_" + e.status(),
+                        "주문 가격 검증을 위한 시세 정보를 확인할 수 없습니다."
+                );
+            }
+
+            return;
+        }
+
+        Long previousClosePrice = quoteResponse.previousClosePrice();
+
+        if (previousClosePrice == null || previousClosePrice <= 0) {
+            orderStatusCommandService.fail(
+                    orderId,
+                    "ORDER_PRICE_VALIDATION_UNAVAILABLE",
+                    "주문 가격 검증에 필요한 시세 정보를 확인할 수 없습니다."
+            );
+            return;
+        }
+
+        long orderPrice = order.getSignalPrice();
+
+        if (!kisOrderPriceValidator.isValidTickSize(orderPrice)) {
+            orderStatusCommandService.fail( // 호가 단위 검증
+                    orderId,
+                    "INVALID_ORDER_TICK_SIZE",
+                    "주문 가격이 해당 가격대의 호가단위에 맞지 않습니다."
+            );
+            return;
+        }
+
+        if (!kisOrderPriceValidator.isWithinDailyPriceLimit(
+                orderPrice,
+                previousClosePrice
+        )) {
+            orderStatusCommandService.fail( // 상·하한가 검증
+                    orderId,
+                    "ORDER_PRICE_OUT_OF_RANGE",
+                    "주문 가격이 당일 허용 가격 범위를 벗어났습니다."
+            );
+            return;
         }
 
         /*
