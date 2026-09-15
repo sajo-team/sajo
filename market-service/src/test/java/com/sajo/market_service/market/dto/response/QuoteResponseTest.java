@@ -8,6 +8,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -45,7 +46,7 @@ class QuoteResponseTest {
         assertEquals(new BigDecimal("1.35"), quote.pbr());
         assertEquals(new BigDecimal("4605.00"), quote.eps());
         assertEquals(new BigDecimal("51850.00"), quote.bps());
-        assertNull(quote.baseTime());
+        assertEquals(fetchedAt, OffsetDateTime.parse(quote.baseTime()).toInstant());
         assertEquals(fetchedAt, quote.fetchedAt());
     }
 
@@ -140,6 +141,8 @@ class QuoteResponseTest {
         assertEquals(4180000L, quote.marketCapitalization());
         assertEquals(new BigDecimal("15.20"), quote.per());
         assertEquals(new BigDecimal("51850.00"), quote.bps());
+        // baseTime은 실시간 체결가 메시지에도 별도 기준 시각 필드가 없어 fetchedAt을 그대로 사용한다.
+        assertEquals(fetchedAt, OffsetDateTime.parse(quote.baseTime()).toInstant());
     }
 
     @Test

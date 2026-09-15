@@ -15,6 +15,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 import org.springframework.data.redis.RedisConnectionFailureException;
 
@@ -47,15 +48,23 @@ class MarketQuoteQueryServiceTest {
 
     private static final String STOCK_CODE = "005930";
     private static final String CACHE_KEY = "market:quote:005930";
+    private static final String NO_PREVIOUS_CLOSE_PRICE_MARKER_KEY = "market:quote:no-previous-close:005930";
     private static final Duration CACHE_TTL = Duration.ofSeconds(60);
     private static final Duration LOCK_TTL = Duration.ofSeconds(30);
     private static final Duration LOCK_WAIT_TIMEOUT = Duration.ofSeconds(2);
+    private static final Duration PREVIOUS_CLOSE_PRICE_MISSING_TTL = Duration.ofSeconds(15);
 
     @Mock
     private RedisTemplate<String, QuoteResponse> quoteRedisTemplate;
 
     @Mock
     private ValueOperations<String, QuoteResponse> valueOperations;
+
+    @Mock
+    private StringRedisTemplate stringRedisTemplate;
+
+    @Mock
+    private ValueOperations<String, String> stringValueOperations;
 
     @Mock
     private MarketQuoteCacheLock marketQuoteCacheLock;
@@ -72,10 +81,11 @@ class MarketQuoteQueryServiceTest {
     void setUp() {
         marketQuoteQueryService = new MarketQuoteQueryService(
                 quoteRedisTemplate,
+                stringRedisTemplate,
                 marketQuoteCacheLock,
                 userAccountFeignClient,
                 kisApiClient,
-                new MarketQuoteCacheProperties(CACHE_TTL, LOCK_TTL, LOCK_WAIT_TIMEOUT)
+                new MarketQuoteCacheProperties(CACHE_TTL, LOCK_TTL, LOCK_WAIT_TIMEOUT, PREVIOUS_CLOSE_PRICE_MISSING_TTL)
         );
         given(quoteRedisTemplate.opsForValue()).willReturn(valueOperations);
         lenient().when(marketQuoteCacheLock.tryLock(anyString(), anyString(), any(Duration.class))).thenReturn(true);
@@ -118,7 +128,7 @@ class MarketQuoteQueryServiceTest {
     void returnsCachedQuoteWithoutBaseTimeWithoutCallingKis() {
         UUID userId = UUID.randomUUID();
         QuoteResponse legacyQuote = new QuoteResponse(
-                STOCK_CODE, 69_000L, null, null, null, null, null, null, null, null, null, null, null, null, null);
+                STOCK_CODE, 69_000L, null, null, null, 68_500L, null, null, null, null, null, null, null, null, null);
         given(valueOperations.get(CACHE_KEY)).willReturn(legacyQuote);
 
         QuoteResponse response = marketQuoteQueryService.getQuote(userId, STOCK_CODE);
@@ -131,7 +141,7 @@ class MarketQuoteQueryServiceTest {
     void returnsCachedQuoteWithBlankBaseTimeWithoutCallingKis() {
         UUID userId = UUID.randomUUID();
         QuoteResponse legacyQuote = new QuoteResponse(
-                STOCK_CODE, 69_000L, null, null, null, null, null, null, null, null, null, null, null, null, null, "   ");
+                STOCK_CODE, 69_000L, null, null, null, 68_500L, null, null, null, null, null, null, null, null, null, "   ");
         given(valueOperations.get(CACHE_KEY)).willReturn(legacyQuote);
 
         QuoteResponse response = marketQuoteQueryService.getQuote(userId, STOCK_CODE);
@@ -144,7 +154,7 @@ class MarketQuoteQueryServiceTest {
     void returnsCachedQuoteWithMalformedBaseTimeWithoutCallingKis() {
         UUID userId = UUID.randomUUID();
         QuoteResponse malformedCachedQuote = new QuoteResponse(
-                STOCK_CODE, 69_000L, null, null, null, null, null, null, null, null, null, null, null, null, null, "not-a-date");
+                STOCK_CODE, 69_000L, null, null, null, 68_500L, null, null, null, null, null, null, null, null, null, "not-a-date");
         given(valueOperations.get(CACHE_KEY)).willReturn(malformedCachedQuote);
 
         QuoteResponse response = marketQuoteQueryService.getQuote(userId, STOCK_CODE);
@@ -158,7 +168,7 @@ class MarketQuoteQueryServiceTest {
         UUID userId = UUID.randomUUID();
         UserKisTokenResponse credentials = new UserKisTokenResponse("token", "app-key", "secret-key");
         QuoteResponse quoteWithoutBaseTime = new QuoteResponse(
-                STOCK_CODE, 70_000L, null, null, null, null, null, null, null, null, null, null, null, null, null);
+                STOCK_CODE, 70_000L, null, null, null, 69_500L, null, null, null, null, null, null, null, null, null);
         given(valueOperations.get(CACHE_KEY)).willReturn(null);
         given(userAccountFeignClient.getKisToken(userId)).willReturn(credentials);
         given(kisApiClient.getQuote(credentials, STOCK_CODE)).willReturn(quoteWithoutBaseTime);
@@ -195,11 +205,65 @@ class MarketQuoteQueryServiceTest {
     }
 
     @Test
+    @DisplayName("previousClosePrice가 없는 캐시 HIT은 그대로 반환하지 않고 KIS를 재조회해 값을 채운다")
+    void refetchesFromKisWhenCachedQuoteHasNoPreviousClosePrice() {
+        UUID userId = UUID.randomUUID();
+        UserKisTokenResponse credentials = new UserKisTokenResponse("token", "app-key", "secret-key");
+        QuoteResponse cachedQuoteWithoutPreviousClosePrice = new QuoteResponse(
+                STOCK_CODE, 70_000L, null, null, null, null, null, null, null, null, null, null, null, null, null);
+        QuoteResponse refetchedQuote = quoteResponse(70_100L);
+        given(valueOperations.get(CACHE_KEY)).willReturn(cachedQuoteWithoutPreviousClosePrice);
+        given(userAccountFeignClient.getKisToken(userId)).willReturn(credentials);
+        given(kisApiClient.getQuote(credentials, STOCK_CODE)).willReturn(refetchedQuote);
+
+        QuoteResponse response = marketQuoteQueryService.getQuote(userId, STOCK_CODE);
+
+        assertThat(response).isEqualTo(refetchedQuote);
+        verify(kisApiClient).getQuote(credentials, STOCK_CODE);
+        verify(valueOperations).set(CACHE_KEY, refetchedQuote, CACHE_TTL);
+    }
+
+    @Test
+    @DisplayName("KIS 응답 자체에 previousClosePrice가 없으면 currentPrice는 캐싱하고, 짧은 TTL로 '확인된 부재' 마커를 남긴다")
+    void cachesCurrentPriceAndMarksPreviousClosePriceConfirmedAbsentWhenMissingFromKis() {
+        UUID userId = UUID.randomUUID();
+        UserKisTokenResponse credentials = new UserKisTokenResponse("token", "app-key", "secret-key");
+        QuoteResponse quoteWithoutPreviousClosePrice = new QuoteResponse(
+                STOCK_CODE, 70_000L, null, null, null, null, null, null, null, null, null, null, null, null, null);
+        given(valueOperations.get(CACHE_KEY)).willReturn(null);
+        given(stringRedisTemplate.opsForValue()).willReturn(stringValueOperations);
+        given(userAccountFeignClient.getKisToken(userId)).willReturn(credentials);
+        given(kisApiClient.getQuote(credentials, STOCK_CODE)).willReturn(quoteWithoutPreviousClosePrice);
+
+        QuoteResponse response = marketQuoteQueryService.getQuote(userId, STOCK_CODE);
+
+        assertThat(response).isEqualTo(quoteWithoutPreviousClosePrice);
+        verify(valueOperations).set(CACHE_KEY, quoteWithoutPreviousClosePrice, CACHE_TTL);
+        verify(stringValueOperations).set(
+                NO_PREVIOUS_CLOSE_PRICE_MARKER_KEY, "1", PREVIOUS_CLOSE_PRICE_MISSING_TTL);
+    }
+
+    @Test
+    @DisplayName("previousClosePrice가 없다고 이미 확인된 종목은 캐시 HIT을 그대로 반환하고 KIS를 다시 호출하지 않는다")
+    void reusesCachedQuoteWithoutPreviousClosePriceWhenAlreadyConfirmedAbsent() {
+        UUID userId = UUID.randomUUID();
+        QuoteResponse cachedQuoteWithoutPreviousClosePrice = new QuoteResponse(
+                STOCK_CODE, 70_000L, null, null, null, null, null, null, null, null, null, null, null, null, null);
+        given(valueOperations.get(CACHE_KEY)).willReturn(cachedQuoteWithoutPreviousClosePrice);
+        given(stringRedisTemplate.hasKey(NO_PREVIOUS_CLOSE_PRICE_MARKER_KEY)).willReturn(true);
+
+        QuoteResponse response = marketQuoteQueryService.getQuote(userId, STOCK_CODE);
+
+        assertThat(response).isEqualTo(cachedQuoteWithoutPreviousClosePrice);
+        verify(kisApiClient, never()).getQuote(any(), anyString());
+    }
+
+    @Test
     void reusesCachedQuoteWithoutBaseTimeWithoutCallingKisAgainBeforeTtlExpires() {
         UUID userId = UUID.randomUUID();
         UserKisTokenResponse credentials = new UserKisTokenResponse("token", "app-key", "secret-key");
         QuoteResponse quoteWithoutBaseTime = new QuoteResponse(
-                STOCK_CODE, 70_000L, null, null, null, null, null, null, null, null, null, null, null, null, null);
+                STOCK_CODE, 70_000L, null, null, null, 69_500L, null, null, null, null, null, null, null, null, null);
         Map<String, QuoteResponse> cache = new ConcurrentHashMap<>();
         given(valueOperations.get(CACHE_KEY)).willAnswer(invocation -> cache.get(invocation.getArgument(0)));
         doAnswer(invocation -> {
@@ -221,7 +285,7 @@ class MarketQuoteQueryServiceTest {
         UUID userId = UUID.randomUUID();
         UserKisTokenResponse credentials = new UserKisTokenResponse("token", "app-key", "secret-key");
         QuoteResponse quoteWithoutBaseTime = new QuoteResponse(
-                STOCK_CODE, 70_000L, null, null, null, null, null, null, null, null, null, null, null, null, null);
+                STOCK_CODE, 70_000L, null, null, null, 69_500L, null, null, null, null, null, null, null, null, null);
         Map<String, QuoteResponse> cache = new ConcurrentHashMap<>();
         given(valueOperations.get(CACHE_KEY)).willAnswer(invocation -> cache.get(invocation.getArgument(0)));
         doAnswer(invocation -> {
@@ -291,6 +355,47 @@ class MarketQuoteQueryServiceTest {
 
         assertThat(response).isEqualTo(fetchedQuote);
         verify(marketQuoteCacheLock).unlock(eq(STOCK_CODE), anyString());
+    }
+
+    @Test
+    @DisplayName("previousClosePrice 부재 마커 저장에 실패해도 KIS 조회 결과는 정상 반환된다")
+    void returnsKisQuoteWhenMarkingPreviousClosePriceAbsentFails() {
+        UUID userId = UUID.randomUUID();
+        UserKisTokenResponse credentials = new UserKisTokenResponse("token", "app-key", "secret-key");
+        QuoteResponse quoteWithoutPreviousClosePrice = new QuoteResponse(
+                STOCK_CODE, 70_000L, null, null, null, null, null, null, null, null, null, null, null, null, null);
+        given(valueOperations.get(CACHE_KEY)).willReturn(null);
+        given(stringRedisTemplate.opsForValue()).willReturn(stringValueOperations);
+        given(userAccountFeignClient.getKisToken(userId)).willReturn(credentials);
+        given(kisApiClient.getQuote(credentials, STOCK_CODE)).willReturn(quoteWithoutPreviousClosePrice);
+        doThrow(new RedisConnectionFailureException("Redis unavailable"))
+                .when(stringValueOperations)
+                .set(NO_PREVIOUS_CLOSE_PRICE_MARKER_KEY, "1", PREVIOUS_CLOSE_PRICE_MISSING_TTL);
+
+        QuoteResponse response = marketQuoteQueryService.getQuote(userId, STOCK_CODE);
+
+        assertThat(response).isEqualTo(quoteWithoutPreviousClosePrice);
+        verify(valueOperations).set(CACHE_KEY, quoteWithoutPreviousClosePrice, CACHE_TTL);
+    }
+
+    @Test
+    @DisplayName("previousClosePrice 부재 마커 조회에 실패하면 안전하게 KIS를 재조회한다")
+    void refetchesFromKisWhenCheckingPreviousClosePriceAbsentMarkerFails() {
+        UUID userId = UUID.randomUUID();
+        UserKisTokenResponse credentials = new UserKisTokenResponse("token", "app-key", "secret-key");
+        QuoteResponse cachedQuoteWithoutPreviousClosePrice = new QuoteResponse(
+                STOCK_CODE, 70_000L, null, null, null, null, null, null, null, null, null, null, null, null, null);
+        QuoteResponse refetchedQuote = quoteResponse(70_100L);
+        given(valueOperations.get(CACHE_KEY)).willReturn(cachedQuoteWithoutPreviousClosePrice);
+        given(stringRedisTemplate.hasKey(NO_PREVIOUS_CLOSE_PRICE_MARKER_KEY))
+                .willThrow(new RedisConnectionFailureException("Redis unavailable"));
+        given(userAccountFeignClient.getKisToken(userId)).willReturn(credentials);
+        given(kisApiClient.getQuote(credentials, STOCK_CODE)).willReturn(refetchedQuote);
+
+        QuoteResponse response = marketQuoteQueryService.getQuote(userId, STOCK_CODE);
+
+        assertThat(response).isEqualTo(refetchedQuote);
+        verify(kisApiClient).getQuote(credentials, STOCK_CODE);
     }
 
     @Test
@@ -391,7 +496,7 @@ class MarketQuoteQueryServiceTest {
             bothKisCallsStarted.countDown();
             assertThat(bothKisCallsStarted.await(1, TimeUnit.SECONDS)).isTrue();
             return new QuoteResponse(
-                    invocation.getArgument(1), 70_000L, null, null, null, null,
+                    invocation.getArgument(1), 70_000L, null, null, null, 69_500L,
                     null, null, null, null, null, null, null, null, null, "2026-09-04T14:30:00+09:00"
             );
         });
@@ -414,10 +519,11 @@ class MarketQuoteQueryServiceTest {
     void throwsBusinessExceptionWhenCacheLockTimesOut() {
         MarketQuoteQueryService shortTimeoutService = new MarketQuoteQueryService(
                 quoteRedisTemplate,
+                stringRedisTemplate,
                 marketQuoteCacheLock,
                 userAccountFeignClient,
                 kisApiClient,
-                new MarketQuoteCacheProperties(CACHE_TTL, LOCK_TTL, Duration.ofMillis(10))
+                new MarketQuoteCacheProperties(CACHE_TTL, LOCK_TTL, Duration.ofMillis(10), PREVIOUS_CLOSE_PRICE_MISSING_TTL)
         );
         given(valueOperations.get(CACHE_KEY)).willReturn(null);
         given(marketQuoteCacheLock.tryLock(eq(STOCK_CODE), anyString(), any(Duration.class))).willReturn(false);
@@ -442,7 +548,7 @@ class MarketQuoteQueryServiceTest {
         UUID userId = UUID.randomUUID();
         UserKisTokenResponse credentials = new UserKisTokenResponse("token", "app-key", "secret-key");
         QuoteResponse quote = new QuoteResponse(
-                STOCK_CODE, 70_000L, null, null, null, null, null, null, null, null, null, null, null, null, null, baseTime);
+                STOCK_CODE, 70_000L, null, null, null, 69_500L, null, null, null, null, null, null, null, null, null, baseTime);
         given(valueOperations.get(CACHE_KEY)).willReturn(null);
         given(userAccountFeignClient.getKisToken(userId)).willReturn(credentials);
         given(kisApiClient.getQuote(credentials, STOCK_CODE)).willReturn(quote);

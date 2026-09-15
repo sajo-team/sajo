@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -100,7 +101,9 @@ class KisApiClientTest {
         assertEquals(70000L, response.currentPrice());
         assertEquals(new BigDecimal("0.7194"), response.changeRate());
         assertEquals(new BigDecimal("15.20"), response.per());
-        assertNull(response.baseTime());
+        // fetchedAt(KIS 응답을 받은 시각)을 기준 시각으로 그대로 사용한다 (KIS REST 응답 자체에는
+        // 기준 시각 필드가 없음).
+        assertEquals(response.fetchedAt(), java.time.OffsetDateTime.parse(response.baseTime()).toInstant());
         assertEquals("2026-09-04T08:00:00Z", response.fetchedAt().toString());
         server.verify();
     }
@@ -121,7 +124,9 @@ class KisApiClientTest {
         QuoteResponse response = client.getQuote(CREDENTIALS, "005930");
 
         assertEquals(70000L, response.currentPrice());
-        assertNull(response.baseTime());
+        // stck_bsop_date/stck_cntg_hour는 공식 계약 밖 필드라 무시되지만, baseTime 자체는
+        // fetchedAt으로부터 채워진다.
+        assertNotNull(response.baseTime());
         server.verify();
     }
 
