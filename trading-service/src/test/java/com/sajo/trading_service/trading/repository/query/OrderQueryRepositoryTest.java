@@ -13,12 +13,16 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
+import java.sql.Timestamp;
+import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -77,6 +81,9 @@ class OrderQueryRepositoryTest {
 
     @Autowired
     private OrderCommandRepository orderCommandRepository;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     @Test
     @DisplayName(
@@ -504,5 +511,185 @@ class OrderQueryRepositoryTest {
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getContent().get(0).getId())
                 .isEqualTo(matchedOrder.getId());
+    }
+
+    @Test
+    @DisplayName("AutoTrading별 가장 최근 주문 한 건씩 조회한다")
+    void findLatestOrdersByAutoTradingIds() {
+        // given
+        UUID userId = UUID.randomUUID();
+
+        UUID autoTradingId1 = UUID.randomUUID();
+        UUID autoTradingId2 = UUID.randomUUID();
+
+        UUID strategyId1 = UUID.randomUUID();
+        UUID strategyId2 = UUID.randomUUID();
+
+        Order firstOldOrder =
+                Order.create(
+                        userId,
+                        autoTradingId1,
+                        strategyId1,
+                        UUID.randomUUID(),
+                        "005930",
+                        OrderType.BUY,
+                        70_000L,
+                        1
+                );
+
+        Order firstLatestOrder =
+                Order.create(
+                        userId,
+                        autoTradingId1,
+                        strategyId1,
+                        UUID.randomUUID(),
+                        "005930",
+                        OrderType.BUY,
+                        71_000L,
+                        1
+                );
+
+        Order secondLatestOrder =
+                Order.create(
+                        userId,
+                        autoTradingId2,
+                        strategyId2,
+                        UUID.randomUUID(),
+                        "000660",
+                        OrderType.SELL,
+                        120_000L,
+                        1
+                );
+
+        orderCommandRepository.saveAndFlush(firstOldOrder);
+
+        /*
+         * createdAt 기준 최신 순을 확실하게 만들기 위해
+         * 첫 주문 저장 후 다음 주문을 저장한다.
+         */
+        orderCommandRepository.saveAndFlush(firstLatestOrder);
+        orderCommandRepository.saveAndFlush(secondLatestOrder);
+
+        // when
+        List<Order> result =
+                orderQueryRepository.findLatestOrdersByAutoTradingIds(
+                        List.of(
+                                autoTradingId1,
+                                autoTradingId2
+                        )
+                );
+
+        // then
+        assertThat(result)
+                .hasSize(2);
+
+        assertThat(result)
+                .extracting(Order::getId)
+                .containsExactlyInAnyOrder(
+                        firstLatestOrder.getId(),
+                        secondLatestOrder.getId()
+                );
+
+        assertThat(result)
+                .extracting(Order::getAutoTradingId)
+                .containsExactlyInAnyOrder(
+                        autoTradingId1,
+                        autoTradingId2
+                );
+    }
+
+    @Test
+    @DisplayName("동일 생성시각 주문이 존재하면 단건과 목록 조회 모두 ID DESC 기준으로 동일한 최신 주문을 반환한다")
+    void findLatestOrderUsesIdDescAsTieBreaker() {
+        // given
+        UUID userId = UUID.randomUUID();
+        UUID autoTradingId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+
+        Order firstOrder =
+                Order.create(
+                        userId,
+                        autoTradingId,
+                        strategyId,
+                        UUID.randomUUID(),
+                        "005930",
+                        OrderType.BUY,
+                        70_000L,
+                        1
+                );
+
+        Order secondOrder =
+                Order.create(
+                        userId,
+                        autoTradingId,
+                        strategyId,
+                        UUID.randomUUID(),
+                        "005930",
+                        OrderType.BUY,
+                        71_000L,
+                        1
+                );
+
+        orderCommandRepository.saveAndFlush(firstOrder);
+        orderCommandRepository.saveAndFlush(secondOrder);
+
+        Instant sameCreatedAt =
+                Instant.parse("2026-09-15T00:00:00Z");
+
+        jdbcTemplate.update(
+                """
+                UPDATE trading.p_orders
+                SET created_at = ?
+                WHERE id IN (?, ?)
+                """,
+                Timestamp.from(sameCreatedAt),
+                firstOrder.getId(),
+                secondOrder.getId()
+        );
+
+        /*
+         * PostgreSQL의 실제 UUID DESC 기준으로
+         * 기대되는 주문 ID를 구한다.
+         */
+        UUID expectedLatestOrderId =
+                jdbcTemplate.queryForObject(
+                        """
+                        SELECT id
+                        FROM trading.p_orders
+                        WHERE id IN (?, ?)
+                        ORDER BY id DESC
+                        LIMIT 1
+                        """,
+                        UUID.class,
+                        firstOrder.getId(),
+                        secondOrder.getId()
+                );
+
+        // when
+        Order detailLatestOrder =
+                orderQueryRepository
+                        .findFirstByAutoTradingIdAndDeletedAtIsNullOrderByCreatedAtDescIdDesc(
+                                autoTradingId
+                        )
+                        .orElseThrow();
+
+        List<Order> listLatestOrders =
+                orderQueryRepository
+                        .findLatestOrdersByAutoTradingIds(
+                                List.of(autoTradingId)
+                        );
+
+        // then
+        assertThat(detailLatestOrder.getId())
+                .isEqualTo(expectedLatestOrderId);
+
+        assertThat(listLatestOrders)
+                .hasSize(1);
+
+        assertThat(listLatestOrders.getFirst().getId())
+                .isEqualTo(expectedLatestOrderId);
+
+        assertThat(detailLatestOrder.getId())
+                .isEqualTo(listLatestOrders.getFirst().getId());
     }
 }
