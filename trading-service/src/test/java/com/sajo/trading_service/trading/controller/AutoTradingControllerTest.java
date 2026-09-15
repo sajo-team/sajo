@@ -8,6 +8,8 @@ import com.sajo.trading_service.trading.controller.dto.request.AutoTradingUpdate
 import com.sajo.trading_service.trading.controller.dto.response.AutoTradingCreateResponse;
 import com.sajo.trading_service.trading.controller.dto.response.AutoTradingQueryResponse;
 import com.sajo.trading_service.trading.controller.dto.response.AutoTradingUpdateResponse;
+import com.sajo.trading_service.trading.domain.enums.AutoTradingDirection;
+import com.sajo.trading_service.trading.domain.enums.OrderStatus;
 import com.sajo.trading_service.trading.exception.TradingErrorCode;
 import com.sajo.trading_service.trading.service.command.AutoTradingCommandService;
 import com.sajo.trading_service.trading.service.query.AutoTradingQueryService;
@@ -59,12 +61,13 @@ class AutoTradingControllerTest {
         UUID autoTradingId = UUID.randomUUID();
  
         AutoTradingCreateRequest request =
-                new AutoTradingCreateRequest(strategyId);
+                new AutoTradingCreateRequest(strategyId, AutoTradingDirection.BOTH);
  
         AutoTradingCreateResponse response =
                 new AutoTradingCreateResponse(
                         autoTradingId,
                         strategyId,
+                        AutoTradingDirection.BOTH,
                         true,
                         Instant.now()
                 );
@@ -98,7 +101,7 @@ class AutoTradingControllerTest {
     void createAutoTradingWithoutStrategyId() throws Exception {
         // given
         AutoTradingCreateRequest request =
-                new AutoTradingCreateRequest(null);
+                new AutoTradingCreateRequest(null, AutoTradingDirection.BOTH);
  
         // when & then
         mockMvc.perform(
@@ -121,12 +124,13 @@ class AutoTradingControllerTest {
         UUID strategyId = UUID.randomUUID();
  
         AutoTradingUpdateRequest request =
-                new AutoTradingUpdateRequest(false);
+                new AutoTradingUpdateRequest(false, AutoTradingDirection.BOTH);
  
         AutoTradingUpdateResponse response =
                 new AutoTradingUpdateResponse(
                         autoTradingId,
                         strategyId,
+                        AutoTradingDirection.BOTH,
                         false,
                         Instant.now()
                 );
@@ -160,7 +164,7 @@ class AutoTradingControllerTest {
         UUID autoTradingId = UUID.randomUUID();
  
         AutoTradingUpdateRequest request =
-                new AutoTradingUpdateRequest(false);
+                new AutoTradingUpdateRequest(false, AutoTradingDirection.BOTH);
  
         given(autoTradingCommandService.updateAutoTrading(
                 eq(userId),
@@ -183,24 +187,48 @@ class AutoTradingControllerTest {
                 .andExpect(jsonPath("$.errorCode")
                         .value("AUTO_TRADING_0008"));
     }
- 
+
     @Test
-    @DisplayName("enabled 값이 없으면 자동매매 설정 수정 시 400을 반환한다")
-    void updateAutoTradingWithoutEnabled() throws Exception {
+    @DisplayName("direction만 전달하면 자동매매 주문 방향을 수정할 수 있다")
+    void updateAutoTradingDirectionOnly() throws Exception {
         UUID userId = UUID.randomUUID();
         UUID autoTradingId = UUID.randomUUID();
- 
+        UUID strategyId = UUID.randomUUID();
+
         AutoTradingUpdateRequest request =
-                new AutoTradingUpdateRequest(null);
- 
+                new AutoTradingUpdateRequest(
+                        null,
+                        AutoTradingDirection.BUY_ONLY
+                );
+
+        AutoTradingUpdateResponse response =
+                new AutoTradingUpdateResponse(
+                        autoTradingId,
+                        strategyId,
+                        AutoTradingDirection.BUY_ONLY,
+                        false,
+                        Instant.now()
+                );
+
+        given(autoTradingCommandService.updateAutoTrading(
+                eq(userId),
+                eq(autoTradingId),
+                any(AutoTradingUpdateRequest.class)
+        )).willReturn(response);
+
         mockMvc.perform(
-                        patch("/api/v1/auto-tradings/{autoTradingId}", autoTradingId)
+                        patch(
+                                "/api/v1/auto-tradings/{autoTradingId}",
+                                autoTradingId
+                        )
                                 .header("X-User-Id", userId.toString())
                                 .contentType(MediaType.APPLICATION_JSON)
                                 .content(objectMapper.writeValueAsString(request))
                 )
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.success").value(false));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.direction")
+                        .value("BUY_ONLY"));
     }
  
     @Test
@@ -215,7 +243,13 @@ class AutoTradingControllerTest {
                 new AutoTradingQueryResponse(
                         autoTradingId,
                         strategyId,
+                        AutoTradingDirection.BOTH,
                         true,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
                         Instant.now(),
                         Instant.now()
                 );
@@ -270,7 +304,13 @@ class AutoTradingControllerTest {
                 new AutoTradingQueryResponse(
                         autoTradingId,
                         strategyId,
+                        AutoTradingDirection.BOTH,
                         true,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
                         Instant.now(),
                         Instant.now()
                 );
@@ -394,5 +434,56 @@ class AutoTradingControllerTest {
                                 .header("X-User-Id", userId)
                 )
                 .andExpect(status().isConflict());
+    }
+
+    @Test
+    @DisplayName("자동매매 설정 단건 조회 시 최근 주문 정보를 함께 반환한다")
+    void getAutoTradingWithLatestOrder_success() throws Exception {
+        // given
+        UUID userId = UUID.randomUUID();
+        UUID autoTradingId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+        UUID latestOrderId = UUID.randomUUID();
+
+        Instant latestOrderCreatedAt = Instant.now();
+
+        AutoTradingQueryResponse response =
+                new AutoTradingQueryResponse(
+                        autoTradingId,
+                        strategyId,
+                        AutoTradingDirection.BOTH,
+                        true,
+                        latestOrderId,
+                        OrderStatus.FAILED,
+                        latestOrderCreatedAt,
+                        "KIS_ORDER_REJECTED",
+                        "주문이 거절되었습니다.",
+                        Instant.now(),
+                        Instant.now()
+                );
+
+        when(autoTradingQueryService.findById(
+                autoTradingId,
+                userId
+        )).thenReturn(response);
+
+        // when & then
+        mockMvc.perform(
+                        get(
+                                "/api/v1/auto-tradings/{autoTradingId}",
+                                autoTradingId
+                        )
+                                .header("X-User-Id", userId.toString())
+                )
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.latestOrderId")
+                        .value(latestOrderId.toString()))
+                .andExpect(jsonPath("$.data.latestOrderStatus")
+                        .value("FAILED"))
+                .andExpect(jsonPath("$.data.latestFailureCode")
+                        .value("KIS_ORDER_REJECTED"))
+                .andExpect(jsonPath("$.data.latestFailureMessage")
+                        .value("주문이 거절되었습니다."));
     }
 }

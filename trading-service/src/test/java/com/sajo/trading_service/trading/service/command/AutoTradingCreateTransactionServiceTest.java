@@ -4,6 +4,7 @@ import com.sajo.common.exception.BusinessException;
 import com.sajo.trading_service.trading.controller.dto.request.AutoTradingCreateRequest;
 import com.sajo.trading_service.trading.controller.dto.response.AutoTradingCreateResponse;
 import com.sajo.trading_service.trading.domain.AutoTrading;
+import com.sajo.trading_service.trading.domain.enums.AutoTradingDirection;
 import com.sajo.trading_service.trading.exception.TradingErrorCode;
 import com.sajo.trading_service.trading.repository.command.AutoTradingCommandRepository;
 import com.sajo.trading_service.trading.repository.command.TradingLimitCommandRepository;
@@ -38,14 +39,17 @@ class AutoTradingCreateTransactionServiceTest {
     private AutoTradingCreateTransactionService autoTradingCreateTransactionService;
 
     @Test
-    @DisplayName("자동매매 설정을 생성하면 enabled는 true이다")
+    @DisplayName("자동매매 설정을 생성하면 기본 비활성 상태이며 주문 방향이 저장된다")
     void createAutoTrading() {
         // given
         UUID userId = UUID.randomUUID();
         UUID strategyId = UUID.randomUUID();
 
         AutoTradingCreateRequest request =
-                new AutoTradingCreateRequest(strategyId);
+                new AutoTradingCreateRequest(
+                        strategyId,
+                        AutoTradingDirection.BOTH
+                );
 
         given(tradingLimitCommandRepository.existsByUserId(userId))
                 .willReturn(true);
@@ -73,7 +77,10 @@ class AutoTradingCreateTransactionServiceTest {
                 .isEqualTo(strategyId);
 
         assertThat(response.enabled())
-                .isTrue();
+                .isFalse();
+
+        assertThat(response.direction())
+                .isEqualTo(AutoTradingDirection.BOTH);
 
         verify(autoTradingCommandRepository)
                 .saveAndFlush(any(AutoTrading.class));
@@ -87,7 +94,7 @@ class AutoTradingCreateTransactionServiceTest {
         UUID strategyId = UUID.randomUUID();
 
         AutoTradingCreateRequest request =
-                new AutoTradingCreateRequest(strategyId);
+                new AutoTradingCreateRequest(strategyId, AutoTradingDirection.BOTH);
 
         given(tradingLimitCommandRepository.existsByUserId(userId))
                 .willReturn(false);
@@ -122,7 +129,7 @@ class AutoTradingCreateTransactionServiceTest {
         UUID strategyId = UUID.randomUUID();
 
         AutoTradingCreateRequest request =
-                new AutoTradingCreateRequest(strategyId);
+                new AutoTradingCreateRequest(strategyId, AutoTradingDirection.BOTH);
 
         given(tradingLimitCommandRepository.existsByUserId(userId))
                 .willReturn(true);
@@ -164,7 +171,7 @@ class AutoTradingCreateTransactionServiceTest {
         UUID strategyId = UUID.randomUUID();
 
         AutoTradingCreateRequest request =
-                new AutoTradingCreateRequest(strategyId);
+                new AutoTradingCreateRequest(strategyId, AutoTradingDirection.BOTH);
 
         given(tradingLimitCommandRepository.existsByUserId(userId))
                 .willReturn(true);
@@ -220,7 +227,7 @@ class AutoTradingCreateTransactionServiceTest {
         UUID strategyId = UUID.randomUUID();
 
         AutoTradingCreateRequest request =
-                new AutoTradingCreateRequest(strategyId);
+                new AutoTradingCreateRequest(strategyId, AutoTradingDirection.BOTH);
 
         given(tradingLimitCommandRepository.existsByUserId(userId))
                 .willReturn(true);

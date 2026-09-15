@@ -2,6 +2,7 @@ package com.sajo.trading_service.trading.repository.command;
 
 import com.sajo.common.config.CommonJpaAuditingAutoConfiguration;
 import com.sajo.trading_service.trading.domain.AutoTrading;
+import com.sajo.trading_service.trading.domain.enums.AutoTradingDirection;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -194,7 +195,8 @@ class AutoTradingCommandRepositoryTest {
             AutoTrading first =
                     AutoTrading.create(
                             userId,
-                            strategyId
+                            strategyId,
+                            AutoTradingDirection.BOTH
                     );
 
             autoTradingCommandRepository.saveAndFlush(first);
@@ -370,7 +372,8 @@ class AutoTradingCommandRepositoryTest {
                 AutoTrading autoTrading =
                         AutoTrading.create(
                                 userId,
-                                strategyId
+                                strategyId,
+                                AutoTradingDirection.BOTH
                         );
 
                 autoTradingCommandRepository.saveAndFlush(autoTrading);
@@ -414,7 +417,8 @@ class AutoTradingCommandRepositoryTest {
             AutoTrading autoTrading =
                     AutoTrading.create(
                             userId,
-                            strategyId
+                            strategyId,
+                            AutoTradingDirection.BOTH
                     );
 
             return autoTradingCommandRepository

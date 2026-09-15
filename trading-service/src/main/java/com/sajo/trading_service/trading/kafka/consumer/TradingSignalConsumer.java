@@ -24,7 +24,8 @@ public class TradingSignalConsumer {
             TradingErrorCode.ORDER_QUANTITY_NOT_AVAILABLE,
             TradingErrorCode.DAILY_ORDER_COUNT_LIMIT_EXCEEDED,
             TradingErrorCode.DAILY_ORDER_AMOUNT_LIMIT_EXCEEDED,
-            TradingErrorCode.ORDER_QUANTITY_OUT_OF_RANGE
+            TradingErrorCode.ORDER_QUANTITY_OUT_OF_RANGE,
+            TradingErrorCode.AUTO_TRADING_DIRECTION_NOT_ALLOWED
     );
 
     private final TradingSignalCommandService tradingSignalCommandService;

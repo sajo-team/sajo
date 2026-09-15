@@ -226,4 +226,28 @@ class TradingSignalConsumerTest {
                 )
         );
     }
+
+    @Test
+    @DisplayName("허용되지 않은 주문 방향 Signal은 예외를 전파하지 않고 스킵한다")
+    void consume_shouldSkipWhenDirectionNotAllowed() {
+        // given
+        TradingSignalGeneratedEvent event = createValidEvent();
+
+        when(validator.validate(event))
+                .thenReturn(Set.of());
+
+        doThrow(new BusinessException(
+                TradingErrorCode.AUTO_TRADING_DIRECTION_NOT_ALLOWED
+        ))
+                .when(tradingSignalCommandService)
+                .processSignal(event);
+
+        // when & then
+        assertThatCode(() ->
+                tradingSignalConsumer.consume(event)
+        ).doesNotThrowAnyException();
+
+        verify(tradingSignalCommandService)
+                .processSignal(event);
+    }
 }

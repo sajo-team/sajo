@@ -9,6 +9,8 @@ import com.sajo.trading_service.trading.controller.dto.request.AutoTradingUpdate
 import com.sajo.trading_service.trading.controller.dto.response.AutoTradingCreateResponse;
 import com.sajo.trading_service.trading.controller.dto.response.AutoTradingUpdateResponse;
 import com.sajo.trading_service.trading.domain.AutoTrading;
+import com.sajo.trading_service.trading.domain.enums.AutoTradingDirection;
+import com.sajo.trading_service.trading.domain.enums.StrategyStatus;
 import com.sajo.trading_service.trading.exception.TradingErrorCode;
 import com.sajo.trading_service.trading.repository.command.AutoTradingCommandRepository;
 import com.sajo.trading_service.trading.repository.command.TradingLimitCommandRepository;
@@ -25,6 +27,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -45,6 +48,9 @@ class AutoTradingCommandServiceTest {
     private AutoTradingCreateTransactionService autoTradingCreateTransactionService;
 
     @Mock
+    private AutoTradingUpdateTransactionService autoTradingUpdateTransactionService;
+
+    @Mock
     private OrderQueryRepository orderQueryRepository;
 
     @InjectMocks
@@ -58,10 +64,10 @@ class AutoTradingCommandServiceTest {
         UUID strategyId = UUID.randomUUID();
 
         AutoTradingCreateRequest request =
-                new AutoTradingCreateRequest(strategyId);
+                new AutoTradingCreateRequest(strategyId, AutoTradingDirection.BOTH);
 
         AutoTrading autoTrading =
-                AutoTrading.create(userId, strategyId);
+                AutoTrading.create(userId, strategyId, AutoTradingDirection.BOTH);
 
         AutoTradingCreateResponse expectedResponse =
                 AutoTradingCreateResponse.from(autoTrading);
@@ -70,7 +76,8 @@ class AutoTradingCommandServiceTest {
                 .willReturn(
                         new StrategyClientResponse(
                                 strategyId,
-                                userId
+                                userId,
+                                StrategyStatus.ACTIVE
                         )
                 );
 
@@ -90,8 +97,11 @@ class AutoTradingCommandServiceTest {
         assertThat(response.strategyId())
                 .isEqualTo(strategyId);
 
+        assertThat(response.direction())
+                .isEqualTo(AutoTradingDirection.BOTH);
+
         assertThat(response.enabled())
-                .isTrue();
+                .isFalse();
 
         verify(autoTradingCreateTransactionService)
                 .create(userId, request);
@@ -105,7 +115,7 @@ class AutoTradingCommandServiceTest {
         UUID strategyId = UUID.randomUUID();
 
         AutoTradingCreateRequest request =
-                new AutoTradingCreateRequest(strategyId);
+                new AutoTradingCreateRequest(strategyId, AutoTradingDirection.BOTH);
 
         given(strategyClient.getStrategy(strategyId))
                 .willThrow(
@@ -147,13 +157,14 @@ class AutoTradingCommandServiceTest {
         UUID strategyId = UUID.randomUUID();
 
         AutoTradingCreateRequest request =
-                new AutoTradingCreateRequest(strategyId);
+                new AutoTradingCreateRequest(strategyId, AutoTradingDirection.BOTH);
 
         given(strategyClient.getStrategy(strategyId))
                 .willReturn(
                         new StrategyClientResponse(
                                 strategyId,
-                                otherUserId
+                                otherUserId,
+                                StrategyStatus.ACTIVE
                         )
                 );
 
@@ -187,7 +198,7 @@ class AutoTradingCommandServiceTest {
         UUID strategyId = UUID.randomUUID();
 
         AutoTradingCreateRequest request =
-                new AutoTradingCreateRequest(strategyId);
+                new AutoTradingCreateRequest(strategyId, AutoTradingDirection.BOTH);
 
         FeignApiException exception =
                 new FeignApiException(
@@ -215,15 +226,26 @@ class AutoTradingCommandServiceTest {
     @Test
     @DisplayName("자동매매 설정의 활성 상태를 수정한다")
     void updateAutoTrading() {
+        // given
         UUID userId = UUID.randomUUID();
         UUID autoTradingId = UUID.randomUUID();
         UUID strategyId = UUID.randomUUID();
 
         AutoTrading autoTrading =
-                AutoTrading.create(userId, strategyId);
+                AutoTrading.create(
+                        userId,
+                        strategyId,
+                        AutoTradingDirection.BOTH
+                );
 
         AutoTradingUpdateRequest request =
-                new AutoTradingUpdateRequest(false);
+                new AutoTradingUpdateRequest(
+                        false,
+                        AutoTradingDirection.BOTH
+                );
+
+        AutoTradingUpdateResponse expectedResponse =
+                AutoTradingUpdateResponse.from(autoTrading);
 
         given(autoTradingCommandRepository
                 .findByIdAndUserIdAndDeletedAtIsNull(
@@ -232,6 +254,13 @@ class AutoTradingCommandServiceTest {
                 ))
                 .willReturn(Optional.of(autoTrading));
 
+        given(autoTradingUpdateTransactionService.update(
+                userId,
+                autoTradingId,
+                request
+        )).willReturn(expectedResponse);
+
+        // when
         AutoTradingUpdateResponse response =
                 autoTradingCommandService.updateAutoTrading(
                         userId,
@@ -239,8 +268,19 @@ class AutoTradingCommandServiceTest {
                         request
                 );
 
-        assertThat(response.enabled()).isFalse();
-        assertThat(response.strategyId()).isEqualTo(strategyId);
+        // then
+        assertThat(response.enabled())
+                .isFalse();
+
+        assertThat(response.strategyId())
+                .isEqualTo(strategyId);
+
+        verify(autoTradingUpdateTransactionService)
+                .update(
+                        userId,
+                        autoTradingId,
+                        request
+                );
     }
 
     @Test
@@ -250,7 +290,7 @@ class AutoTradingCommandServiceTest {
         UUID autoTradingId = UUID.randomUUID();
 
         AutoTradingUpdateRequest request =
-                new AutoTradingUpdateRequest(false);
+                new AutoTradingUpdateRequest(false, AutoTradingDirection.BOTH);
 
         given(autoTradingCommandRepository
                 .findByIdAndUserIdAndDeletedAtIsNull(
@@ -286,10 +326,10 @@ class AutoTradingCommandServiceTest {
         UUID strategyId = UUID.randomUUID();
 
         AutoTrading autoTrading =
-                AutoTrading.create(userId, strategyId);
+                AutoTrading.create(userId, strategyId, AutoTradingDirection.BOTH);
 
         AutoTradingUpdateRequest request =
-                new AutoTradingUpdateRequest(true);
+                new AutoTradingUpdateRequest(true, AutoTradingDirection.BOTH);
 
         given(autoTradingCommandRepository
                 .findByIdAndUserIdAndDeletedAtIsNull(
@@ -330,7 +370,8 @@ class AutoTradingCommandServiceTest {
         AutoTrading autoTrading =
                 AutoTrading.create(
                         userId,
-                        strategyId
+                        strategyId,
+                        AutoTradingDirection.BOTH
                 );
 
         given(autoTradingCommandRepository
@@ -403,7 +444,8 @@ class AutoTradingCommandServiceTest {
         AutoTrading autoTrading =
                 AutoTrading.create(
                         userId,
-                        strategyId
+                        strategyId,
+                        AutoTradingDirection.BOTH
                 );
 
         given(autoTradingCommandRepository
@@ -454,7 +496,8 @@ class AutoTradingCommandServiceTest {
         AutoTrading autoTrading =
                 AutoTrading.create(
                         userId,
-                        strategyId
+                        strategyId,
+                        AutoTradingDirection.BOTH
                 );
 
         given(autoTradingCommandRepository
@@ -487,5 +530,375 @@ class AutoTradingCommandServiceTest {
 
         assertThat(autoTrading.getDeletedAt())
                 .isNull();
+    }
+
+    @Test
+    @DisplayName("수정할 값이 없으면 자동매매 설정을 수정할 수 없다")
+    void updateAutoTradingEmptyRequest() {
+        UUID userId = UUID.randomUUID();
+        UUID autoTradingId = UUID.randomUUID();
+
+        AutoTradingUpdateRequest request =
+                new AutoTradingUpdateRequest(
+                        null,
+                        null
+                );
+
+        assertThatThrownBy(() ->
+                autoTradingCommandService.updateAutoTrading(
+                        userId,
+                        autoTradingId,
+                        request
+                )
+        )
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException =
+                            (BusinessException) exception;
+
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(
+                                    TradingErrorCode.INVALID_AUTO_TRADING
+                            );
+                });
+    }
+
+    @Test
+    @DisplayName("활성 전략이고 공통 한도가 존재하면 자동매매 활성화 트랜잭션을 실행한다")
+    void activateAutoTrading() {
+        // given
+        UUID userId = UUID.randomUUID();
+        UUID autoTradingId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+
+        AutoTrading autoTrading =
+                AutoTrading.create(
+                        userId,
+                        strategyId,
+                        AutoTradingDirection.BOTH
+                );
+
+        AutoTradingUpdateRequest request =
+                new AutoTradingUpdateRequest(
+                        true,
+                        null
+                );
+
+        AutoTradingUpdateResponse expectedResponse =
+                new AutoTradingUpdateResponse(
+                        autoTradingId,
+                        strategyId,
+                        AutoTradingDirection.BOTH,
+                        true,
+                        null
+                );
+
+        given(autoTradingCommandRepository
+                .findByIdAndUserIdAndDeletedAtIsNull(
+                        autoTradingId,
+                        userId
+                ))
+                .willReturn(Optional.of(autoTrading));
+
+        given(tradingLimitCommandRepository.existsByUserId(userId))
+                .willReturn(true);
+
+        given(strategyClient.getStrategy(strategyId))
+                .willReturn(
+                        new StrategyClientResponse(
+                                strategyId,
+                                userId,
+                                StrategyStatus.ACTIVE
+                        )
+                );
+
+        given(autoTradingUpdateTransactionService.update(
+                userId,
+                autoTradingId,
+                request
+        )).willReturn(expectedResponse);
+
+        // when
+        AutoTradingUpdateResponse response =
+                autoTradingCommandService.updateAutoTrading(
+                        userId,
+                        autoTradingId,
+                        request
+                );
+
+        // then
+        assertThat(response.enabled())
+                .isTrue();
+
+        verify(strategyClient)
+                .getStrategy(strategyId);
+
+        verify(autoTradingUpdateTransactionService)
+                .update(
+                        userId,
+                        autoTradingId,
+                        request
+                );
+    }
+
+    @Test
+    @DisplayName("비활성 전략은 자동매매를 활성화할 수 없다")
+    void activateAutoTradingWithInactiveStrategy() {
+        // given
+        UUID userId = UUID.randomUUID();
+        UUID autoTradingId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+
+        AutoTrading autoTrading =
+                AutoTrading.create(
+                        userId,
+                        strategyId,
+                        AutoTradingDirection.BOTH
+                );
+
+        AutoTradingUpdateRequest request =
+                new AutoTradingUpdateRequest(
+                        true,
+                        null
+                );
+
+        given(autoTradingCommandRepository
+                .findByIdAndUserIdAndDeletedAtIsNull(
+                        autoTradingId,
+                        userId
+                ))
+                .willReturn(Optional.of(autoTrading));
+
+        given(tradingLimitCommandRepository.existsByUserId(userId))
+                .willReturn(true);
+
+        given(strategyClient.getStrategy(strategyId))
+                .willReturn(
+                        new StrategyClientResponse(
+                                strategyId,
+                                userId,
+                                StrategyStatus.INACTIVE
+                        )
+                );
+
+        // when & then
+        assertThatThrownBy(() ->
+                autoTradingCommandService.updateAutoTrading(
+                        userId,
+                        autoTradingId,
+                        request
+                )
+        )
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException =
+                            (BusinessException) exception;
+
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(
+                                    TradingErrorCode.STRATEGY_NOT_ACTIVE
+                            );
+                });
+
+        assertThat(autoTrading.getEnabled())
+                .isFalse();
+    }
+
+    @Test
+    @DisplayName("삭제된 전략은 자동매매를 활성화할 수 없다")
+    void activateAutoTradingWithDeletedStrategy() {
+        // given
+        UUID userId = UUID.randomUUID();
+        UUID autoTradingId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+
+        AutoTrading autoTrading =
+                AutoTrading.create(
+                        userId,
+                        strategyId,
+                        AutoTradingDirection.BOTH
+                );
+
+        AutoTradingUpdateRequest request =
+                new AutoTradingUpdateRequest(
+                        true,
+                        null
+                );
+
+        given(autoTradingCommandRepository
+                .findByIdAndUserIdAndDeletedAtIsNull(
+                        autoTradingId,
+                        userId
+                ))
+                .willReturn(Optional.of(autoTrading));
+
+        given(tradingLimitCommandRepository.existsByUserId(userId))
+                .willReturn(true);
+
+        given(strategyClient.getStrategy(strategyId))
+                .willReturn(
+                        new StrategyClientResponse(
+                                strategyId,
+                                userId,
+                                StrategyStatus.DELETED
+                        )
+                );
+
+        // when & then
+        assertThatThrownBy(() ->
+                autoTradingCommandService.updateAutoTrading(
+                        userId,
+                        autoTradingId,
+                        request
+                )
+        )
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException =
+                            (BusinessException) exception;
+
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(
+                                    TradingErrorCode.STRATEGY_NOT_ACTIVE
+                            );
+                });
+
+        assertThat(autoTrading.getEnabled())
+                .isFalse();
+    }
+
+    @Test
+    @DisplayName("주문 방향만 수정할 때는 활성화 검증 없이 수정 트랜잭션을 실행한다")
+    void updateAutoTradingDirectionOnly() {
+        // given
+        UUID userId = UUID.randomUUID();
+        UUID autoTradingId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+
+        AutoTrading autoTrading =
+                AutoTrading.create(
+                        userId,
+                        strategyId,
+                        AutoTradingDirection.BOTH
+                );
+
+        AutoTradingUpdateRequest request =
+                new AutoTradingUpdateRequest(
+                        null,
+                        AutoTradingDirection.BUY_ONLY
+                );
+
+        AutoTradingUpdateResponse expectedResponse =
+                AutoTradingUpdateResponse.from(autoTrading);
+
+        given(autoTradingCommandRepository
+                .findByIdAndUserIdAndDeletedAtIsNull(
+                        autoTradingId,
+                        userId
+                ))
+                .willReturn(Optional.of(autoTrading));
+
+        given(autoTradingUpdateTransactionService.update(
+                userId,
+                autoTradingId,
+                request
+        )).willReturn(expectedResponse);
+
+        // when
+        autoTradingCommandService.updateAutoTrading(
+                userId,
+                autoTradingId,
+                request
+        );
+
+        // then
+        verify(strategyClient, never())
+                .getStrategy(any());
+
+        verify(tradingLimitCommandRepository, never())
+                .existsByUserId(any());
+
+        verify(autoTradingUpdateTransactionService)
+                .update(
+                        userId,
+                        autoTradingId,
+                        request
+                );
+    }
+
+    @Test
+    @DisplayName("enabled true 요청은 현재 활성 상태와 관계없이 활성화 안전 검증을 수행한다")
+    void updateAlreadyEnabledAutoTrading() {
+        // given
+        UUID userId = UUID.randomUUID();
+        UUID autoTradingId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+
+        AutoTrading autoTrading =
+                AutoTrading.create(
+                        userId,
+                        strategyId,
+                        AutoTradingDirection.BOTH
+                );
+
+        autoTrading.update(true, null);
+
+        AutoTradingUpdateRequest request =
+                new AutoTradingUpdateRequest(
+                        true,
+                        null
+                );
+
+        given(autoTradingCommandRepository
+                .findByIdAndUserIdAndDeletedAtIsNull(
+                        autoTradingId,
+                        userId
+                ))
+                .willReturn(Optional.of(autoTrading));
+
+        given(tradingLimitCommandRepository.existsByUserId(userId))
+                .willReturn(true);
+
+        given(strategyClient.getStrategy(strategyId))
+                .willReturn(
+                        new StrategyClientResponse(
+                                strategyId,
+                                userId,
+                                StrategyStatus.ACTIVE
+                        )
+                );
+
+        given(autoTradingUpdateTransactionService.update(
+                userId,
+                autoTradingId,
+                request
+        )).willReturn(
+                AutoTradingUpdateResponse.from(autoTrading)
+        );
+
+        // when
+        AutoTradingUpdateResponse response =
+                autoTradingCommandService.updateAutoTrading(
+                        userId,
+                        autoTradingId,
+                        request
+                );
+
+        // then
+        assertThat(response.enabled())
+                .isTrue();
+
+        verify(tradingLimitCommandRepository)
+                .existsByUserId(userId);
+
+        verify(strategyClient)
+                .getStrategy(strategyId);
+
+        verify(autoTradingUpdateTransactionService)
+                .update(
+                        userId,
+                        autoTradingId,
+                        request
+                );
     }
 }

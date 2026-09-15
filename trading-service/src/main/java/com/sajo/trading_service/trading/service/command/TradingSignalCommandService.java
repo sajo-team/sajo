@@ -59,6 +59,10 @@ public class TradingSignalCommandService {
             );
         }
 
+        autoTrading.validateDirection(
+                payload.signalType()
+        );
+
         TradingLimit tradingLimit =
                 tradingLimitCommandRepository.findByUserIdForUpdate(
                                 payload.userId()
