@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -46,7 +47,8 @@ class KisTokenLogQueryServiceTest {
     }
 
     @Test
-    @DisplayName("getTokenStatuses는 KisTokenStatusQueryRepository(현재 상태 스냅샷)를 조회해 TokenStatusResponse로 매핑한다")
+    @DisplayName("getTokenStatuses는 KisTokenStatusQueryRepository(현재 상태 스냅샷, lastEventAt DESC 고정 정렬)를 "
+            + "조회해 TokenStatusResponse로 매핑한다")
     void getTokenStatuses_delegatesToStatusRepositoryAndMaps() {
         // given
         UUID userId = UUID.randomUUID();
@@ -59,11 +61,11 @@ class KisTokenLogQueryServiceTest {
         given(status.getErrorMessage()).willReturn("1분당 1회 제한 초과");
         given(status.getLastEventAt()).willReturn(lastEventAt);
 
-        Pageable pageable = PageRequest.of(0, 10);
-        given(kisTokenStatusQueryRepository.findAll(pageable)).willReturn(new PageImpl<>(List.of(status)));
+        given(kisTokenStatusQueryRepository.findAllByOrderByLastEventAtDescIdDesc(any(Pageable.class)))
+                .willReturn(new PageImpl<>(List.of(status)));
 
         // when
-        Page<TokenStatusResponse> result = kisTokenLogQueryService.getTokenStatuses(pageable);
+        Page<TokenStatusResponse> result = kisTokenLogQueryService.getTokenStatuses(PageRequest.of(0, 10));
 
         // then - 자기조인 대신 스냅샷 테이블로 위임되고, 필드가 그대로 매핑돼야 한다
         assertThat(result.getContent()).hasSize(1);
