@@ -1,5 +1,6 @@
 package com.sajo.trading_service.trading.client;
 
+import com.sajo.common.response.GeneralResponse;
 import com.sajo.trading_service.trading.client.dto.response.MarketStockQuoteResponse;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -15,7 +16,7 @@ import java.util.UUID;
 public interface MarketStockClient {
 
     @GetMapping("/internal/v1/stocks/{stockCode}/quote")
-    MarketStockQuoteResponse getQuote(
+    GeneralResponse<MarketStockQuoteResponse> getQuote(
             @RequestHeader("X-User-Id") UUID userId,
             @PathVariable String stockCode
     );

@@ -2,6 +2,7 @@ package com.sajo.trading_service.trading.service.command;
 
 import com.sajo.common.exception.BusinessException;
 import com.sajo.common.feign.FeignApiException;
+import com.sajo.common.response.GeneralResponse;
 import com.sajo.trading_service.trading.client.AccountClient;
 import com.sajo.trading_service.trading.client.KisOrderClient;
 import com.sajo.trading_service.trading.client.MarketStockClient;
@@ -188,10 +189,10 @@ public class KisOrderCommandService {
         /*
          * 주문 가격 사전 검증
          */
-        MarketStockQuoteResponse quoteResponse;
+        GeneralResponse<MarketStockQuoteResponse> marketResponse;
 
         try {
-            quoteResponse =
+            marketResponse =
                     marketStockClient.getQuote(
                             order.getUserId(),
                             order.getStockCode()
@@ -229,6 +230,21 @@ public class KisOrderCommandService {
 
             return;
         }
+
+        /*
+         * GeneralResponse envelope 검증 및 data 추출
+         */
+        if (marketResponse == null || marketResponse.data() == null) {
+            orderStatusCommandService.fail(
+                    orderId,
+                    "ORDER_PRICE_VALIDATION_UNAVAILABLE",
+                    "주문 가격 검증에 필요한 시세 정보를 확인할 수 없습니다."
+            );
+            return;
+        }
+
+        MarketStockQuoteResponse quoteResponse =
+                marketResponse.data();
 
         Long previousClosePrice = quoteResponse.previousClosePrice();
 

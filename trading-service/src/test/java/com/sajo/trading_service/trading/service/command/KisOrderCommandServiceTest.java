@@ -2,6 +2,7 @@ package com.sajo.trading_service.trading.service.command;
 
 import com.sajo.common.exception.BusinessException;
 import com.sajo.common.feign.FeignApiException;
+import com.sajo.common.response.GeneralResponse;
 import com.sajo.trading_service.trading.client.AccountClient;
 import com.sajo.trading_service.trading.client.KisOrderClient;
 import com.sajo.trading_service.trading.client.MarketStockClient;
@@ -1196,11 +1197,15 @@ class KisOrderCommandServiceTest {
                 userId,
                 "005930"
         )).thenReturn(
-                new MarketStockQuoteResponse(
-                        "005930",
-                        70_000L,
-                        69_000L,
-                        OffsetDateTime.now()
+                new GeneralResponse<>(
+                        true,
+                        "OK",
+                        new MarketStockQuoteResponse(
+                                "005930",
+                                100_000L,
+                                100_000L,
+                                OffsetDateTime.now()
+                        )
                 )
         );
 
@@ -1257,11 +1262,15 @@ class KisOrderCommandServiceTest {
                 userId,
                 "005930"
         )).thenReturn(
-                new MarketStockQuoteResponse(
-                        "005930",
-                        100_000L,
-                        100_000L,
-                        OffsetDateTime.now()
+                new GeneralResponse<>(
+                        true,
+                        "OK",
+                        new MarketStockQuoteResponse(
+                                "005930",
+                                100_000L,
+                                100_000L,
+                                OffsetDateTime.now()
+                        )
                 )
         );
 
@@ -1318,11 +1327,15 @@ class KisOrderCommandServiceTest {
                 userId,
                 "005930"
         )).thenReturn(
-                new MarketStockQuoteResponse(
-                        "005930",
-                        100_000L,
-                        100_000L,
-                        OffsetDateTime.now()
+                new GeneralResponse<>(
+                        true,
+                        "OK",
+                        new MarketStockQuoteResponse(
+                                "005930",
+                                100_000L,
+                                100_000L,
+                                OffsetDateTime.now()
+                        )
                 )
         );
 
@@ -1379,11 +1392,15 @@ class KisOrderCommandServiceTest {
                 userId,
                 "005930"
         )).thenReturn(
-                new MarketStockQuoteResponse(
-                        "005930",
-                        100_000L,
-                        100_000L,
-                        OffsetDateTime.now()
+                new GeneralResponse<>(
+                        true,
+                        "OK",
+                        new MarketStockQuoteResponse(
+                                "005930",
+                                100_000L,
+                                100_000L,
+                                OffsetDateTime.now()
+                        )
                 )
         );
 
@@ -1440,11 +1457,15 @@ class KisOrderCommandServiceTest {
                 userId,
                 "005930"
         )).thenReturn(
-                new MarketStockQuoteResponse(
-                        "005930",
-                        70_000L,
-                        70_000L,
-                        OffsetDateTime.now()
+                new GeneralResponse<>(
+                        true,
+                        "OK",
+                        new MarketStockQuoteResponse(
+                                "005930",
+                                70_000L,
+                                70_000L,
+                                OffsetDateTime.now()
+                        )
                 )
         );
     }
@@ -1471,11 +1492,15 @@ class KisOrderCommandServiceTest {
                 userId,
                 "005930"
         )).thenReturn(
-                new MarketStockQuoteResponse(
-                        "005930",
-                        70_000L,
-                        null,
-                        OffsetDateTime.now()
+                new GeneralResponse<>(
+                        true,
+                        "OK",
+                        new MarketStockQuoteResponse(
+                                "005930",
+                                70_000L,
+                                null,
+                                OffsetDateTime.now()
+                        )
                 )
         );
 
