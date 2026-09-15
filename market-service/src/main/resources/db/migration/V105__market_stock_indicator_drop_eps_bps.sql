@@ -1,4 +1,6 @@
--- Manual migration: this project does not execute Flyway/Liquibase migrations automatically.
+-- Baseline migration (Flyway adoption, #218): this change was already applied manually via psql
+-- before Flyway was introduced. It is kept here for history only — Flyway's baselineVersion=105
+-- (see application.yaml) means this file is NOT re-executed on any existing market_strategy schema.
 --
 -- eps/bps are unused going forward: the V104 quarterly-snapshot upsert (MarketStockIndicatorWriter)
 -- only ever writes them as literal NULL, and no consumer (Strategy's internal contract, /indicators,

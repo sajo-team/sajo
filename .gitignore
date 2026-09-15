@@ -34,6 +34,10 @@ docker-compose.override.yaml
 # Build artifacts
 build/
 .gradle/
+out/
 
 # IDE
 .idea/
+
+# macOS
+.DS_Store

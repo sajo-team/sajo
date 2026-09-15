@@ -1,6 +1,39 @@
 # Database migrations
 
-`market-service` does not currently include Flyway or Liquibase. SQL files in this directory are not executed automatically, and there is no migration execution-history management.
+`market-service` uses Flyway (adopted in #218) to manage `market_strategy` schema migrations. Flyway
+runs automatically on application startup against `spring.flyway.schemas: market_strategy`
+(see `application.yaml`). New schema changes from now on should be added as a new versioned file in
+this directory (`V<next>__description.sql`) instead of the old "manual psql" convention.
+
+## Baseline (V44–V105)
+
+V44, V52, V53, V103, V104 and V105 below predate Flyway and were already applied by hand (psql) to
+every real environment before this adoption. `application.yaml` sets:
+
+```yaml
+spring:
+  flyway:
+    baseline-on-migrate: true
+    baseline-version: 105
+```
+
+so on any schema that already has these changes applied (which today means every real schema —
+prod and any developer's already-bootstrapped local DB), Flyway records a baseline row at version
+105 on first boot and does **not** re-execute V44–V105. Only new migrations above V105 (e.g. V106+)
+are actually run by Flyway. The execution notes for V44–V105 further down are kept for history —
+they describe how each file was originally applied by hand, not something Flyway will redo.
+
+**Important limitation — this does not cover a truly empty schema.** `baseline-on-migrate` only
+triggers for a *non-empty* schema. Against a brand-new schema that has no tables at all (a fresh
+local DB before its first boot, or the throwaway schema CI creates with `CREATE SCHEMA IF NOT
+EXISTS`), Flyway sees nothing to baseline and instead tries to run V44 onward for real — which fails
+immediately, since V44 issues `ALTER TABLE` against tables that don't exist yet (they're normally
+created by Hibernate `ddl-auto`, not by these historical files). This is the same pre-existing gap the
+"Bootstrapping a brand-new database" runbook below was already written for; see the updated steps
+there for how to get a fresh schema to a state where Flyway can take over. market-service's test suite
+avoids this entirely by disabling Flyway for the H2-backed `local`/`test` profiles
+(`src/test/resources/application-{local,test}.yaml`), since those profiles rebuild their schema from
+scratch via `ddl-auto: create-drop` on every run anyway.
 
 ## V44 execution order
 
@@ -70,17 +103,26 @@ adds something Hibernate cannot generate from annotations: the **partial** uniqu
 
 Verified against a schema generated from the current entities (2026-09-08):
 
+0. **With Flyway now enabled by default, step 1 will fail unless Flyway is turned off for
+   this bootstrap boot.** Flyway runs before Hibernate creates any tables, so against a
+   completely empty schema it will try to execute V44 for real (`ALTER TABLE
+   market_strategy.m_market_stocks_price ...`) and fail immediately because that table
+   doesn't exist yet. Stage `SPRING_FLYWAY_ENABLED: "false"` alongside the
+   `SPRING_JPA_HIBERNATE_DDL_AUTO: update` override in step 1, and keep it set through
+   step 2 as well.
 1. Boot `market-service` (and `trading-service`, which has no migration files at all)
-   **once** with `hibernate.ddl-auto: update` against the empty schema. Since there are
-   no existing tables, this behaves identically to a manual `CREATE TABLE` script and
-   only creates what's missing — it does not run any risky `ALTER` on real data.
-   In practice this is done via a temporary `SPRING_JPA_HIBERNATE_DDL_AUTO: update`
-   environment override already staged in `docker-compose.prod.yaml` (rather than
-   editing `sajo-config-repo`, which doesn't set `ddl-auto` at all) — remove those two
-   lines and redeploy once step 2 below is confirmed healthy.
-2. After a healthy boot, run **V44 only**. It is safe and rerunnable (confirmed by
-   running it twice back-to-back).
-3. Do **not** run V52 or V103 against a freshly bootstrapped schema:
+   **once** with `hibernate.ddl-auto: update` (and Flyway disabled, per step 0) against
+   the empty schema. Since there are no existing tables, this behaves identically to a
+   manual `CREATE TABLE` script and only creates what's missing — it does not run any
+   risky `ALTER` on real data. In practice this is done via a temporary
+   `SPRING_JPA_HIBERNATE_DDL_AUTO: update` environment override already staged in
+   `docker-compose.prod.yaml` (rather than editing `sajo-config-repo`, which doesn't set
+   `ddl-auto` at all) — remove those overrides and redeploy once step 2 below is
+   confirmed healthy.
+2. After a healthy boot, run **V44 only**, by hand (psql), same as before Flyway —
+   Flyway is still disabled at this point (step 0), so it will not pick this up on its
+   own. It is safe and rerunnable (confirmed by running it twice back-to-back).
+3. Do **not** run V52 or V103 by hand against a freshly bootstrapped schema:
    - V52 will not error, but its "does an equivalent index already exist" check never
      matches (see bug note below), so it silently creates a **duplicate** unique index
      on `stock_code` alongside the one Hibernate already created from the entity
@@ -91,8 +133,12 @@ Verified against a schema generated from the current entities (2026-09-08):
      name.
    - V53 is a harmless no-op (all its `ADD COLUMN IF NOT EXISTS` guards correctly skip),
      but there is no reason to run it either.
-4. Switch `ddl-auto` back to `validate` for both services immediately after step 2 and
-   never set it back to `update` in production again.
+4. Switch `ddl-auto` back to `validate` and remove the `SPRING_FLYWAY_ENABLED: "false"`
+   override (i.e. let it default back to enabled) for both services immediately after
+   step 2, and never set `ddl-auto` back to `update` in production again. The schema is
+   now non-empty and already contains everything V44–V105 would have added, so the next
+   boot's Flyway run baselines it at V105 (per `baseline-version: 105` in
+   `application.yaml`) instead of trying to re-run them.
 
 ### Known bug: V52 / V103 existence checks (non-blocking, tracked separately)
 

@@ -1,4 +1,12 @@
 spring:
+  # Repository integration tests (@DataJpaTest + @Testcontainers) boot against a brand-new,
+  # per-test Testcontainers Postgres with no pre-existing schema. Flyway's baseline-on-migrate
+  # only protects a *non-empty* schema, so against this empty one it would try to run the legacy
+  # V44~V105 migrations for real -- and those are ALTER TABLE statements against tables Hibernate
+  # hasn't created yet at that point, so they fail immediately. Hibernate ddl-auto below already
+  # builds the schema from the entities for these tests, so Flyway is unnecessary here.
+  flyway:
+    enabled: false
   datasource:
     url: jdbc:postgresql://localhost:5432/sajo?currentSchema=market_strategy
     username: postgres
