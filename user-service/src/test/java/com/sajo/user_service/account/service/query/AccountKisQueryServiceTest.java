@@ -140,6 +140,41 @@ class AccountKisQueryServiceTest {
                 });
     }
 
+    @Test
+    @DisplayName("KIS 응답의 output2 필드가 숫자로 파싱 불가능하면 KIS_BALANCE_INQUIRY_FAILED 예외를 던진다")
+    void getDepositFailsWhenFieldIsUnparsable() {
+        // given
+        UUID userId = UUID.randomUUID();
+        Account account = Account.createAccount(
+                userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
+        KisBalanceResponse kisBalanceResponse = new KisBalanceResponse(
+                "0", "MSG_CD", "정상처리 되었습니다", null, null, List.of(), List.of(unparsableDepositSummary()));
+
+        given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
+        given(kisTokenCacheQueryService.getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL))
+                .willReturn("issued-token");
+        given(kisTrClient.inquireBalance(
+                "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.REAL))
+                .willReturn(kisBalanceResponse);
+
+        // when & then
+        assertThatThrownBy(() -> accountKisQueryService.getDeposit(userId))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(AccountErrorCode.KIS_BALANCE_INQUIRY_FAILED);
+                });
+    }
+
+    private static KisBalanceSummaryResponse unparsableDepositSummary() {
+        return new KisBalanceSummaryResponse(
+                "숫자아님", // dnca_tot_amt - 정상이면 Long.parseLong 가능한 숫자 문자열이어야 함
+                "900000", "800000", null, null, null, null, null, null, null, null, null, null, null,
+                "1500000", "1400000", null, null, null, "50000", null, null, null, null
+        );
+    }
+
     private static KisBalanceSummaryResponse depositSummary() {
         return new KisBalanceSummaryResponse(
                 "1000000", // dnca_tot_amt
@@ -261,6 +296,35 @@ class AccountKisQueryServiceTest {
     }
 
     @Test
+    @DisplayName("보유종목 응답의 필드가 숫자로 파싱 불가능하면 KIS_BALANCE_INQUIRY_FAILED 예외를 던진다")
+    void getHoldingsFailsWhenFieldIsUnparsable() {
+        // given
+        UUID userId = UUID.randomUUID();
+        Account account = Account.createAccount(
+                userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
+        KisBalanceResponse kisBalanceResponse = new KisBalanceResponse(
+                "0", "MSG_CD", "정상처리 되었습니다", null, null, List.of(unparsableHolding()), List.of());
+        KisContinuationResult<KisBalanceResponse> continuationResult =
+                new KisContinuationResult<>(kisBalanceResponse, false);
+
+        given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
+        given(kisTokenCacheQueryService.getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL))
+                .willReturn("issued-token");
+        given(kisTrClient.inquireBalance(
+                "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.REAL, null, null))
+                .willReturn(continuationResult);
+
+        // when & then
+        assertThatThrownBy(() -> accountKisQueryService.getHoldings(userId, null, null))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(AccountErrorCode.KIS_BALANCE_INQUIRY_FAILED);
+                });
+    }
+
+    @Test
     @DisplayName("보유종목 조회 시 계좌가 없으면 ACCOUNT_NOT_FOUND 예외를 그대로 전파하고 KIS는 호출하지 않는다")
     void getHoldingsFailsWhenAccountNotFound() {
         // given
@@ -308,6 +372,15 @@ class AccountKisQueryServiceTest {
                 null, // grta_rt_name
                 null, // sbst_pric
                 null // stck_loan_unpr
+        );
+    }
+
+    private static KisBalanceHoldingResponse unparsableHolding() {
+        return new KisBalanceHoldingResponse(
+                "005930", "삼성전자", null, null, null, null, null,
+                "숫자아님", // hldg_qty - 정상이면 Long.parseLong 가능한 숫자 문자열이어야 함
+                "10", "70000.5", null, "75000", "750000", "49995", "7.14",
+                null, null, null, null, null, null, null, null, null, null, null
         );
     }
 

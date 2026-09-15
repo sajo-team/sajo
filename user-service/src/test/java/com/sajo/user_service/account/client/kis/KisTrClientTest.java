@@ -139,6 +139,33 @@ class KisTrClientTest {
     }
 
     @Test
+    @DisplayName("잔고조회 - HTTP 200이어도 msg_cd가 EGW00215(원장 유량 초과, inquire-balance 전용)이면 "
+            + "KIS_BALANCE_INQUIRY_FAILED가 아닌 KIS_RATE_LIMITED 예외를 던진다")
+    void inquireBalanceFailsWithRateLimitWhenMsgCdIsEgw00215() {
+        // given
+        setUp();
+        server.expect(requestTo("https://kis.example/uapi/domestic-stock/v1/trading/inquire-balance"
+                        + "?CANO=12345678&ACNT_PRDT_CD=01&AFHR_FLPR_YN=N&OFL_YN=&INQR_DVSN=02&UNPR_DVSN=01"
+                        + "&FUND_STTL_ICLD_YN=N&FNCG_AMT_AUTO_RDPT_YN=N&PRCS_DVSN=00"
+                        + "&CTX_AREA_FK100=&CTX_AREA_NK100="))
+                .andRespond(withSuccess("""
+                        {"rt_cd":"1","msg_cd":"EGW00215","msg1":"원장에서 허용 가능한 초당 거래건수를 초과하였습니다.","output1":[],"output2":[]}
+                        """, MediaType.APPLICATION_JSON));
+
+        // when & then
+        assertThatThrownBy(() -> client.inquireBalance(
+                "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.VIRTUAL))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(AccountErrorCode.KIS_RATE_LIMITED);
+                });
+
+        server.verify();
+    }
+
+    @Test
     @DisplayName("잔고조회 - 4xx 응답 바디가 oauth 에러 포맷(error_code)이 아니어도(rt_cd/msg_cd 포맷) "
             + "NPE 없이 INVALID_KIS_CREDENTIALS 예외를 던진다")
     void inquireBalanceFailsWithHttp4xxInDifferentErrorShape() {
