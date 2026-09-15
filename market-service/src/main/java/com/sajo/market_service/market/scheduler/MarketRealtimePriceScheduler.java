@@ -100,8 +100,15 @@ public class MarketRealtimePriceScheduler {
                 return false;
             }
             return snapshotCommandService.saveWebsocketSnapshot(stockId, now.toLocalDate(), now.toLocalTime(), quote);
-        } catch (DataAccessException exception) {
-            log.warn("실시간 시세 스냅샷 저장 중 Redis/DB 접근에 실패했습니다. stockCode={}", stockCode, exception);
+        } catch (RuntimeException exception) {
+            // DataAccessException(Redis/DB 접근 실패)뿐 아니라, 저장 로직이 나중에 바뀌어 다른
+            // RuntimeException(NPE, BusinessException 등)이 나더라도 이 종목 하나만 건너뛰고 나머지
+            // 종목 처리는 계속되어야 한다 — 그렇지 않으면 이 for 루프가 이 자리에서 그대로 끝나버려
+            // 아직 처리 못 한 나머지 종목의 스냅샷까지 전부 유실된다(바로 위 배치 조회 실패 처리와
+            // 같은 종류의 리스크). MarketDailyPriceScheduler.collectStock()도 같은 이유로 종목 단위
+            // 루프에서 Exception을 넓게 잡는다(코드 리뷰 반영).
+            log.warn("실시간 시세 스냅샷 저장 중 예외가 발생했습니다. stockCode={}, exceptionType={}",
+                    stockCode, exception.getClass().getSimpleName(), exception);
             return false;
         }
     }

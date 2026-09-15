@@ -19,6 +19,18 @@ import java.util.UUID;
  * (일별 시세, KIS 호출 포함)와는 저장 대상·트리거가 달라 별도 서비스로 분리했다 — Scheduler는 대상
  * 종목 결정과 이 서비스 호출만 담당하고, 엔티티 생성/저장/중복 처리는 여기 둔다(CLAUDE.md 3장,
  * 코드 리뷰 반영).
+ *
+ * <p><b>{@code @Transactional}을 의도적으로 붙이지 않았다(코드 리뷰 반영).</b> 이 메서드는
+ * {@link MarketStockPriceCommandRepository#save}(SimpleJpaRepository 자체가 이미
+ * {@code @Transactional}) 한 번만 호출하므로, 지금 구조에서는 이 메서드 자체에 트랜잭션을 걸지
+ * 않아도 저장 하나하나가 자기 자신만의 독립된 트랜잭션으로 커밋/롤백된다. 만약 이 메서드에
+ * {@code @Transactional}을 붙이면, {@code save()}가 던지는 {@link DataIntegrityViolationException}이
+ * (아래 catch에서 잡아 false를 반환하며 정상 흐름을 이어가려 해도) 그 시점에 이미 JPA가 물리
+ * 트랜잭션을 rollback-only로 마킹해버려서, 트랜잭션 커밋 시점에
+ * "Transaction rolled back because it has been marked as rollback-only" 예외로 깨질 수 있다.
+ * 그러니 이 클래스에 조회/추가 저장 로직을 덧붙이면서 컨벤션에 맞추려고 무심코
+ * {@code @Transactional}을 추가하지 말 것 — 필요해지면 이 catch-and-continue 패턴 자체를 다시
+ * 설계해야 한다(예: 별도 트랜잭션 전파 옵션, 또는 예외 캐치 위치 재조정).</p>
  */
 @Slf4j
 @Service

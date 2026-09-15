@@ -109,6 +109,28 @@ class MarketRealtimePriceSchedulerTest {
     }
 
     @Test
+    void continuesWithOtherStocksWhenOneStockSnapshotThrowsNonDataAccessException() {
+        UUID otherStockId = UUID.fromString("33333333-3333-3333-3333-333333333333");
+        given(kisWebSocketClient.subscribedStockCodes()).willReturn(Set.of("005930", "000660"));
+        given(quoteRedisTemplate.opsForValue()).willReturn(valueOperations);
+        given(valueOperations.get("market:quote:005930")).willReturn(sampleQuote());
+        given(valueOperations.get("market:quote:000660")).willReturn(sampleQuote());
+        given(marketStockQueryRepository.findCollectionTargetsByStockCodes(Set.of("005930", "000660")))
+                .willReturn(List.of(target("005930", STOCK_ID), target("000660", otherStockId)));
+        // saveWebsocketSnapshot 내부 로직이 나중에 바뀌어 DataAccessException이 아닌 다른
+        // RuntimeException(예: NPE, BusinessException)을 던지는 상황을 흉내낸다.
+        given(snapshotCommandService.saveWebsocketSnapshot(eq(STOCK_ID), any(), any(), any()))
+                .willThrow(new IllegalStateException("boom"));
+        given(snapshotCommandService.saveWebsocketSnapshot(eq(otherStockId), any(), any(), any()))
+                .willReturn(true);
+
+        org.assertj.core.api.Assertions.assertThatCode(scheduler::snapshotRealtimePrices)
+                .doesNotThrowAnyException();
+
+        verify(snapshotCommandService).saveWebsocketSnapshot(eq(otherStockId), any(), any(), any());
+    }
+
+    @Test
     void skipsWholeTickWithoutThrowingWhenBatchStockLookupFails() {
         given(kisWebSocketClient.subscribedStockCodes()).willReturn(Set.of("005930", "000660"));
         given(marketStockQueryRepository.findCollectionTargetsByStockCodes(Set.of("005930", "000660")))
