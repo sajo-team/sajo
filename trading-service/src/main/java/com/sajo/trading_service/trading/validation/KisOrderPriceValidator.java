@@ -58,6 +58,9 @@ public class KisOrderPriceValidator {
 
     long calculatePriceLimit(long previousClosePrice) {
         long rawPriceLimit = previousClosePrice * 30 / 100;
+
+        // KRX 기준에 따라 가격제한폭은 기준가격의 호가단위로 절사한다.
+        // 상/하한가 결과값의 가격대 호가단위를 사용하는 것이 아니다.
         long tickSize = resolveTickSize(previousClosePrice);
 
         return rawPriceLimit / tickSize * tickSize;

@@ -213,7 +213,23 @@ public class KisOrderCommandService {
 
             return;
 
-        } catch (FeignException e) {
+        } catch (FeignApiException e) {
+            log.warn(
+                    "Market Service 비즈니스 오류가 발생했습니다. orderId={}, errorCode={}",
+                    orderId,
+                    e.getErrorCode(),
+                    e
+            );
+
+            orderStatusCommandService.fail(
+                    orderId,
+                    e.getErrorCode(),
+                    "주문 가격 검증을 위한 시세 정보를 확인할 수 없습니다."
+            );
+
+            return;
+
+        }  catch (FeignException e) {
 
             if (e.status() >= 500 || e.status() == 429) {
                 log.warn(

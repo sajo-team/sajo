@@ -1763,4 +1763,55 @@ class KisOrderCommandServiceTest {
 
         verifyNoInteractions(kisOrderClient);
     }
+
+    @Test
+    @DisplayName("Market Service에서 FeignApiException이 발생하면 실제 오류 코드로 FAILED 처리한다")
+    void failWhenMarketServiceFeignApiException() {
+        // given
+        Order order = createOrder(OrderType.BUY);
+
+        when(orderStatusCommandService.startProcessing(orderId))
+                .thenReturn(order);
+
+        givenCommonAccountResponses();
+
+        when(accountClient.getOrderableAmount(userId))
+                .thenReturn(
+                        new AccountOrderableAmountResponse(
+                                1_000_000L
+                        )
+                );
+
+        FeignApiException exception =
+                new FeignApiException(
+                        "MARKET_QUOTE_NOT_FOUND",
+                        "시세 정보를 찾을 수 없습니다.",
+                        400
+                );
+
+        when(marketStockClient.getQuote(
+                userId,
+                "005930"
+        )).thenThrow(exception);
+
+        // when
+        kisOrderCommandService.executeOrder(orderId);
+
+        // then
+        verify(orderStatusCommandService)
+                .fail(
+                        orderId,
+                        "MARKET_QUOTE_NOT_FOUND",
+                        "주문 가격 검증을 위한 시세 정보를 확인할 수 없습니다."
+                );
+
+        verify(orderStatusCommandService, never())
+                .retryMarketQuote(
+                        any(),
+                        any(),
+                        any()
+                );
+
+        verifyNoInteractions(kisOrderClient);
+    }
 }
