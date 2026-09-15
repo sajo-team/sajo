@@ -277,7 +277,10 @@ public class KisWebSocketClient {
         }
     }
 
-    /** 연결 생명주기 콜백만 담당한다. 메시지 정규화·저장은 이후 단계(15단계)에서 처리한다. */
+    /** 연결 생명주기 콜백과 메시지 수신을 담당한다. 수신한 원문의 정규화·Redis 반영은
+     * {@link MarketRealtimePriceUpdateService}에 위임하고(수신 스레드 보호를 위해 예외를 흡수),
+     * PostgreSQL 저장은 여기서도 그 서비스에서도 하지 않는다({@link com.sajo.market_service.market.scheduler.MarketRealtimePriceScheduler}
+     * 책임). */
     final class KisMessageListener extends TextWebSocketHandler {
 
         /** 이 리스너를 만든 connect() 시도의 세대. {@link #connectionGeneration}과 비교해 폐기 여부를 판단한다. */

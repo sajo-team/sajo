@@ -1,21 +1,20 @@
 package com.sajo.market_service.market.scheduler;
 
-import com.sajo.market_service.market.domain.MarketStockPrice;
-import com.sajo.market_service.market.domain.PriceSource;
 import com.sajo.market_service.market.dto.response.QuoteResponse;
-import com.sajo.market_service.market.repository.command.MarketStockPriceCommandRepository;
 import com.sajo.market_service.market.repository.query.MarketStockCollectionTarget;
 import com.sajo.market_service.market.repository.query.MarketStockQueryRepository;
+import com.sajo.market_service.market.service.command.MarketRealtimePriceSnapshotCommandService;
 import com.sajo.market_service.market.websocket.KisWebSocketClient;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.QueryTimeoutException;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Set;
@@ -32,8 +31,8 @@ class MarketRealtimePriceSchedulerTest {
 
     private final KisWebSocketClient kisWebSocketClient = mock(KisWebSocketClient.class);
     private final MarketStockQueryRepository marketStockQueryRepository = mock(MarketStockQueryRepository.class);
-    private final MarketStockPriceCommandRepository marketStockPriceCommandRepository =
-            mock(MarketStockPriceCommandRepository.class);
+    private final MarketRealtimePriceSnapshotCommandService snapshotCommandService =
+            mock(MarketRealtimePriceSnapshotCommandService.class);
     @SuppressWarnings("unchecked")
     private final RedisTemplate<String, QuoteResponse> quoteRedisTemplate = mock(RedisTemplate.class);
     @SuppressWarnings("unchecked")
@@ -41,7 +40,7 @@ class MarketRealtimePriceSchedulerTest {
     private final Clock clock = Clock.fixed(Instant.parse("2026-09-14T15:07:00Z"), ZoneOffset.UTC);
 
     private final MarketRealtimePriceScheduler scheduler = new MarketRealtimePriceScheduler(
-            kisWebSocketClient, marketStockQueryRepository, marketStockPriceCommandRepository,
+            kisWebSocketClient, marketStockQueryRepository, snapshotCommandService,
             quoteRedisTemplate, clock);
 
     @Test
@@ -51,16 +50,13 @@ class MarketRealtimePriceSchedulerTest {
         given(valueOperations.get("market:quote:005930")).willReturn(sampleQuote());
         given(marketStockQueryRepository.findCollectionTargetsByStockCodes(Set.of("005930")))
                 .willReturn(List.of(target("005930", STOCK_ID)));
+        given(snapshotCommandService.saveWebsocketSnapshot(eq(STOCK_ID), any(), any(), any()))
+                .willReturn(true);
 
         scheduler.snapshotRealtimePrices();
 
-        ArgumentCaptor<MarketStockPrice> captor = ArgumentCaptor.forClass(MarketStockPrice.class);
-        verify(marketStockPriceCommandRepository).save(captor.capture());
-        MarketStockPrice saved = captor.getValue();
-        assertThat(saved.getStockId()).isEqualTo(STOCK_ID);
-        assertThat(saved.getCurrentPrice()).isEqualTo(70000L);
-        assertThat(saved.getSource()).isEqualTo(PriceSource.WEBSOCKET);
-        assertThat(saved.getTime().getSecond()).isZero();
+        verify(snapshotCommandService).saveWebsocketSnapshot(
+                STOCK_ID, LocalDate.of(2026, 9, 14), LocalTime.of(15, 7), sampleQuote());
     }
 
     @Test
@@ -69,7 +65,7 @@ class MarketRealtimePriceSchedulerTest {
 
         scheduler.snapshotRealtimePrices();
 
-        verifyNoInteractions(quoteRedisTemplate, marketStockPriceCommandRepository);
+        verifyNoInteractions(quoteRedisTemplate, marketStockQueryRepository, snapshotCommandService);
     }
 
     @Test
@@ -77,10 +73,12 @@ class MarketRealtimePriceSchedulerTest {
         given(kisWebSocketClient.subscribedStockCodes()).willReturn(Set.of("005930"));
         given(quoteRedisTemplate.opsForValue()).willReturn(valueOperations);
         given(valueOperations.get("market:quote:005930")).willReturn(null);
+        given(marketStockQueryRepository.findCollectionTargetsByStockCodes(Set.of("005930")))
+                .willReturn(List.of(target("005930", STOCK_ID)));
 
         scheduler.snapshotRealtimePrices();
 
-        verify(marketStockPriceCommandRepository, never()).save(any());
+        verifyNoInteractions(snapshotCommandService);
     }
 
     @Test
@@ -93,7 +91,7 @@ class MarketRealtimePriceSchedulerTest {
 
         scheduler.snapshotRealtimePrices();
 
-        verify(marketStockPriceCommandRepository, never()).save(any());
+        verifyNoInteractions(snapshotCommandService);
     }
 
     @Test
@@ -103,10 +101,23 @@ class MarketRealtimePriceSchedulerTest {
         given(valueOperations.get("market:quote:005930")).willReturn(sampleQuote());
         given(marketStockQueryRepository.findCollectionTargetsByStockCodes(Set.of("005930")))
                 .willReturn(List.of(target("005930", STOCK_ID)));
-        given(marketStockPriceCommandRepository.save(any())).willThrow(new DataIntegrityViolationException("dup"));
+        given(snapshotCommandService.saveWebsocketSnapshot(eq(STOCK_ID), any(), any(), any()))
+                .willReturn(false);
 
         org.assertj.core.api.Assertions.assertThatCode(scheduler::snapshotRealtimePrices)
                 .doesNotThrowAnyException();
+    }
+
+    @Test
+    void skipsWholeTickWithoutThrowingWhenBatchStockLookupFails() {
+        given(kisWebSocketClient.subscribedStockCodes()).willReturn(Set.of("005930", "000660"));
+        given(marketStockQueryRepository.findCollectionTargetsByStockCodes(Set.of("005930", "000660")))
+                .willThrow(new QueryTimeoutException("timeout"));
+
+        org.assertj.core.api.Assertions.assertThatCode(scheduler::snapshotRealtimePrices)
+                .doesNotThrowAnyException();
+
+        verifyNoInteractions(quoteRedisTemplate, snapshotCommandService);
     }
 
     private MarketStockCollectionTarget target(String stockCode, UUID stockId) {

@@ -1,18 +1,15 @@
 package com.sajo.market_service.market.scheduler;
 
 import com.sajo.market_service.market.cache.MarketQuoteCacheKey;
-import com.sajo.market_service.market.domain.MarketStockPrice;
-import com.sajo.market_service.market.domain.PriceSource;
 import com.sajo.market_service.market.dto.response.QuoteResponse;
-import com.sajo.market_service.market.repository.command.MarketStockPriceCommandRepository;
 import com.sajo.market_service.market.repository.query.MarketStockCollectionTarget;
 import com.sajo.market_service.market.repository.query.MarketStockQueryRepository;
+import com.sajo.market_service.market.service.command.MarketRealtimePriceSnapshotCommandService;
 import com.sajo.market_service.market.websocket.KisWebSocketClient;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.dao.DataAccessException;
-import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -36,6 +33,11 @@ import java.util.stream.Collectors;
  * <p>{@link KisWebSocketClient} 빈 자체가 {@code market.websocket.enabled=true}일 때만 생성되므로,
  * 그 빈을 주입받는 이 스케줄러도 동일한 조건으로 등록해야 disabled 환경에서 컨텍스트 기동이
  * 실패하지 않는다.</p>
+ *
+ * <p>대상 종목 결정(Redis 조회, stockCode→stockId 매핑)까지만 이 클래스가 담당하고, 엔티티 생성·저장·
+ * 중복 처리는 {@link MarketRealtimePriceSnapshotCommandService}(command 패키지)에 위임한다 —
+ * 기존 {@link MarketDailyPriceScheduler}와 같은 관례(Scheduler는 조정만, 저장 로직은 Command
+ * 서비스)를 따른다(CLAUDE.md 3장, 코드 리뷰 반영).</p>
  */
 @Slf4j
 @Component
@@ -45,7 +47,7 @@ public class MarketRealtimePriceScheduler {
 
     private final KisWebSocketClient kisWebSocketClient;
     private final MarketStockQueryRepository marketStockQueryRepository;
-    private final MarketStockPriceCommandRepository marketStockPriceCommandRepository;
+    private final MarketRealtimePriceSnapshotCommandService snapshotCommandService;
     private final RedisTemplate<String, QuoteResponse> quoteRedisTemplate;
     private final Clock clock;
 
@@ -58,11 +60,21 @@ public class MarketRealtimePriceScheduler {
 
         // stockCode → stockId 매핑은 종목별로 매분 개별 SELECT를 하지 않고 한 번의 IN 조회로 가져온다
         // (코드 리뷰 반영). 조회 전용이라 CommandRepository가 아닌 QueryRepository를 사용한다.
-        Map<String, UUID> stockIdsByCode = marketStockQueryRepository.findCollectionTargetsByStockCodes(stockCodes)
-                .stream()
-                .collect(Collectors.toMap(
-                        MarketStockCollectionTarget::getStockCode,
-                        MarketStockCollectionTarget::getStockId));
+        // 이 한 번의 배치 조회 자체가 실패하면(예: 순간적인 DB 커넥션 장애) snapshotOne()의 종목별
+        // 격리와 달리 이번 tick 전체가 예외로 죽어 모든 종목의 스냅샷이 유실될 수 있으므로, 여기서도
+        // 잡아서 이번 tick만 건너뛰고 다음 1분 뒤 재시도되도록 한다(코드 리뷰 반영).
+        Map<String, UUID> stockIdsByCode;
+        try {
+            stockIdsByCode = marketStockQueryRepository.findCollectionTargetsByStockCodes(stockCodes)
+                    .stream()
+                    .collect(Collectors.toMap(
+                            MarketStockCollectionTarget::getStockCode,
+                            MarketStockCollectionTarget::getStockId));
+        } catch (DataAccessException exception) {
+            log.warn("실시간 시세 스냅샷 대상 종목 조회에 실패해 이번 tick을 건너뜁니다. stockCodeCount={}",
+                    stockCodes.size(), exception);
+            return;
+        }
 
         LocalDateTime now = LocalDateTime.now(clock).withSecond(0).withNano(0);
         int savedCount = 0;
@@ -87,44 +99,9 @@ public class MarketRealtimePriceScheduler {
                 log.warn("실시간 시세 스냅샷 대상 종목을 찾을 수 없습니다. stockCode={}", stockCode);
                 return false;
             }
-            return saveSnapshot(stockId, now, quote);
+            return snapshotCommandService.saveWebsocketSnapshot(stockId, now.toLocalDate(), now.toLocalTime(), quote);
         } catch (DataAccessException exception) {
             log.warn("실시간 시세 스냅샷 저장 중 Redis/DB 접근에 실패했습니다. stockCode={}", stockCode, exception);
-            return false;
-        }
-    }
-
-    // JpaRepository.save()는 SimpleJpaRepository 자체가 @Transactional이라 별도 트랜잭션 래핑이
-    // 필요 없다(같은 빈 안에서 @Transactional 메서드를 직접 호출하면 프록시를 안 거쳐 적용도 안 된다).
-    // 반환값(저장 성공 여부)을 snapshotOne()까지 그대로 돌려줘야, 위 snapshotRealtimePrices()의
-    // savedCount/skippedCount 통계에서 "같은 분 중복이라 건너뜀"이 "저장됨"으로 잘못 집계되지 않는다
-    // (코드 리뷰 반영 — 동작에는 영향 없는 로그 통계 정확도 문제였다).
-    private boolean saveSnapshot(UUID stockId, LocalDateTime now, QuoteResponse quote) {
-        try {
-            MarketStockPrice price = MarketStockPrice.create(
-                    stockId,
-                    now.toLocalDate(),
-                    now.toLocalTime(),
-                    quote.currentPrice(),
-                    null,
-                    quote.openPrice(),
-                    quote.highPrice(),
-                    quote.lowPrice(),
-                    quote.previousClosePrice(),
-                    quote.changePrice(),
-                    quote.changeRate(),
-                    null,
-                    quote.accumulatedVolume(),
-                    quote.tradeAmount(),
-                    null,
-                    PriceSource.WEBSOCKET
-            );
-            marketStockPriceCommandRepository.save(price);
-            return true;
-        } catch (DataIntegrityViolationException exception) {
-            // 같은 분(minute)에 대한 스냅샷이 이미 저장돼 있는 경우다(유니크 제약, V106 마이그레이션).
-            // 단일 인스턴스 운영을 전제로 하지만, 재시도/재기동 등으로 겹치는 경우를 대비한 방어다.
-            log.debug("이미 같은 분에 대한 실시간 시세 스냅샷이 존재해 건너뜁니다. stockId={}", stockId);
             return false;
         }
     }
