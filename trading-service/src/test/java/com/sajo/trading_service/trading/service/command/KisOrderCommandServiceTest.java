@@ -2,14 +2,17 @@ package com.sajo.trading_service.trading.service.command;
 
 import com.sajo.common.exception.BusinessException;
 import com.sajo.common.feign.FeignApiException;
+import com.sajo.common.response.GeneralResponse;
 import com.sajo.trading_service.trading.client.AccountClient;
 import com.sajo.trading_service.trading.client.KisOrderClient;
+import com.sajo.trading_service.trading.client.MarketStockClient;
 import com.sajo.trading_service.trading.client.dto.request.KisOrderRequest;
 import com.sajo.trading_service.trading.client.dto.response.*;
 import com.sajo.trading_service.trading.domain.Order;
 import com.sajo.trading_service.trading.domain.enums.AccountType;
 import com.sajo.trading_service.trading.domain.enums.OrderType;
 import com.sajo.trading_service.trading.exception.TradingErrorCode;
+import com.sajo.trading_service.trading.validation.KisOrderPriceValidator;
 import feign.FeignException;
 import feign.RetryableException;
 import org.junit.jupiter.api.BeforeEach;
@@ -18,8 +21,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.OffsetDateTime;
 import java.util.UUID;
 
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatThrownBy;
@@ -38,6 +43,13 @@ class KisOrderCommandServiceTest {
 
     @Mock
     private OrderStatusCommandService orderStatusCommandService;
+
+    @Mock
+    private MarketStockClient marketStockClient;
+
+    @Spy
+    private KisOrderPriceValidator kisOrderPriceValidator =
+            new KisOrderPriceValidator();
 
     @InjectMocks
     private KisOrderCommandService kisOrderCommandService;
@@ -68,6 +80,7 @@ class KisOrderCommandServiceTest {
                                 1_000_000L
                         )
                 );
+        givenValidMarketQuote();
 
         KisOrderResponse response =
                 new KisOrderResponse(
@@ -134,6 +147,7 @@ class KisOrderCommandServiceTest {
                                 1_000_000L
                         )
                 );
+        givenValidMarketQuote();
 
         KisOrderResponse response =
                 new KisOrderResponse(
@@ -429,6 +443,7 @@ class KisOrderCommandServiceTest {
                                 1_000_000L
                         )
                 );
+        givenValidMarketQuote();
 
         KisOrderResponse response =
                 new KisOrderResponse(
@@ -492,6 +507,7 @@ class KisOrderCommandServiceTest {
                                 1_000_000L
                         )
                 );
+        givenValidMarketQuote();
 
         KisOrderResponse response =
                 new KisOrderResponse(
@@ -545,6 +561,7 @@ class KisOrderCommandServiceTest {
                                 1_000_000L
                         )
                 );
+        givenValidMarketQuote();
 
         KisOrderResponse response =
                 new KisOrderResponse(
@@ -601,6 +618,7 @@ class KisOrderCommandServiceTest {
                                 1_000_000L
                         )
                 );
+        givenValidMarketQuote();
 
         RetryableException retryableException =
                 mock(RetryableException.class);
@@ -656,6 +674,7 @@ class KisOrderCommandServiceTest {
                                 1_000_000L
                         )
                 );
+        givenValidMarketQuote();
 
         FeignException feignException =
                 mock(FeignException.class);
@@ -707,6 +726,7 @@ class KisOrderCommandServiceTest {
                                 1_000_000L
                         )
                 );
+        givenValidMarketQuote();
 
         FeignException feignException =
                 mock(FeignException.class);
@@ -759,6 +779,7 @@ class KisOrderCommandServiceTest {
                                 1_000_000L
                         )
                 );
+        givenValidMarketQuote();
 
         FeignException feignException =
                 mock(FeignException.class);
@@ -907,6 +928,7 @@ class KisOrderCommandServiceTest {
                                 1_000_000L
                         )
                 );
+        givenValidMarketQuote();
 
         when(kisOrderClient.placeOrder(
                 anyString(),
@@ -957,6 +979,7 @@ class KisOrderCommandServiceTest {
                                 1_000_000L
                         )
                 );
+        givenValidMarketQuote();
 
         KisOrderResponse response =
                 new KisOrderResponse(
@@ -1139,6 +1162,655 @@ class KisOrderCommandServiceTest {
 
         verify(accountClient, never())
                 .getOrderableAmount(any());
+
+        verifyNoInteractions(kisOrderClient);
+    }
+
+    @Test
+    @DisplayName("호가단위가 유효하지 않으면 KIS 주문을 호출하지 않고 FAILED 처리한다")
+    void failWhenOrderPriceHasInvalidTickSize() {
+        // given
+        Order order = Order.create(
+                userId,
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "005930",
+                OrderType.BUY,
+                70_050L,
+                1
+        );
+
+        when(orderStatusCommandService.startProcessing(orderId))
+                .thenReturn(order);
+
+        givenCommonAccountResponses();
+
+        when(accountClient.getOrderableAmount(userId))
+                .thenReturn(
+                        new AccountOrderableAmountResponse(
+                                1_000_000L
+                        )
+                );
+
+        when(marketStockClient.getQuote(
+                userId,
+                "005930"
+        )).thenReturn(
+                new GeneralResponse<>(
+                        true,
+                        "OK",
+                        new MarketStockQuoteResponse(
+                                "005930",
+                                100_000L,
+                                100_000L,
+                                OffsetDateTime.now()
+                        )
+                )
+        );
+
+        // when
+        kisOrderCommandService.executeOrder(orderId);
+
+        // then
+        verify(orderStatusCommandService)
+                .fail(
+                        orderId,
+                        "INVALID_ORDER_TICK_SIZE",
+                        "주문 가격이 해당 가격대의 호가단위에 맞지 않습니다."
+                );
+
+        verify(kisOrderClient, never())
+                .placeOrder(
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any()
+                );
+    }
+
+    @Test
+    @DisplayName("주문 가격이 상한가를 초과하면 KIS 주문을 호출하지 않고 FAILED 처리한다")
+    void failWhenOrderPriceExceedsUpperLimit() {
+        // given
+        Order order = Order.create(
+                userId,
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "005930",
+                OrderType.BUY,
+                131_000L,
+                1
+        );
+
+        when(orderStatusCommandService.startProcessing(orderId))
+                .thenReturn(order);
+
+        givenCommonAccountResponses();
+
+        when(accountClient.getOrderableAmount(userId))
+                .thenReturn(
+                        new AccountOrderableAmountResponse(
+                                1_000_000L
+                        )
+                );
+
+        when(marketStockClient.getQuote(
+                userId,
+                "005930"
+        )).thenReturn(
+                new GeneralResponse<>(
+                        true,
+                        "OK",
+                        new MarketStockQuoteResponse(
+                                "005930",
+                                100_000L,
+                                100_000L,
+                                OffsetDateTime.now()
+                        )
+                )
+        );
+
+        // when
+        kisOrderCommandService.executeOrder(orderId);
+
+        // then
+        verify(orderStatusCommandService)
+                .fail(
+                        orderId,
+                        "ORDER_PRICE_OUT_OF_RANGE",
+                        "주문 가격이 당일 허용 가격 범위를 벗어났습니다."
+                );
+
+        verify(kisOrderClient, never())
+                .placeOrder(
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any()
+                );
+    }
+
+    @Test
+    @DisplayName("주문 가격이 하한가 미만이면 KIS 주문을 호출하지 않고 FAILED 처리한다")
+    void failWhenOrderPriceBelowLowerLimit() {
+        // given
+        Order order = Order.create(
+                userId,
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "005930",
+                OrderType.BUY,
+                69_900L,
+                1
+        );
+
+        when(orderStatusCommandService.startProcessing(orderId))
+                .thenReturn(order);
+
+        givenCommonAccountResponses();
+
+        when(accountClient.getOrderableAmount(userId))
+                .thenReturn(
+                        new AccountOrderableAmountResponse(
+                                1_000_000L
+                        )
+                );
+
+        when(marketStockClient.getQuote(
+                userId,
+                "005930"
+        )).thenReturn(
+                new GeneralResponse<>(
+                        true,
+                        "OK",
+                        new MarketStockQuoteResponse(
+                                "005930",
+                                100_000L,
+                                100_000L,
+                                OffsetDateTime.now()
+                        )
+                )
+        );
+
+        // when
+        kisOrderCommandService.executeOrder(orderId);
+
+        // then
+        verify(orderStatusCommandService)
+                .fail(
+                        orderId,
+                        "ORDER_PRICE_OUT_OF_RANGE",
+                        "주문 가격이 당일 허용 가격 범위를 벗어났습니다."
+                );
+
+        verify(kisOrderClient, never())
+                .placeOrder(
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any()
+                );
+    }
+
+    @Test
+    @DisplayName("유효한 주문 가격이면 KIS 주문을 호출하고 ACCEPTED 처리한다")
+    void executeOrderWhenPriceIsValid() {
+        // given
+        Order order = Order.create(
+                userId,
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "005930",
+                OrderType.BUY,
+                100_000L,
+                1
+        );
+
+        when(orderStatusCommandService.startProcessing(orderId))
+                .thenReturn(order);
+
+        givenCommonAccountResponses();
+
+        when(accountClient.getOrderableAmount(userId))
+                .thenReturn(
+                        new AccountOrderableAmountResponse(
+                                1_000_000L
+                        )
+                );
+
+        when(marketStockClient.getQuote(
+                userId,
+                "005930"
+        )).thenReturn(
+                new GeneralResponse<>(
+                        true,
+                        "OK",
+                        new MarketStockQuoteResponse(
+                                "005930",
+                                100_000L,
+                                100_000L,
+                                OffsetDateTime.now()
+                        )
+                )
+        );
+
+        KisOrderResponse response =
+                new KisOrderResponse(
+                        "0",
+                        "SUCCESS",
+                        "주문 전송 완료",
+                        new KisOrderResponse.KisOrderOutput(
+                                "1234567890",
+                                "101530"
+                        )
+                );
+
+        when(kisOrderClient.placeOrder(
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                any(KisOrderRequest.class)
+        )).thenReturn(response);
+
+        // when
+        kisOrderCommandService.executeOrder(orderId);
+
+        // then
+        verify(kisOrderClient)
+                .placeOrder(
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        any(KisOrderRequest.class)
+                );
+
+        verify(orderStatusCommandService)
+                .accept(
+                        orderId,
+                        "1234567890"
+                );
+
+        verify(orderStatusCommandService, never())
+                .fail(
+                        any(),
+                        any(),
+                        any()
+                );
+    }
+
+    private void givenValidMarketQuote() {
+        when(marketStockClient.getQuote(
+                userId,
+                "005930"
+        )).thenReturn(
+                new GeneralResponse<>(
+                        true,
+                        "OK",
+                        new MarketStockQuoteResponse(
+                                "005930",
+                                70_000L,
+                                70_000L,
+                                OffsetDateTime.now()
+                        )
+                )
+        );
+    }
+
+    @Test
+    @DisplayName("전일 종가를 확인할 수 없으면 KIS 주문을 호출하지 않고 FAILED 처리한다")
+    void failWhenPreviousClosePriceIsUnavailable() {
+        // given
+        Order order = createOrder(OrderType.BUY);
+
+        when(orderStatusCommandService.startProcessing(orderId))
+                .thenReturn(order);
+
+        givenCommonAccountResponses();
+
+        when(accountClient.getOrderableAmount(userId))
+                .thenReturn(
+                        new AccountOrderableAmountResponse(
+                                1_000_000L
+                        )
+                );
+
+        when(marketStockClient.getQuote(
+                userId,
+                "005930"
+        )).thenReturn(
+                new GeneralResponse<>(
+                        true,
+                        "OK",
+                        new MarketStockQuoteResponse(
+                                "005930",
+                                70_000L,
+                                null,
+                                OffsetDateTime.now()
+                        )
+                )
+        );
+
+        // when
+        kisOrderCommandService.executeOrder(orderId);
+
+        // then
+        verify(orderStatusCommandService)
+                .fail(
+                        orderId,
+                        "ORDER_PRICE_VALIDATION_UNAVAILABLE",
+                        "주문 가격 검증에 필요한 시세 정보를 확인할 수 없습니다."
+                );
+
+        verifyNoInteractions(kisOrderClient);
+    }
+
+    @Test
+    @DisplayName("Market Service 호출 중 RetryableException이 발생하면 REQUESTED 재시도를 요청한다")
+    void retryWhenMarketServiceRetryableException() {
+        // given
+        Order order = createOrder(OrderType.BUY);
+
+        when(orderStatusCommandService.startProcessing(orderId))
+                .thenReturn(order);
+
+        givenCommonAccountResponses();
+
+        when(accountClient.getOrderableAmount(userId))
+                .thenReturn(
+                        new AccountOrderableAmountResponse(
+                                1_000_000L
+                        )
+                );
+
+        RetryableException retryableException =
+                mock(RetryableException.class);
+
+        when(marketStockClient.getQuote(
+                userId,
+                "005930"
+        )).thenThrow(retryableException);
+
+        // when
+        kisOrderCommandService.executeOrder(orderId);
+
+        // then
+        verify(orderStatusCommandService)
+                .retryMarketQuote(
+                        orderId,
+                        "MARKET_QUOTE_RETRY_EXHAUSTED",
+                        "시세 정보 조회 재시도 횟수를 초과했습니다."
+                );
+
+        verify(orderStatusCommandService, never())
+                .fail(
+                        any(),
+                        any(),
+                        any()
+                );
+
+        verifyNoInteractions(kisOrderClient);
+    }
+
+    @Test
+    @DisplayName("Market Service가 5xx 응답을 반환하면 REQUESTED 재시도를 요청한다")
+    void retryWhenMarketServiceServerError() {
+        // given
+        Order order = createOrder(OrderType.BUY);
+
+        when(orderStatusCommandService.startProcessing(orderId))
+                .thenReturn(order);
+
+        givenCommonAccountResponses();
+
+        when(accountClient.getOrderableAmount(userId))
+                .thenReturn(
+                        new AccountOrderableAmountResponse(
+                                1_000_000L
+                        )
+                );
+
+        FeignException feignException =
+                mock(FeignException.class);
+
+        when(feignException.status())
+                .thenReturn(500);
+
+        when(marketStockClient.getQuote(
+                userId,
+                "005930"
+        )).thenThrow(feignException);
+
+        // when
+        kisOrderCommandService.executeOrder(orderId);
+
+        // then
+        verify(orderStatusCommandService)
+                .retryMarketQuote(
+                        orderId,
+                        "MARKET_QUOTE_RETRY_EXHAUSTED",
+                        "시세 정보 조회 재시도 횟수를 초과했습니다."
+                );
+
+        verify(orderStatusCommandService, never())
+                .fail(
+                        any(),
+                        any(),
+                        any()
+                );
+
+        verifyNoInteractions(kisOrderClient);
+    }
+
+    @Test
+    @DisplayName("Market Service가 4xx 응답을 반환하면 FAILED 처리한다")
+    void failWhenMarketServiceClientError() {
+        // given
+        Order order = createOrder(OrderType.BUY);
+
+        when(orderStatusCommandService.startProcessing(orderId))
+                .thenReturn(order);
+
+        givenCommonAccountResponses();
+
+        when(accountClient.getOrderableAmount(userId))
+                .thenReturn(
+                        new AccountOrderableAmountResponse(
+                                1_000_000L
+                        )
+                );
+
+        FeignException feignException =
+                mock(FeignException.class);
+
+        when(feignException.status())
+                .thenReturn(400);
+
+        when(marketStockClient.getQuote(
+                userId,
+                "005930"
+        )).thenThrow(feignException);
+
+        // when
+        kisOrderCommandService.executeOrder(orderId);
+
+        // then
+        verify(orderStatusCommandService)
+                .fail(
+                        orderId,
+                        "MARKET_SERVICE_HTTP_400",
+                        "주문 가격 검증을 위한 시세 정보를 확인할 수 없습니다."
+                );
+
+        verify(orderStatusCommandService, never())
+                .retryMarketQuote(
+                        orderId,
+                        "MARKET_QUOTE_RETRY_EXHAUSTED",
+                        "시세 정보 조회 재시도 횟수를 초과했습니다."
+                );
+
+        verifyNoInteractions(kisOrderClient);
+    }
+
+    @Test
+    @DisplayName("Market Service가 429 응답을 반환하면 REQUESTED 재시도를 요청한다")
+    void retryWhenMarketServiceRateLimited() {
+        // given
+        Order order = createOrder(OrderType.BUY);
+
+        when(orderStatusCommandService.startProcessing(orderId))
+                .thenReturn(order);
+
+        givenCommonAccountResponses();
+
+        when(accountClient.getOrderableAmount(userId))
+                .thenReturn(
+                        new AccountOrderableAmountResponse(
+                                1_000_000L
+                        )
+                );
+
+        FeignException feignException =
+                mock(FeignException.class);
+
+        when(feignException.status())
+                .thenReturn(429);
+
+        when(marketStockClient.getQuote(
+                userId,
+                "005930"
+        )).thenThrow(feignException);
+
+        // when
+        kisOrderCommandService.executeOrder(orderId);
+
+        // then
+        verify(orderStatusCommandService)
+                .retryMarketQuote(
+                        orderId,
+                        "MARKET_QUOTE_RETRY_EXHAUSTED",
+                        "시세 정보 조회 재시도 횟수를 초과했습니다."
+                );
+
+        verify(orderStatusCommandService, never())
+                .fail(
+                        any(),
+                        any(),
+                        any()
+                );
+
+        verifyNoInteractions(kisOrderClient);
+    }
+
+    @Test
+    @DisplayName("Market Service 처리 중 예상하지 못한 예외가 발생하면 FAILED 처리 후 예외를 전파한다")
+    void executeOrderMarketUnexpectedError() {
+        // given
+        Order order = createOrder(OrderType.BUY);
+
+        when(orderStatusCommandService.startProcessing(orderId))
+                .thenReturn(order);
+
+        givenCommonAccountResponses();
+
+        when(accountClient.getOrderableAmount(userId))
+                .thenReturn(
+                        new AccountOrderableAmountResponse(
+                                1_000_000L
+                        )
+                );
+
+        when(marketStockClient.getQuote(
+                userId,
+                "005930"
+        )).thenThrow(
+                new RuntimeException("unexpected")
+        );
+
+        // when & then
+        assertThatThrownBy(() ->
+                kisOrderCommandService.executeOrder(orderId)
+        )
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("unexpected");
+
+        verify(orderStatusCommandService)
+                .fail(
+                        orderId,
+                        "MARKET_QUOTE_UNEXPECTED_ERROR",
+                        "시세 정보 처리 중 예상하지 못한 오류가 발생했습니다."
+                );
+
+        verify(orderStatusCommandService, never())
+                .retryMarketQuote(
+                        orderId,
+                        "MARKET_QUOTE_RETRY_EXHAUSTED",
+                        "시세 정보 조회 재시도 횟수를 초과했습니다."
+                );
+
+        verifyNoInteractions(kisOrderClient);
+    }
+
+    @Test
+    @DisplayName("Market Service에서 FeignApiException이 발생하면 실제 오류 코드로 FAILED 처리한다")
+    void failWhenMarketServiceFeignApiException() {
+        // given
+        Order order = createOrder(OrderType.BUY);
+
+        when(orderStatusCommandService.startProcessing(orderId))
+                .thenReturn(order);
+
+        givenCommonAccountResponses();
+
+        when(accountClient.getOrderableAmount(userId))
+                .thenReturn(
+                        new AccountOrderableAmountResponse(
+                                1_000_000L
+                        )
+                );
+
+        FeignApiException exception =
+                new FeignApiException(
+                        "MARKET_QUOTE_NOT_FOUND",
+                        "시세 정보를 찾을 수 없습니다.",
+                        400
+                );
+
+        when(marketStockClient.getQuote(
+                userId,
+                "005930"
+        )).thenThrow(exception);
+
+        // when
+        kisOrderCommandService.executeOrder(orderId);
+
+        // then
+        verify(orderStatusCommandService)
+                .fail(
+                        orderId,
+                        "MARKET_QUOTE_NOT_FOUND",
+                        "주문 가격 검증을 위한 시세 정보를 확인할 수 없습니다."
+                );
+
+        verify(orderStatusCommandService, never())
+                .retryMarketQuote(
+                        any(),
+                        any(),
+                        any()
+                );
 
         verifyNoInteractions(kisOrderClient);
     }
