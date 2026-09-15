@@ -233,40 +233,31 @@ class AccountKisQueryServiceTest {
     }
 
     @Test
-    @DisplayName("ctxAreaFk100/ctxAreaNk100 중 하나만 오면 INVALID_CONTINUATION_CURSOR 예외를 던지고 아무것도 조회하지 않는다")
-    void getHoldingsFailsWhenOnlyOneCursorProvided() {
+    @DisplayName("ctxAreaFk100/ctxAreaNk100 중 하나만 값이 있어도 검증 없이 그대로 KIS에 전달한다 ")
+    void getHoldingsPassesThroughCursorEvenWhenOnlyOneIsBlank() {
         // given
         UUID userId = UUID.randomUUID();
+        Account account = Account.createAccount(
+                userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
+        KisBalanceResponse kisBalanceResponse = new KisBalanceResponse(
+                "0", "MSG_CD", "정상처리 되었습니다", "", "next-nk-2",
+                List.of(holding()), List.of());
+        KisContinuationResult<KisBalanceResponse> continuationResult =
+                new KisContinuationResult<>(kisBalanceResponse, true);
 
-        // when & then
-        assertThatThrownBy(() -> accountKisQueryService.getHoldings(userId, "only-fk", null))
-                .isInstanceOf(BusinessException.class)
-                .satisfies(exception -> {
-                    BusinessException businessException = (BusinessException) exception;
-                    assertThat(businessException.getErrorCode())
-                            .isEqualTo(AccountErrorCode.INVALID_CONTINUATION_CURSOR);
-                });
+        given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
+        given(kisTokenCacheQueryService.getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL))
+                .willReturn("issued-token");
+        given(kisTrClient.inquireBalance(
+                "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.REAL, "", "next-nk"))
+                .willReturn(continuationResult);
 
-        verifyNoInteractions(accountQueryService, kisTokenCacheQueryService, kisTrClient);
-    }
+        // when
+        AccountHoldingsResponse result = accountKisQueryService.getHoldings(userId, "", "next-nk");
 
-    @Test
-    @DisplayName("ctxAreaFk100은 빈 문자열, ctxAreaNk100은 정상 값이면 INVALID_CONTINUATION_CURSOR 예외를 던진다 "
-            + "(빈 문자열도 null과 동일하게 '커서 없음'으로 취급)")
-    void getHoldingsFailsWhenOneCursorIsBlank() {
-        // given
-        UUID userId = UUID.randomUUID();
-
-        // when & then
-        assertThatThrownBy(() -> accountKisQueryService.getHoldings(userId, "", "next-nk"))
-                .isInstanceOf(BusinessException.class)
-                .satisfies(exception -> {
-                    BusinessException businessException = (BusinessException) exception;
-                    assertThat(businessException.getErrorCode())
-                            .isEqualTo(AccountErrorCode.INVALID_CONTINUATION_CURSOR);
-                });
-
-        verifyNoInteractions(accountQueryService, kisTokenCacheQueryService, kisTrClient);
+        // then
+        assertThat(result.holdings()).hasSize(1);
+        assertThat(result.nextCtxAreaNk100()).isEqualTo("next-nk-2");
     }
 
     @Test

@@ -196,22 +196,6 @@ class AccountQueryControllerTest {
     }
 
     @Test
-    @DisplayName("ctxAreaFk100/ctxAreaNk100 중 하나만 오면 보유종목 조회는 400을 반환한다")
-    void getHoldingsInvalidCursor() throws Exception {
-        // given
-        UUID userId = UUID.randomUUID();
-        given(accountKisQueryService.getHoldings(userId, "only-fk", null))
-                .willThrow(new BusinessException(AccountErrorCode.INVALID_CONTINUATION_CURSOR));
-
-        // when & then
-        mockMvc.perform(get("/api/v1/accounts/me/holdings")
-                        .header("X-User-Id", userId.toString())
-                        .param("ctxAreaFk100", "only-fk"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.errorCode").value("ACCOUNT_0010"));
-    }
-
-    @Test
     @DisplayName("X-User-Id 헤더가 없으면 보유종목 조회는 401을 반환한다")
     void getHoldingsWithoutUserHeader() throws Exception {
         // when & then
