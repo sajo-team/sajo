@@ -55,7 +55,7 @@ market:
     ttl: 60s
     lock-ttl: 30s
     lock-wait-timeout: 5s
-    previous-close-price-missing-ttl: 15s
+    previous-close-price-missing-ttl: 5m
   stock-master-sync:
     enabled: ${MARKET_STOCK_MASTER_SYNC_ENABLED:false}
     chunk-size: ${MARKET_STOCK_MASTER_SYNC_CHUNK_SIZE:500}

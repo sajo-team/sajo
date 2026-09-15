@@ -17,7 +17,7 @@ public record InternalStockQuoteResponse(
     /**
      * previousClosePrice는 Trading의 주문 전 상·하한가 검증에 쓰인다(#228).
      * WebSocket이 REST 보다 먼저 캐시를 채운 종목은 이 값이 null일 수 있는데,
-     * {@code MarketQuoteQueryService.isCacheableQuote}가 previousClosePrice가 없는 캐시 항목을 "재사용 불가"로 취급해 KIS REST를 강제로 재조회하도록 보장하므로,
+     * {@code MarketQuoteQueryService.isReusableCachedQuote}가 previousClosePrice가 없는 캐시 항목을 "재사용 불가"로 취급해 KIS REST를 강제로 재조회하도록 보장하므로,
      * 이 API 레벨에서는 별도 null 방어를 추가하지 않는다.
      */
     public static InternalStockQuoteResponse from(QuoteResponse quote) {

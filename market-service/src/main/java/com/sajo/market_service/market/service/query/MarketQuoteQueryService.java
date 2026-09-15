@@ -161,7 +161,7 @@ public class MarketQuoteQueryService {
      *   "캐시 MISS"로 취급해 KIS REST 재조회를 강제한다. Trading의 주문 전 상·하한가 검증에
      *   previousClosePrice가 필요하기 때문이다.</li>
      *   <li>이미 REST로 확인했지만 KIS 응답 자체에 previousClosePrice가 없었던 경우(상장 첫날 등) —
-     *   {@link #markPreviousClosePriceConfirmedAbsent}가 남긴 짧은 TTL 마커가 있으면 그 확인 결과를 신뢰하고 그대로 재사용한다.
+     *   {@link #markPreviousClosePriceConfirmedAbsent}가 남긴 마커가 previousClosePriceMissingTtl 동안 살아있으면 그 확인 결과를 신뢰하고 그대로 재사용한다.
      *   이 구분이 없으면 그런 종목은 캐싱이 무력화되어 매 호출마다 KIS를 직접 호출하게 된다.</li>
      * </ul>
      */
