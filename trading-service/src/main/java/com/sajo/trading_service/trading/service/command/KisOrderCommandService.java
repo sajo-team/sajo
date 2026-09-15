@@ -205,7 +205,12 @@ public class KisOrderCommandService {
                     e
             );
 
-            orderStatusCommandService.retry(orderId);
+            orderStatusCommandService.retryMarketQuote(
+                    orderId,
+                    "MARKET_QUOTE_RETRY_EXHAUSTED",
+                    "시세 정보 조회 재시도 횟수를 초과했습니다."
+            );
+
             return;
 
         } catch (FeignException e) {
@@ -218,7 +223,11 @@ public class KisOrderCommandService {
                         e
                 );
 
-                orderStatusCommandService.retry(orderId);
+                orderStatusCommandService.retryMarketQuote(
+                        orderId,
+                        "MARKET_QUOTE_RETRY_EXHAUSTED",
+                        "시세 정보 조회 재시도 횟수를 초과했습니다."
+                );
 
             } else {
                 orderStatusCommandService.fail(
@@ -229,6 +238,29 @@ public class KisOrderCommandService {
             }
 
             return;
+
+        } catch (RuntimeException e) {
+            log.error(
+                    "Market Service 처리 중 예상하지 못한 오류가 발생했습니다. orderId={}",
+                    orderId,
+                    e
+            );
+
+            try {
+                orderStatusCommandService.fail(
+                        orderId,
+                        "MARKET_QUOTE_UNEXPECTED_ERROR",
+                        "시세 정보 처리 중 예상하지 못한 오류가 발생했습니다."
+                );
+            } catch (RuntimeException statusException) {
+                log.error(
+                        "Market 예상하지 못한 오류 후 FAILED 상태 저장 실패. orderId={}",
+                        orderId,
+                        statusException
+                );
+            }
+
+            throw e;
         }
 
         /*

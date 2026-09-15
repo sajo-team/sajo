@@ -15,6 +15,7 @@ import java.util.UUID;
 public class OrderStatusCommandService {
     private final OrderCommandRepository orderCommandRepository;
     private static final int MAX_ACCOUNT_RETRY_COUNT = 3;
+    private static final int MAX_MARKET_RETRY_COUNT = 3;
     private static final int MAX_RECONCILIATION_RETRY_COUNT = 3;
 
     @Transactional
@@ -83,6 +84,26 @@ public class OrderStatusCommandService {
                 MAX_ACCOUNT_RETRY_COUNT,
                 "ACCOUNT_RETRY_EXHAUSTED",
                 "계좌 정보 조회 재시도 횟수를 초과했습니다."
+        );
+    }
+
+    @Transactional
+    public void retryMarketQuote(
+            UUID orderId,
+            String exhaustedCode,
+            String exhaustedMessage
+    ) {
+        Order order = orderCommandRepository.findByIdForUpdate(orderId)
+                .orElseThrow(() ->
+                        new BusinessException(
+                                TradingErrorCode.ORDER_NOT_FOUND
+                        )
+                );
+
+        order.retry(
+                MAX_MARKET_RETRY_COUNT,
+                exhaustedCode,
+                exhaustedMessage
         );
     }
 

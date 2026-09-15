@@ -1549,7 +1549,11 @@ class KisOrderCommandServiceTest {
 
         // then
         verify(orderStatusCommandService)
-                .retry(orderId);
+                .retryMarketQuote(
+                        orderId,
+                        "MARKET_QUOTE_RETRY_EXHAUSTED",
+                        "시세 정보 조회 재시도 횟수를 초과했습니다."
+                );
 
         verify(orderStatusCommandService, never())
                 .fail(
@@ -1595,7 +1599,11 @@ class KisOrderCommandServiceTest {
 
         // then
         verify(orderStatusCommandService)
-                .retry(orderId);
+                .retryMarketQuote(
+                        orderId,
+                        "MARKET_QUOTE_RETRY_EXHAUSTED",
+                        "시세 정보 조회 재시도 횟수를 초과했습니다."
+                );
 
         verify(orderStatusCommandService, never())
                 .fail(
@@ -1648,7 +1656,11 @@ class KisOrderCommandServiceTest {
                 );
 
         verify(orderStatusCommandService, never())
-                .retry(orderId);
+                .retryMarketQuote(
+                        orderId,
+                        "MARKET_QUOTE_RETRY_EXHAUSTED",
+                        "시세 정보 조회 재시도 횟수를 초과했습니다."
+                );
 
         verifyNoInteractions(kisOrderClient);
     }
@@ -1687,13 +1699,66 @@ class KisOrderCommandServiceTest {
 
         // then
         verify(orderStatusCommandService)
-                .retry(orderId);
+                .retryMarketQuote(
+                        orderId,
+                        "MARKET_QUOTE_RETRY_EXHAUSTED",
+                        "시세 정보 조회 재시도 횟수를 초과했습니다."
+                );
 
         verify(orderStatusCommandService, never())
                 .fail(
                         any(),
                         any(),
                         any()
+                );
+
+        verifyNoInteractions(kisOrderClient);
+    }
+
+    @Test
+    @DisplayName("Market Service 처리 중 예상하지 못한 예외가 발생하면 FAILED 처리 후 예외를 전파한다")
+    void executeOrderMarketUnexpectedError() {
+        // given
+        Order order = createOrder(OrderType.BUY);
+
+        when(orderStatusCommandService.startProcessing(orderId))
+                .thenReturn(order);
+
+        givenCommonAccountResponses();
+
+        when(accountClient.getOrderableAmount(userId))
+                .thenReturn(
+                        new AccountOrderableAmountResponse(
+                                1_000_000L
+                        )
+                );
+
+        when(marketStockClient.getQuote(
+                userId,
+                "005930"
+        )).thenThrow(
+                new RuntimeException("unexpected")
+        );
+
+        // when & then
+        assertThatThrownBy(() ->
+                kisOrderCommandService.executeOrder(orderId)
+        )
+                .isInstanceOf(RuntimeException.class)
+                .hasMessage("unexpected");
+
+        verify(orderStatusCommandService)
+                .fail(
+                        orderId,
+                        "MARKET_QUOTE_UNEXPECTED_ERROR",
+                        "시세 정보 처리 중 예상하지 못한 오류가 발생했습니다."
+                );
+
+        verify(orderStatusCommandService, never())
+                .retryMarketQuote(
+                        orderId,
+                        "MARKET_QUOTE_RETRY_EXHAUSTED",
+                        "시세 정보 조회 재시도 횟수를 초과했습니다."
                 );
 
         verifyNoInteractions(kisOrderClient);
