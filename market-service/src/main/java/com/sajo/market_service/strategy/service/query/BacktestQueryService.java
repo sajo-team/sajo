@@ -85,7 +85,7 @@ public class BacktestQueryService {
 
         return BacktestInternalResponse.from(backtest);
     }
-    
+
     private Backtest getBacktestByOwner(UUID userId, UUID strategyId, UUID backtestId) {
         Backtest backtest = backtestQueryRepository.findByIdAndDeletedAtIsNull(backtestId)
                 .orElseThrow(() -> {
