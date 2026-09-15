@@ -210,7 +210,7 @@ public class Strategy extends BaseUpdatableEntity {
                     "1회 주문 금액은 전략 배정 금액보다 클 수 없습니다."
             );
         }
-        
+
         Long newBuyConditionPrice =
                 buyConditionPrice != null
                     ? buyConditionPrice
