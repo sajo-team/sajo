@@ -46,9 +46,9 @@ class AiPromptVersionCommandControllerTest {
     void create_asAdmin_success() throws Exception {
         // given
         AiPromptVersionCreateRequest request =
-                new AiPromptVersionCreateRequest(AiPromptKey.RISK_ANALYSIS, "프롬프트 내용", "변경 요약");
+                new AiPromptVersionCreateRequest(AiPromptKey.STRATEGY_RISK_ANALYSIS, "프롬프트 내용", "변경 요약");
         AiPromptVersionCreateResponse response = new AiPromptVersionCreateResponse(
-                UUID.randomUUID(), AiPromptKey.RISK_ANALYSIS, "v1", AiPromptStatus.ACTIVE, Instant.now());
+                UUID.randomUUID(), AiPromptKey.STRATEGY_RISK_ANALYSIS, "v1", AiPromptStatus.ACTIVE, Instant.now());
  
         given(promptVersionCommandService.create(any(AiPromptVersionCreateRequest.class))).willReturn(response);
  
@@ -69,7 +69,7 @@ class AiPromptVersionCommandControllerTest {
     void create_asNonAdmin_forbidden() throws Exception {
         // given
         AiPromptVersionCreateRequest request =
-                new AiPromptVersionCreateRequest(AiPromptKey.RISK_ANALYSIS, "프롬프트 내용", "변경 요약");
+                new AiPromptVersionCreateRequest(AiPromptKey.STRATEGY_RISK_ANALYSIS, "프롬프트 내용", "변경 요약");
  
         // when & then
         mockMvc.perform(
@@ -88,7 +88,7 @@ class AiPromptVersionCommandControllerTest {
     void create_withoutRoleHeader_unauthorized() throws Exception {
         // given
         AiPromptVersionCreateRequest request =
-                new AiPromptVersionCreateRequest(AiPromptKey.RISK_ANALYSIS, "프롬프트 내용", "변경 요약");
+                new AiPromptVersionCreateRequest(AiPromptKey.STRATEGY_RISK_ANALYSIS, "프롬프트 내용", "변경 요약");
  
         // when & then
         mockMvc.perform(

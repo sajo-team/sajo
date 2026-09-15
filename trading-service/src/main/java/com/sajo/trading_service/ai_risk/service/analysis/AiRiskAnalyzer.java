@@ -26,6 +26,7 @@ public class AiRiskAnalyzer {
     private final AiPromptVersionQueryService promptVersionQueryService;
 
     private static final String MODEL = "gpt-5-mini";
+    private static final AiPromptKey PROMPT_KEY = AiPromptKey.STRATEGY_RISK_ANALYSIS;
 
     private String createAnalysisData(
             StrategyInternalResponse strategy,
@@ -100,13 +101,14 @@ public class AiRiskAnalyzer {
 
         try{
             promptVersion = promptVersionQueryService.getActivePrompt(
-                    AiPromptKey.RISK_ANALYSIS
+                    PROMPT_KEY
             );
         } catch (BusinessException e){
             if(e.getErrorCode() == AiRiskErrorCode.AI_ACTIVE_PROMPT_NOT_FOUND) {
                 throw new AiAnalysisException(
                         AiAnalysisFailureType.PROMPT_NOT_FOUND,
                         e.getMessage(),
+                        PROMPT_KEY,
                         null,
                         null,
                         MODEL,
@@ -140,6 +142,7 @@ public class AiRiskAnalyzer {
             throw new AiAnalysisException(
                     AiAnalysisFailureType.LLM_API_ERROR,
                     "LLM API 호출에 실패했습니다.",
+                    promptVersion.getPromptKey(),
                     promptVersion.getVersion(),
                     systemPrompt,
                     MODEL,
@@ -156,6 +159,7 @@ public class AiRiskAnalyzer {
             return new AiRiskAnalysisOutput(
                     result,
                     rawResponse,
+                    promptVersion.getPromptKey(),
                     systemPrompt,
                     version,
                     MODEL,
@@ -166,6 +170,7 @@ public class AiRiskAnalyzer {
             throw new AiResponseParseException(
                     "AI 응답 변환에 실패했습니다.",
                     rawResponse,
+                    promptVersion.getPromptKey(),
                     promptVersion.getVersion(),
                     systemPrompt,
                     MODEL,
