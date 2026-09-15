@@ -4,6 +4,7 @@ import com.sajo.user_service.account.domain.EventType;
 import com.sajo.user_service.account.domain.KisTokenLog;
 import com.sajo.user_service.account.domain.KisTokenType;
 import com.sajo.user_service.account.repository.command.KisTokenLogCommandRepository;
+import com.sajo.user_service.account.repository.command.KisTokenStatusCommandRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -16,7 +17,9 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.willThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -28,6 +31,9 @@ class KisTokenLogCommandServiceTest {
 
     @MockitoBean
     private KisTokenLogCommandRepository kisTokenLogCommandRepository;
+
+    @MockitoBean
+    private KisTokenStatusCommandRepository kisTokenStatusCommandRepository;
 
     @Test
     @DisplayName("recordSuccess는 TOKEN_ISSUE_SUCCESS 이벤트를 tokenType과 함께 저장한다")
@@ -49,6 +55,14 @@ class KisTokenLogCommandServiceTest {
         assertThat(saved.getTokenType()).isEqualTo(KisTokenType.APPROVAL_KEY);
         assertThat(saved.getErrorCode()).isNull();
         assertThat(saved.getErrorMessage()).isNull();
+
+        // "현재 상태" 테이블도 같은 값으로 upsert돼야 한다
+        ArgumentCaptor<String> tokenTypeCaptor = ArgumentCaptor.forClass(String.class);
+        ArgumentCaptor<String> eventTypeCaptor = ArgumentCaptor.forClass(String.class);
+        verify(kisTokenStatusCommandRepository).upsert(
+                any(), eq(userId), tokenTypeCaptor.capture(), eventTypeCaptor.capture(), any(), any(), any());
+        assertThat(tokenTypeCaptor.getValue()).isEqualTo(KisTokenType.APPROVAL_KEY.name());
+        assertThat(eventTypeCaptor.getValue()).isEqualTo(EventType.TOKEN_ISSUE_SUCCESS.name());
     }
 
     @Test
@@ -70,6 +84,11 @@ class KisTokenLogCommandServiceTest {
         assertThat(saved.getTokenType()).isEqualTo(KisTokenType.ACCESS_TOKEN);
         assertThat(saved.getErrorCode()).isEqualTo("EGW00133");
         assertThat(saved.getErrorMessage()).isEqualTo("1분당 1회 제한 초과");
+
+        // 실패 이벤트도 "현재 상태" 테이블에 그대로 upsert돼야 한다
+        verify(kisTokenStatusCommandRepository).upsert(
+                any(), eq(userId), eq(KisTokenType.ACCESS_TOKEN.name()), eq(EventType.TOKEN_ISSUE_FAILED.name()),
+                eq("EGW00133"), eq("1분당 1회 제한 초과"), any());
     }
 
     @Test
@@ -105,6 +124,9 @@ class KisTokenLogCommandServiceTest {
         assertThatCode(() ->
                 kisTokenLogCommandService.recordSuccess(UUID.randomUUID(), UUID.randomUUID(), KisTokenType.ACCESS_TOKEN))
                 .doesNotThrowAnyException();
+
+        // 로그 저장 자체가 실패했으니 "현재 상태" upsert는 시도조차 하면 안 된다
+        verify(kisTokenStatusCommandRepository, never()).upsert(any(), any(), any(), any(), any(), any(), any());
     }
 
     @Test

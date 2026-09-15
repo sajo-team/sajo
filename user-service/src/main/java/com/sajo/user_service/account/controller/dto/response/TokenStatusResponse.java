@@ -1,7 +1,7 @@
 package com.sajo.user_service.account.controller.dto.response;
 
 import com.sajo.user_service.account.domain.EventType;
-import com.sajo.user_service.account.domain.KisTokenLog;
+import com.sajo.user_service.account.domain.KisTokenStatus;
 import com.sajo.user_service.account.domain.KisTokenType;
 
 import java.time.Instant;
@@ -16,9 +16,9 @@ public record TokenStatusResponse(
         String errorMessage,
         Instant createdAt
 ) {
-    public static TokenStatusResponse from(KisTokenLog log) {
+    public static TokenStatusResponse from(KisTokenStatus status) {
         return new TokenStatusResponse(
-                log.getUserId(), log.getTokenType(), log.getEventType(), log.getErrorCode(), log.getErrorMessage(),
-                log.getCreatedAt());
+                status.getUserId(), status.getTokenType(), status.getEventType(), status.getErrorCode(),
+                status.getErrorMessage(), status.getLastEventAt());
     }
 }
