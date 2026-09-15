@@ -149,6 +149,9 @@ class TradingSignalCommandServiceTest {
 
         verify(applicationEventPublisher)
                 .publishEvent(any(OrderRequestedEvent.class));
+
+        verify(autoTrading)
+                .validateDirection(OrderType.BUY);
     }
 
     @Test
@@ -439,6 +442,9 @@ class TradingSignalCommandServiceTest {
 
         verify(applicationEventPublisher)
                 .publishEvent(any(OrderRequestedEvent.class));
+
+        verify(autoTrading)
+                .validateDirection(OrderType.SELL);
     }
 
     private TradingSignalGeneratedEvent createEvent(
@@ -508,4 +514,133 @@ class TradingSignalCommandServiceTest {
         verify(orderCommandRepository, never())
                 .save(any(Order.class));
     }
+
+    @Test
+    @DisplayName("Signal 수신 시 AutoTrading 주문 방향을 검증한다")
+    void validateAutoTradingDirection() {
+        // given
+        TradingSignalGeneratedEvent event =
+                createEvent(
+                        300_000L,
+                        70_000L,
+                        OrderType.BUY
+                );
+
+        given(orderCommandRepository.existsBySignalId(signalId))
+                .willReturn(false);
+
+        given(autoTradingCommandRepository
+                .findByUserIdAndStrategyIdForUpdate(
+                        userId,
+                        strategyId
+                ))
+                .willReturn(Optional.of(autoTrading));
+
+        given(autoTrading.getId())
+                .willReturn(autoTradingId);
+
+        given(autoTrading.getEnabled())
+                .willReturn(true);
+
+        given(tradingLimitCommandRepository
+                .findByUserIdForUpdate(userId))
+                .willReturn(Optional.of(tradingLimit));
+
+        given(tradingLimit.getDailyMaxOrderCount())
+                .willReturn(10);
+
+        given(tradingLimit.getDailyMaxOrderAmount())
+                .willReturn(3_000_000L);
+
+        given(orderCommandRepository
+                .countOrdersByUserIdAndCreatedAtBetween(
+                        eq(userId),
+                        any(),
+                        any(Instant.class),
+                        any(Instant.class)
+                ))
+                .willReturn(0L);
+
+        given(orderCommandRepository
+                .sumEstimatedOrderAmountByUserIdAndCreatedAtBetween(
+                        eq(userId),
+                        any(),
+                        any(Instant.class),
+                        any(Instant.class)
+                ))
+                .willReturn(0L);
+
+        given(orderCommandRepository.save(any(Order.class)))
+                .willAnswer(invocation -> invocation.getArgument(0));
+
+        // when
+        tradingSignalCommandService.processSignal(event);
+
+        // then
+        verify(autoTrading)
+                .validateDirection(OrderType.BUY);
+
+        verify(orderCommandRepository)
+                .save(any(Order.class));
+    }
+
+    @Test
+    @DisplayName("자동매매에서 허용하지 않은 방향의 Signal이면 주문을 생성하지 않는다")
+    void directionNotAllowed() {
+        // given
+        TradingSignalGeneratedEvent event =
+                createEvent(
+                        300_000L,
+                        70_000L,
+                        OrderType.SELL
+                );
+
+        given(orderCommandRepository.existsBySignalId(signalId))
+                .willReturn(false);
+
+        given(autoTradingCommandRepository
+                .findByUserIdAndStrategyIdForUpdate(
+                        userId,
+                        strategyId
+                ))
+                .willReturn(Optional.of(autoTrading));
+
+        given(autoTrading.getEnabled())
+                .willReturn(true);
+
+        doThrow(
+                new BusinessException(
+                        TradingErrorCode.AUTO_TRADING_DIRECTION_NOT_ALLOWED
+                )
+        )
+                .when(autoTrading)
+                .validateDirection(OrderType.SELL);
+
+        // when & then
+        assertThatThrownBy(() ->
+                tradingSignalCommandService.processSignal(event)
+        )
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException =
+                            (BusinessException) exception;
+
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(
+                                    TradingErrorCode.AUTO_TRADING_DIRECTION_NOT_ALLOWED
+                            );
+                });
+
+        verify(autoTrading)
+                .validateDirection(OrderType.SELL);
+
+        verifyNoInteractions(tradingLimitCommandRepository);
+
+        verify(orderCommandRepository, never())
+                .save(any(Order.class));
+
+        verify(applicationEventPublisher, never())
+                .publishEvent(any(OrderRequestedEvent.class));
+    }
+
 }
