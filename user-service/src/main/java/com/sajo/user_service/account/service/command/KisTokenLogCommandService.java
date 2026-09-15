@@ -4,6 +4,7 @@ import com.sajo.user_service.account.domain.EventType;
 import com.sajo.user_service.account.domain.KisTokenLog;
 import com.sajo.user_service.account.domain.KisTokenType;
 import com.sajo.user_service.account.repository.command.KisTokenLogCommandRepository;
+import com.sajo.user_service.account.repository.command.KisTokenStatusCommandRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -11,6 +12,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.interceptor.TransactionAspectSupport;
 
+import java.time.Instant;
 import java.util.UUID;
 
 @Slf4j
@@ -18,6 +20,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class KisTokenLogCommandService {
     private final KisTokenLogCommandRepository kisTokenLogCommandRepository;
+    private final KisTokenStatusCommandRepository kisTokenStatusCommandRepository;
 
     // 이력 기록은 best-effort이며 호출자의 핵심 흐름(토큰 발급/폐기)에 영향을 주면 안 된다.
     // REQUIRES_NEW로 항상 독립된 트랜잭션에서만 동작하도록 강제해, 나중에 호출부가
@@ -55,10 +58,22 @@ public class KisTokenLogCommandService {
     private void save(KisTokenLog tokenLog) {
         try {
             kisTokenLogCommandRepository.saveAndFlush(tokenLog);
+            upsertStatus(tokenLog);
         } catch (Exception e) {
             log.warn("KIS 토큰 이력 저장 실패. eventType={}, tokenType={}",
                     tokenLog.getEventType(), tokenLog.getTokenType(), e);
             TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
         }
+    }
+
+    // 관리자 목록 조회(getTokenStatuses)가 이력 전체를 훑지 않고 이 "현재 상태" 테이블만
+    // 보게 하기 위한 upsert. 로그 저장과 같은 트랜잭션 안에서 처리해 항상 같이 성공/실패한다.
+    // DB의 ON CONFLICT로 원자적으로 처리되므로 동시에 같은 user+tokenType 이벤트가 들어와도
+    // unique violation 없이 안전하다 (KisTokenStatusCommandRepository.upsert 참고).
+    private void upsertStatus(KisTokenLog tokenLog) {
+        Instant now = tokenLog.getCreatedAt() != null ? tokenLog.getCreatedAt() : Instant.now();
+        kisTokenStatusCommandRepository.upsert(
+                UUID.randomUUID(), tokenLog.getUserId(), tokenLog.getTokenType().name(),
+                tokenLog.getEventType().name(), tokenLog.getErrorCode(), tokenLog.getErrorMessage(), now);
     }
 }
