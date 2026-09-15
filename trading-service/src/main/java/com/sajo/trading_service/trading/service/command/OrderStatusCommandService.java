@@ -100,7 +100,7 @@ public class OrderStatusCommandService {
                         )
                 );
 
-        order.retry(
+        order.retryMarketQuote(
                 MAX_MARKET_RETRY_COUNT,
                 exhaustedCode,
                 exhaustedMessage
