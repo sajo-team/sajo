@@ -325,6 +325,32 @@ class KisTrClientTest {
     }
 
     @Test
+    @DisplayName("잔고조회(연속조회) - ctxAreaFk100이 완전히 생략(null)되고 ctxAreaNk100만 있어도 "
+            + "tr_cont=N(다음 조회)으로 판단하고, null을 그대로 넘기지 않고 빈 문자열로 정규화해서 요청한다")
+    void inquiresBalanceNormalizesNullCursorWhenOnlyOneIsProvided() {
+        // given
+        setUp();
+        server.expect(requestTo("https://kis.example/uapi/domestic-stock/v1/trading/inquire-balance"
+                        + "?CANO=12345678&ACNT_PRDT_CD=01&AFHR_FLPR_YN=N&OFL_YN=&INQR_DVSN=02&UNPR_DVSN=01"
+                        + "&FUND_STTL_ICLD_YN=N&FNCG_AMT_AUTO_RDPT_YN=N&PRCS_DVSN=00"
+                        + "&CTX_AREA_FK100=&CTX_AREA_NK100=only-nk"))
+                .andExpect(header("tr_cont", "N"))
+                .andRespond(withSuccess("""
+                        {"rt_cd":"0","msg_cd":"MSG_CD","msg1":"정상처리 되었습니다","output1":[],"output2":[{}]}
+                        """, MediaType.APPLICATION_JSON)
+                        .header("tr_cont", "D"));
+
+        // when
+        KisContinuationResult<KisBalanceResponse> result = client.inquireBalance(
+                "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.VIRTUAL,
+                null, "only-nk");
+
+        // then
+        assertThat(result.hasNext()).isFalse();
+        server.verify();
+    }
+
+    @Test
     @DisplayName("매수가능조회 - 정상 응답이면 KisOrderableAmountResponse를 반환하고, "
             + "VIRTUAL은 virtual 서버/모의 tr_id로 PDNO/ORD_UNPR 공란·ORD_DVSN=00으로 요청한다")
     void inquiresOrderableAmountSuccessfully() {
