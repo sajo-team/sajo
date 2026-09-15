@@ -80,7 +80,7 @@ public class AutoTradingQueryService {
                         );
 
         Order lastOrder = orderQueryRepository
-                .findFirstByAutoTradingIdAndDeletedAtIsNullOrderByCreatedAtDesc(
+                .findFirstByAutoTradingIdAndDeletedAtIsNullOrderByCreatedAtDescIdDesc(
                         autoTradingId
                 )
                 .orElse(null);

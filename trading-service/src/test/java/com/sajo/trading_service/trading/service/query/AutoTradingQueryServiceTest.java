@@ -205,7 +205,7 @@ class AutoTradingQueryServiceTest {
                 .willReturn(Optional.of(autoTrading));
 
         given(orderQueryRepository
-                .findFirstByAutoTradingIdAndDeletedAtIsNullOrderByCreatedAtDesc(
+                .findFirstByAutoTradingIdAndDeletedAtIsNullOrderByCreatedAtDescIdDesc(
                         autoTradingId
                 ))
                 .willReturn(Optional.of(latestOrder));
@@ -279,7 +279,7 @@ class AutoTradingQueryServiceTest {
                 .isEqualTo("주문이 거절되었습니다.");
 
         verify(orderQueryRepository)
-                .findFirstByAutoTradingIdAndDeletedAtIsNullOrderByCreatedAtDesc(
+                .findFirstByAutoTradingIdAndDeletedAtIsNullOrderByCreatedAtDescIdDesc(
                         autoTradingId
                 );
     }
@@ -303,7 +303,7 @@ class AutoTradingQueryServiceTest {
                 .willReturn(Optional.of(autoTrading));
 
         given(orderQueryRepository
-                .findFirstByAutoTradingIdAndDeletedAtIsNullOrderByCreatedAtDesc(
+                .findFirstByAutoTradingIdAndDeletedAtIsNullOrderByCreatedAtDescIdDesc(
                         autoTradingId
                 ))
                 .willReturn(Optional.empty());

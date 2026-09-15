@@ -13,12 +13,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
 
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -78,6 +81,9 @@ class OrderQueryRepositoryTest {
 
     @Autowired
     private OrderCommandRepository orderCommandRepository;
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
 
     @Test
     @DisplayName(
@@ -590,5 +596,100 @@ class OrderQueryRepositoryTest {
                         autoTradingId1,
                         autoTradingId2
                 );
+    }
+
+    @Test
+    @DisplayName("동일 생성시각 주문이 존재하면 단건과 목록 조회 모두 ID DESC 기준으로 동일한 최신 주문을 반환한다")
+    void findLatestOrderUsesIdDescAsTieBreaker() {
+        // given
+        UUID userId = UUID.randomUUID();
+        UUID autoTradingId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+
+        Order firstOrder =
+                Order.create(
+                        userId,
+                        autoTradingId,
+                        strategyId,
+                        UUID.randomUUID(),
+                        "005930",
+                        OrderType.BUY,
+                        70_000L,
+                        1
+                );
+
+        Order secondOrder =
+                Order.create(
+                        userId,
+                        autoTradingId,
+                        strategyId,
+                        UUID.randomUUID(),
+                        "005930",
+                        OrderType.BUY,
+                        71_000L,
+                        1
+                );
+
+        orderCommandRepository.saveAndFlush(firstOrder);
+        orderCommandRepository.saveAndFlush(secondOrder);
+
+        Instant sameCreatedAt =
+                Instant.parse("2026-09-15T00:00:00Z");
+
+        jdbcTemplate.update(
+                """
+                UPDATE trading.p_orders
+                SET created_at = ?
+                WHERE id IN (?, ?)
+                """,
+                Timestamp.from(sameCreatedAt),
+                firstOrder.getId(),
+                secondOrder.getId()
+        );
+
+        /*
+         * PostgreSQL의 실제 UUID DESC 기준으로
+         * 기대되는 주문 ID를 구한다.
+         */
+        UUID expectedLatestOrderId =
+                jdbcTemplate.queryForObject(
+                        """
+                        SELECT id
+                        FROM trading.p_orders
+                        WHERE id IN (?, ?)
+                        ORDER BY id DESC
+                        LIMIT 1
+                        """,
+                        UUID.class,
+                        firstOrder.getId(),
+                        secondOrder.getId()
+                );
+
+        // when
+        Order detailLatestOrder =
+                orderQueryRepository
+                        .findFirstByAutoTradingIdAndDeletedAtIsNullOrderByCreatedAtDescIdDesc(
+                                autoTradingId
+                        )
+                        .orElseThrow();
+
+        List<Order> listLatestOrders =
+                orderQueryRepository
+                        .findLatestOrdersByAutoTradingIds(
+                                List.of(autoTradingId)
+                        );
+
+        // then
+        assertThat(detailLatestOrder.getId())
+                .isEqualTo(expectedLatestOrderId);
+
+        assertThat(listLatestOrders)
+                .hasSize(1);
+
+        assertThat(listLatestOrders.getFirst().getId())
+                .isEqualTo(expectedLatestOrderId);
+
+        assertThat(detailLatestOrder.getId())
+                .isEqualTo(listLatestOrders.getFirst().getId());
     }
 }

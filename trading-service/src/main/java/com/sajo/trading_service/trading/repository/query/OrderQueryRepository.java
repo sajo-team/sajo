@@ -133,7 +133,7 @@ public interface OrderQueryRepository extends
             @Param("autoTradingId") UUID autoTradingId
     );
 
-    Optional<Order> findFirstByAutoTradingIdAndDeletedAtIsNullOrderByCreatedAtDesc(
+    Optional<Order> findFirstByAutoTradingIdAndDeletedAtIsNullOrderByCreatedAtDescIdDesc(
             UUID autoTradingId
     );
 
