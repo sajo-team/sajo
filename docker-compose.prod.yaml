@@ -351,3 +351,20 @@ services:
       kafka:
         condition: service_healthy
     restart: unless-stopped
+
+  operation-service:
+    image: ghcr.io/sajo-team/sajo-operation-service:${IMAGE_TAG:?IMAGE_TAG must be set}
+    container_name: operation-service
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      CONFIG_SERVER_URL: http://config-server:8888
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+    # ports 없음 - user-service와 동일한 이유 (Gateway만 내부 DNS로 접근하면 됨)
+    networks:
+      - sajo-net
+    depends_on:
+      discovery-service:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+    restart: unless-stopped

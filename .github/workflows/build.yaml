@@ -71,7 +71,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        module: [gateway, discovery-service, config-server]
+        module: [gateway, discovery-service, config-server, operation-service]
 
     steps:
       - name: Checkout code

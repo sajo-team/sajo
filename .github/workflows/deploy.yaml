@@ -32,6 +32,7 @@ jobs:
           - user-service
           - market-service
           - trading-service
+          - operation-service
 
     steps:
       - name: Checkout code at the commit that CI validated
@@ -102,7 +103,7 @@ jobs:
               # 제거했으므로(#100), 컨테이너 내부에서 자기 자신의 localhost로
               # 체크한다 - discovery-service의 기존 docker-compose healthcheck와
               # 동일한 방식(wget, eclipse-temurin:21-jre 이미지에 포함되어 있음).
-              local container_ports="user-service:8081 market-service:8082 trading-service:8083"
+              local container_ports="user-service:8081 market-service:8082 trading-service:8083 operation-service:8084"
               for i in $(seq 1 30); do
                 all_up=true
                 for port in $host_ports; do
@@ -132,7 +133,7 @@ jobs:
 
             export IMAGE_TAG=${{ github.event.workflow_run.head_sha }}
             if docker compose -f docker-compose.prod.yaml pull && docker compose -f docker-compose.prod.yaml up -d; then
-              echo "Waiting for health checks (discovery-service, config-server, gateway, user-service, market-service, trading-service)..."
+              echo "Waiting for health checks (discovery-service, config-server, gateway, user-service, market-service, trading-service, operation-service)..."
               if check_health; then
                 echo "$IMAGE_TAG" > ~/sajo/.last_healthy_sha
                 echo "Deploy succeeded, all core services are healthy."
