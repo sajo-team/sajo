@@ -17,6 +17,7 @@ public class OrderRecoveryCommandService {
 
     private static final long REQUESTED_STALE_MINUTES = 5L;
     private static final long ACCOUNT_RETRY_STALE_SECONDS = 30L;
+    private static final int MAX_RECONCILIATION_RETRY_COUNT = 3;
 
     // KIS 주문 요청 후 응답 지연이나 상태 반영 실패로 PROCESSING 상태가 장시간 유지되는 경우,
     // 5분 이후 주문 조회 기반 reconciliation 대상으로 처리한다.
@@ -25,7 +26,6 @@ public class OrderRecoveryCommandService {
     private static final long EXECUTION_INQUIRY_INTERVAL_SECONDS = 30L;
 
     private final OrderQueryRepository orderQueryRepository;
-    private final OrderStatusCommandService orderStatusCommandService;
     private final OrderRecoveryExecutor orderRecoveryExecutor;
     private final KisOrderReconciliationService kisOrderReconciliationService;
     private final KisOrderExecutionService kisOrderExecutionService;
@@ -89,7 +89,10 @@ public class OrderRecoveryCommandService {
                 );
 
         List<UUID> orderIds =
-                orderQueryRepository.findStaleTimeoutOrderIds(cutoff);
+                orderQueryRepository.findStaleTimeoutOrderIds(
+                        cutoff,
+                        MAX_RECONCILIATION_RETRY_COUNT
+                );
 
         for (UUID orderId : orderIds) {
             try {

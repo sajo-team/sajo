@@ -48,11 +48,13 @@ public interface OrderQueryRepository extends
     select o.id
     from Order o
     where o.status = com.sajo.trading_service.trading.domain.enums.OrderStatus.TIMEOUT
+      and o.reconciliationRetryCount < :maxRetryCount
       and o.updatedAt < :cutoff
       and o.deletedAt is null
     """)
     List<UUID> findStaleTimeoutOrderIds(
-            @Param("cutoff") Instant cutoff
+            @Param("cutoff") Instant cutoff,
+            @Param("maxRetryCount") int maxRetryCount
     );
 
     @Query("""

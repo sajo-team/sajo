@@ -436,8 +436,8 @@ class OrderTest {
     }
 
     @Test
-    @DisplayName("주문 보정 실패 횟수가 최대 횟수 미만이면 기존 상태를 유지한다")
-    void recordReconciliationFailure_keepStatus() {
+    @DisplayName("PROCESSING 주문의 보정이 실패하면 TIMEOUT으로 전환하고 재조정 횟수를 증가시킨다")
+    void recordReconciliationFailure_moveToTimeout() {
         // given
         Order order = createOrder();
         order.startProcessing();
@@ -451,47 +451,62 @@ class OrderTest {
 
         // then
         assertThat(order.getStatus())
-                .isEqualTo(OrderStatus.PROCESSING);
+                .isEqualTo(OrderStatus.TIMEOUT);
 
         assertThat(order.getReconciliationRetryCount())
                 .isEqualTo(1);
+
+        assertThat(order.getFailureCode())
+                .isNull();
+
+        assertThat(order.getFailureMessage())
+                .isNull();
     }
 
     @Test
-    @DisplayName("주문 보정 실패 횟수가 최대 횟수에 도달하면 FAILED로 전환한다")
-    void recordReconciliationFailure_exhausted_fail() {
+    @DisplayName("주문 보정 실패 횟수가 최대 횟수에 도달해도 TIMEOUT을 유지하고 소진 사유를 기록한다")
+    void recordReconciliationFailure_exhausted_keepTimeout() {
         // given
         Order order = createOrder();
         order.startProcessing();
 
+        String failureCode =
+                "KIS_RECONCILIATION_EXHAUSTED";
+
+        String failureMessage =
+                "KIS 주문 조회로 주문 상태를 확정하지 못했습니다.";
+
         // when
         order.recordReconciliationFailure(
                 3,
-                "KIS_RECONCILIATION_EXHAUSTED",
-                "KIS 주문 조회로 주문 상태를 확정하지 못했습니다."
+                failureCode,
+                failureMessage
         );
 
         order.recordReconciliationFailure(
                 3,
-                "KIS_RECONCILIATION_EXHAUSTED",
-                "KIS 주문 조회로 주문 상태를 확정하지 못했습니다."
+                failureCode,
+                failureMessage
         );
 
         order.recordReconciliationFailure(
                 3,
-                "KIS_RECONCILIATION_EXHAUSTED",
-                "KIS 주문 조회로 주문 상태를 확정하지 못했습니다."
+                failureCode,
+                failureMessage
         );
 
         // then
         assertThat(order.getStatus())
-                .isEqualTo(OrderStatus.FAILED);
+                .isEqualTo(OrderStatus.TIMEOUT);
 
         assertThat(order.getReconciliationRetryCount())
                 .isEqualTo(3);
 
         assertThat(order.getFailureCode())
-                .isEqualTo("KIS_RECONCILIATION_EXHAUSTED");
+                .isEqualTo(failureCode);
+
+        assertThat(order.getFailureMessage())
+                .isEqualTo(failureMessage);
     }
 
     @Test

@@ -204,7 +204,7 @@ public class Order extends BaseUpdatableEntity {
         this.status = OrderStatus.PROCESSING;
     }
 
-    public void retry(
+    public void retry( // Account 쪽 재시도
             int maxRetryCount,
             String failureCode,
             String failureMessage
@@ -229,7 +229,7 @@ public class Order extends BaseUpdatableEntity {
         this.failureMessage = null;
     }
 
-    public void retryMarketQuote(
+    public void retryMarketQuote( // Market 시세 조회 재시도
             int maxRetryCount,
             String failureCode,
             String failureMessage
@@ -254,6 +254,7 @@ public class Order extends BaseUpdatableEntity {
         this.failureMessage = null;
     }
 
+    // KIS 주문을 보냈을 가능성이 있는 상태에서, 주문 결과를 확정하지 못한 경우
     public void recordReconciliationFailure(
             int maxRetryCount,
             String failureCode,
@@ -268,8 +269,11 @@ public class Order extends BaseUpdatableEntity {
 
         this.reconciliationRetryCount++;
 
+        if (this.status == OrderStatus.PROCESSING) {
+            this.status = OrderStatus.TIMEOUT;
+        }
+
         if (this.reconciliationRetryCount >= maxRetryCount) {
-            this.status = OrderStatus.FAILED;
             this.failureCode = failureCode;
             this.failureMessage = failureMessage;
         }

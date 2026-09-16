@@ -22,6 +22,7 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 
@@ -691,5 +692,108 @@ class OrderQueryRepositoryTest {
 
         assertThat(detailLatestOrder.getId())
                 .isEqualTo(listLatestOrders.getFirst().getId());
+    }
+
+    @Test
+    @DisplayName("TIMEOUT 주문 중 재조정 횟수가 최대 횟수 미만인 주문만 조회한다")
+    void findStaleTimeoutOrderIds_onlyBelowMaxRetryCount() {
+        // given
+        Instant oldTime =
+                Instant.now().minus(
+                        10,
+                        ChronoUnit.MINUTES
+                );
+
+        Order retryCount2Order =
+                createTimeoutOrderWithRetryCount(
+                        2,
+                        oldTime
+                );
+
+        Order retryCount3Order =
+                createTimeoutOrderWithRetryCount(
+                        3,
+                        oldTime
+                );
+
+        // when
+        List<UUID> result =
+                orderQueryRepository.findStaleTimeoutOrderIds(
+                        Instant.now().minus(
+                                1,
+                                ChronoUnit.MINUTES
+                        ),
+                        3
+                );
+
+        // then
+        assertThat(result)
+                .contains(retryCount2Order.getId())
+                .doesNotContain(retryCount3Order.getId());
+    }
+
+    @Test
+    @DisplayName("재조정 횟수가 최대 횟수 미만이어도 cutoff보다 최신 TIMEOUT 주문은 조회하지 않는다")
+    void findStaleTimeoutOrderIds_excludesRecentOrder() {
+        // given
+        Order recentOrder =
+                createTimeoutOrderWithRetryCount(
+                        1,
+                        Instant.now()
+                );
+
+        // when
+        List<UUID> result =
+                orderQueryRepository.findStaleTimeoutOrderIds(
+                        Instant.now().minus(
+                                1,
+                                ChronoUnit.MINUTES
+                        ),
+                        3
+                );
+
+        // then
+        assertThat(result)
+                .doesNotContain(recentOrder.getId());
+    }
+
+    private Order createTimeoutOrderWithRetryCount(
+            int retryCount,
+            Instant updatedAt
+    ) {
+        Order order = Order.create(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "005930",
+                OrderType.BUY,
+                70_000L,
+                10
+        );
+
+        order.startProcessing();
+
+        for (int i = 0; i < retryCount; i++) {
+            order.recordReconciliationFailure(
+                    3,
+                    "KIS_RECONCILIATION_EXHAUSTED",
+                    "KIS 주문 조회로 주문 상태를 확정하지 못했습니다."
+            );
+        }
+
+        orderCommandRepository.saveAndFlush(order);
+
+        jdbcTemplate.update(
+                """
+                UPDATE trading.p_orders
+                SET updated_at = ?
+                WHERE id = ?
+                """,
+                Timestamp.from(updatedAt),
+                order.getId()
+        );
+
+        return order;
     }
 }

@@ -232,7 +232,7 @@ class OrderStatusCommandServiceTest {
     }
 
     @Test
-    @DisplayName("KIS 주문 보정 실패가 최대 횟수에 도달하면 FAILED 처리한다")
+    @DisplayName("KIS 주문 보정 실패가 최대 횟수에 도달해도 TIMEOUT을 유지하고 소진 사유를 기록한다")
     void reconciliationFailureExhausted() {
         // given
         Order order = Order.create(
@@ -272,12 +272,14 @@ class OrderStatusCommandServiceTest {
                 .isEqualTo(3);
 
         assertThat(order.getStatus())
-                .isEqualTo(OrderStatus.FAILED);
+                .isEqualTo(OrderStatus.TIMEOUT);
 
         assertThat(order.getFailureCode())
                 .isEqualTo("KIS_RECONCILIATION_EXHAUSTED");
 
         assertThat(order.getFailureMessage())
-                .isEqualTo("KIS 주문 조회로 주문 상태를 확정하지 못했습니다.");
+                .isEqualTo(
+                        "KIS 주문 조회로 주문 상태를 확정하지 못했습니다."
+                );
     }
 }

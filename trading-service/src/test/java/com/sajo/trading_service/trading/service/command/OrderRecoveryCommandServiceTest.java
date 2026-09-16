@@ -102,20 +102,84 @@ class OrderRecoveryCommandServiceTest {
     }
 
     @Test
-    @DisplayName("오래된 TIMEOUT 주문을 KIS 주문 보정 대상으로 전달한다")
+    @DisplayName("오래된 TIMEOUT 주문 중 재조정 가능 횟수 미만 주문을 KIS 주문 보정 대상으로 전달한다")
     void recoverTimeoutOrders_reconcile() {
         // given
         UUID orderId1 = UUID.randomUUID();
         UUID orderId2 = UUID.randomUUID();
 
-        when(orderQueryRepository.findStaleTimeoutOrderIds(any()))
-                .thenReturn(List.of(orderId1, orderId2));
+        when(orderQueryRepository.findStaleTimeoutOrderIds(
+                any(Instant.class),
+                eq(3)
+        )).thenReturn(List.of(orderId1, orderId2));
 
         // when
         orderRecoveryCommandService.recoverTimeoutOrders();
 
         // then
+        verify(orderQueryRepository)
+                .findStaleTimeoutOrderIds(
+                        any(Instant.class),
+                        eq(3)
+                );
+
         verify(kisOrderReconciliationService).reconcile(orderId1);
         verify(kisOrderReconciliationService).reconcile(orderId2);
+    }
+
+    @Test
+    @DisplayName("TIMEOUT 주문 복구 시 재조정 가능 횟수 미만 주문만 조회한다")
+    void recoverTimeoutOrders_onlyRetryableTimeoutOrders() {
+        // given
+        UUID orderId1 = UUID.randomUUID();
+        UUID orderId2 = UUID.randomUUID();
+
+        when(orderQueryRepository.findStaleTimeoutOrderIds(
+                any(Instant.class),
+                eq(3)
+        )).thenReturn(List.of(orderId1, orderId2));
+
+        // when
+        orderRecoveryCommandService.recoverTimeoutOrders();
+
+        // then
+        verify(orderQueryRepository)
+                .findStaleTimeoutOrderIds(
+                        any(Instant.class),
+                        eq(3)
+                );
+
+        verify(kisOrderReconciliationService)
+                .reconcile(orderId1);
+
+        verify(kisOrderReconciliationService)
+                .reconcile(orderId2);
+    }
+
+    @Test
+    @DisplayName("TIMEOUT 주문 보정 중 하나가 실패해도 다음 주문 보정은 계속한다")
+    void recoverTimeoutOrders_continueWhenOneFails() {
+        // given
+        UUID orderId1 = UUID.randomUUID();
+        UUID orderId2 = UUID.randomUUID();
+
+        when(orderQueryRepository.findStaleTimeoutOrderIds(
+                any(Instant.class),
+                eq(3)
+        )).thenReturn(List.of(orderId1, orderId2));
+
+        doThrow(new RuntimeException("reconciliation fail"))
+                .when(kisOrderReconciliationService)
+                .reconcile(orderId1);
+
+        // when
+        orderRecoveryCommandService.recoverTimeoutOrders();
+
+        // then
+        verify(kisOrderReconciliationService)
+                .reconcile(orderId1);
+
+        verify(kisOrderReconciliationService)
+                .reconcile(orderId2);
     }
 }
