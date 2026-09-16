@@ -213,9 +213,12 @@ groups:
       # DefaultErrorHandler + DeadLetterPublishingRecoverer면 실패 메시지가 DLT로 넘어가며
       # 원본 offset은 정상 진행 → lag 0인데 메시지는 버려지는 상태. DLT 유입 자체를 알림
       # (DeadLetterPublishingRecoverer 기본 접미사 .DLT, @RetryableTopic 기본 접미사 -dlt)
+      # sum by에 application을 안 넣으면(모든 시계열이 application="kafka"로 고정값이라 집계
+      # 결과 자체는 안 바뀜) 이 라벨이 사라져서, group_by(alertname, application) 기준 Slack
+      # 제목이 "TradingMessageDeadLettered ()"처럼 괄호가 비어서 나가게 됨
       - alert: TradingMessageDeadLettered
         expr: |
-          sum by (topic) (
+          sum by (topic, application) (
             increase(kafka_topic_partition_current_offset{topic=~"trading\\..*(\\.DLT|-dlt)"}[5m])
           ) > 0
         labels:
@@ -263,9 +266,11 @@ groups:
           summary: "Kafka 컨슈머 없음 ({{ $labels.consumergroup }})"
           description: "{{ $labels.consumergroup }} 그룹에 활성 컨슈머가 없습니다."
 
+      # sum by에 application을 안 넣으면 이 라벨이 사라져서, group_by(alertname, application)
+      # 기준 Slack 제목이 "KafkaMessageDeadLettered ()"처럼 괄호가 비어서 나가게 됨
       - alert: KafkaMessageDeadLettered
         expr: |
-          sum by (topic) (
+          sum by (topic, application) (
             increase(kafka_topic_partition_current_offset{topic=~".+(\\.DLT|-dlt)", topic!~"trading\\..*"}[5m])
           ) > 0
         labels:
