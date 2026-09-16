@@ -3,13 +3,21 @@ package com.sajo.market_service.market.dto.response;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.sajo.common.exception.BusinessException;
 import com.sajo.market_service.market.dto.kis.KisQuoteResponse;
+import com.sajo.market_service.market.dto.kis.KisRealtimePriceMessage;
 import com.sajo.market_service.market.exception.MarketErrorCode;
 import lombok.extern.slf4j.Slf4j;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 
-/** Market 내부 현재가 모델. fetchedAt은 실제 체결 시각이 아니라 KIS 응답을 받은 시각이다. */
+/**
+ * Market 내부 현재가 모델. fetchedAt은 실제 체결 시각이 아니라 KIS 응답을 받은 시각이다.
+ * <p>baseTime("기준 시각")은 KIS REST 응답(inquire-price)과 실시간 체결가 메시지 모두 별도의
+ * 기준 시각 필드를 내려주지 않아, fetchedAt을 그대로 기준 시각으로 사용한다 (#228 코드리뷰에서
+ * baseTime이 항상 null로 채워지던 기존 버그를 함께 수정).
+ */
 @Slf4j
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record QuoteResponse(
@@ -85,13 +93,72 @@ public record QuoteResponse(
                 toOptionalBigDecimal(output.pbr(), stockCode, "pbr"),
                 toOptionalBigDecimal(output.eps(), stockCode, "eps"),
                 toOptionalBigDecimal(output.bps(), stockCode, "bps"),
-                null,
+                toBaseTime(fetchedAt),
                 fetchedAt
         );
     }
 
+    /**
+     * KIS WebSocket 실시간 체결가 레코드로 현재가 관련 필드만 갱신한 새 QuoteResponse를 만든다.
+     * PER/PBR/EPS/BPS/시가총액은 실시간 체결가에 포함되지 않는 필드라 REST로 캐시돼 있던
+     * {@code previous} 값을 그대로 보존한다(없으면 null).
+     */
+    public static QuoteResponse fromRealtime(KisRealtimePriceMessage message, QuoteResponse previous, Instant fetchedAt) {
+        if (message == null) {
+            throw new BusinessException(
+                    MarketErrorCode.KIS_QUOTE_RESPONSE_INVALID,
+                    "KIS 실시간 체결가 메시지가 비어 있습니다."
+            );
+        }
+        return new QuoteResponse(
+                message.stockCode(),
+                toLong(message.currentPrice()),
+                toLong(message.openPrice()),
+                toLong(message.highPrice()),
+                toLong(message.lowPrice()),
+                previous != null ? previous.previousClosePrice() : null,
+                toSignedChangePrice(message),
+                toBigDecimal(message.changeRate()),
+                toLong(message.accumulatedVolume()),
+                toLong(message.accumulatedTradeAmount()),
+                previous != null ? previous.marketCapitalization() : null,
+                previous != null ? previous.per() : null,
+                previous != null ? previous.pbr() : null,
+                previous != null ? previous.eps() : null,
+                previous != null ? previous.bps() : null,
+                toBaseTime(fetchedAt),
+                fetchedAt
+        );
+    }
+
+    /**
+     * KIS는 전일대비값의 부호를 changeSign(1~5)으로 별도 표기한다. changePrice 필드 자체가 이미 부호를
+     * 포함해 내려오는 경우도 실제 캡처 샘플에서 확인됐다(예: 하락 시 "-10250"). 그래서 changeSign만
+     * 신뢰하지 않고 Math.abs로 부호를 제거한 뒤, 하락(4=하락, 5=하한가)일 때만 다시 음수로 뒤집어
+     * REST 응답(prdy_vrss, 부호 포함)과 부호 체계를 맞춘다 — changePrice의 원래 부호 표기 방식과
+     * 무관하게 항상 안전하게 동작한다.
+     */
+    private static Long toSignedChangePrice(KisRealtimePriceMessage message) {
+        Long changePrice = toLong(message.changePrice());
+        if (changePrice == null) {
+            return null;
+        }
+        String sign = message.changeSign();
+        boolean isFall = "4".equals(sign) || "5".equals(sign);
+        return isFall ? -Math.abs(changePrice) : changePrice;
+    }
+
     private static Long toLong(String value) {
         return value == null || value.isBlank() ? null : Long.valueOf(value);
+    }
+
+    /**
+     * fetchedAt(KIS 응답을 받은 시각)을 InternalStockQuoteResponse가 요구하는 baseTime 문자열로
+     * 변환한다. KIS REST/WebSocket 응답 모두 자체 기준 시각 필드를 제공하지 않으므로, 응답을 받은
+     * 시각을 기준 시각으로 대체한다. fetchedAt이 없으면(2-arg from() 등) baseTime도 null이다.
+     */
+    private static String toBaseTime(Instant fetchedAt) {
+        return fetchedAt == null ? null : OffsetDateTime.ofInstant(fetchedAt, ZoneOffset.UTC).toString();
     }
 
     private static BigDecimal toBigDecimal(String value) {

@@ -1,4 +1,10 @@
 spring:
+  # Flyway migration files under db/migration are PostgreSQL-specific (PL/pgSQL DO blocks,
+  # pg_index/regclass, etc.) and target an already-existing schema (ALTER TABLE on tables
+  # Hibernate creates). They are incompatible with this H2 in-memory test DB, which is built
+  # fresh each run via ddl-auto: create-drop, so Flyway is disabled here.
+  flyway:
+    enabled: false
   datasource:
     url: jdbc:h2:mem:market-service;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
     username: sa

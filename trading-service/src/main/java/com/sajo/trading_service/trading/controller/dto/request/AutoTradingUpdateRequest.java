@@ -1,9 +1,9 @@
 package com.sajo.trading_service.trading.controller.dto.request;
 
-import jakarta.validation.constraints.NotNull;
+import com.sajo.trading_service.trading.domain.enums.AutoTradingDirection;
 
 public record AutoTradingUpdateRequest(
-        @NotNull
-        Boolean enabled
+        Boolean enabled,
+        AutoTradingDirection direction
 ) {
 }

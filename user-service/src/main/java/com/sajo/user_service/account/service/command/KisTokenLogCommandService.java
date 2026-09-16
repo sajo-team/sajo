@@ -4,6 +4,7 @@ import com.sajo.user_service.account.domain.EventType;
 import com.sajo.user_service.account.domain.KisTokenLog;
 import com.sajo.user_service.account.domain.KisTokenType;
 import com.sajo.user_service.account.repository.command.KisTokenLogCommandRepository;
+import com.sajo.user_service.account.repository.command.KisTokenStatusCommandRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -11,6 +12,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.interceptor.TransactionAspectSupport;
 
+import java.time.Instant;
 import java.util.UUID;
 
 @Slf4j
@@ -18,6 +20,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class KisTokenLogCommandService {
     private final KisTokenLogCommandRepository kisTokenLogCommandRepository;
+    private final KisTokenStatusCommandRepository kisTokenStatusCommandRepository;
 
     // 이력 기록은 best-effort이며 호출자의 핵심 흐름(토큰 발급/폐기)에 영향을 주면 안 된다.
     // REQUIRES_NEW로 항상 독립된 트랜잭션에서만 동작하도록 강제해, 나중에 호출부가
@@ -47,16 +50,42 @@ public class KisTokenLogCommandService {
                 accountId, userId, EventType.TOKEN_REVOKE_FAILED, KisTokenType.ACCESS_TOKEN, errorCode, errorMessage));
     }
 
+    // 로그를 저장하고, 성공한 경우에만 상태 스냅샷을 갱신한다 (순서 조율만 담당 - 각 write의
+    // 실패 처리는 saveLog/upsertStatus가 각자 책임진다).
+    private void save(KisTokenLog tokenLog) {
+        if (saveLog(tokenLog)) {
+            upsertStatus(tokenLog);
+        }
+    }
+
     // 이력 기록 실패(DB 오류 등)가 호출자의 핵심 흐름(토큰 발급/폐기)에 영향을 주면 안 된다.
     // saveAndFlush를 써야 이 메서드(트랜잭션 경계) 안에서 실제 INSERT 실패가 드러나 여기서 잡힌다.
     // PostgreSQL은 statement 오류 시 트랜잭션 전체를 abort 상태로 만들기 때문에, 여기서 예외를
     // 삼키기만 하면 이후 커밋 시점에 TransactionSystemException이 호출자에게 그대로 전파될 수 있다 -
     // setRollbackOnly로 커밋 대신 롤백하도록 명시해 이 메서드가 항상 조용히 반환되게 한다.
-    private void save(KisTokenLog tokenLog) {
+    private boolean saveLog(KisTokenLog tokenLog) {
         try {
             kisTokenLogCommandRepository.saveAndFlush(tokenLog);
+            return true;
         } catch (Exception e) {
-            log.warn("KIS 토큰 이력 저장 실패. eventType={}, tokenType={}",
+            log.warn("KIS 토큰 이력 로그 저장 실패. eventType={}, tokenType={}",
+                    tokenLog.getEventType(), tokenLog.getTokenType(), e);
+            TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
+            return false;
+        }
+    }
+
+    // 관리자 목록 조회(getTokenStatuses)가 이력 전체를 훑지 않고 이 "현재 상태" 테이블만 보게
+    // 하기 위한 upsert. 로그 저장과 같은 트랜잭션 안에서 처리해 항상 같이 성공/실패한다
+    private void upsertStatus(KisTokenLog tokenLog) {
+        try {
+            Instant now = tokenLog.getCreatedAt() != null ? tokenLog.getCreatedAt() : Instant.now();
+            kisTokenStatusCommandRepository.upsert(
+                    UUID.randomUUID(), tokenLog.getUserId(), tokenLog.getTokenType().name(),
+                    tokenLog.getEventType().name(), tokenLog.getErrorCode(), tokenLog.getErrorMessage(), now);
+        } catch (Exception e) {
+            log.warn("KIS 토큰 상태 스냅샷 upsert 실패 (로그 insert는 성공했으나 같은 트랜잭션이라 함께 롤백됨). "
+                            + "eventType={}, tokenType={}",
                     tokenLog.getEventType(), tokenLog.getTokenType(), e);
             TransactionAspectSupport.currentTransactionStatus().setRollbackOnly();
         }

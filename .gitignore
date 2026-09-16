@@ -28,12 +28,22 @@ replay_pid*
 .env
 *.private.env.json
 
+# Alertmanager secrets (Slack webhook URL 등) - alertmanager 0.34.0엔 config 내 env var 치환이 없어서
+# api_url_file로 파일에서 읽음, 그 파일 자체는 커밋하면 안 됨
+# (.example은 디렉토리를 통째로 막으면 negation이 안 먹혀서 secrets/* + !*.example로 분리함)
+monitoring/secrets/*
+!monitoring/secrets/*.example
+
 # Local docker-compose overrides (personal test-only config, not for commit)
 docker-compose.override.yaml
 
 # Build artifacts
 build/
 .gradle/
+out/
 
 # IDE
 .idea/
+
+# macOS
+.DS_Store

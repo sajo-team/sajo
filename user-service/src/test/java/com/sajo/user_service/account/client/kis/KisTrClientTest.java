@@ -139,6 +139,33 @@ class KisTrClientTest {
     }
 
     @Test
+    @DisplayName("잔고조회 - HTTP 200이어도 msg_cd가 EGW00215(원장 유량 초과, inquire-balance 전용)이면 "
+            + "KIS_BALANCE_INQUIRY_FAILED가 아닌 KIS_RATE_LIMITED 예외를 던진다")
+    void inquireBalanceFailsWithRateLimitWhenMsgCdIsEgw00215() {
+        // given
+        setUp();
+        server.expect(requestTo("https://kis.example/uapi/domestic-stock/v1/trading/inquire-balance"
+                        + "?CANO=12345678&ACNT_PRDT_CD=01&AFHR_FLPR_YN=N&OFL_YN=&INQR_DVSN=02&UNPR_DVSN=01"
+                        + "&FUND_STTL_ICLD_YN=N&FNCG_AMT_AUTO_RDPT_YN=N&PRCS_DVSN=00"
+                        + "&CTX_AREA_FK100=&CTX_AREA_NK100="))
+                .andRespond(withSuccess("""
+                        {"rt_cd":"1","msg_cd":"EGW00215","msg1":"원장에서 허용 가능한 초당 거래건수를 초과하였습니다.","output1":[],"output2":[]}
+                        """, MediaType.APPLICATION_JSON));
+
+        // when & then
+        assertThatThrownBy(() -> client.inquireBalance(
+                "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.VIRTUAL))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(AccountErrorCode.KIS_RATE_LIMITED);
+                });
+
+        server.verify();
+    }
+
+    @Test
     @DisplayName("잔고조회 - 4xx 응답 바디가 oauth 에러 포맷(error_code)이 아니어도(rt_cd/msg_cd 포맷) "
             + "NPE 없이 INVALID_KIS_CREDENTIALS 예외를 던진다")
     void inquireBalanceFailsWithHttp4xxInDifferentErrorShape() {
@@ -291,6 +318,32 @@ class KisTrClientTest {
         KisContinuationResult<KisBalanceResponse> result = client.inquireBalance(
                 "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.VIRTUAL,
                 "prev-fk", "prev-nk");
+
+        // then
+        assertThat(result.hasNext()).isFalse();
+        server.verify();
+    }
+
+    @Test
+    @DisplayName("잔고조회(연속조회) - ctxAreaFk100이 완전히 생략(null)되고 ctxAreaNk100만 있어도 "
+            + "tr_cont=N(다음 조회)으로 판단하고, null을 그대로 넘기지 않고 빈 문자열로 정규화해서 요청한다")
+    void inquiresBalanceNormalizesNullCursorWhenOnlyOneIsProvided() {
+        // given
+        setUp();
+        server.expect(requestTo("https://kis.example/uapi/domestic-stock/v1/trading/inquire-balance"
+                        + "?CANO=12345678&ACNT_PRDT_CD=01&AFHR_FLPR_YN=N&OFL_YN=&INQR_DVSN=02&UNPR_DVSN=01"
+                        + "&FUND_STTL_ICLD_YN=N&FNCG_AMT_AUTO_RDPT_YN=N&PRCS_DVSN=00"
+                        + "&CTX_AREA_FK100=&CTX_AREA_NK100=only-nk"))
+                .andExpect(header("tr_cont", "N"))
+                .andRespond(withSuccess("""
+                        {"rt_cd":"0","msg_cd":"MSG_CD","msg1":"정상처리 되었습니다","output1":[],"output2":[{}]}
+                        """, MediaType.APPLICATION_JSON)
+                        .header("tr_cont", "D"));
+
+        // when
+        KisContinuationResult<KisBalanceResponse> result = client.inquireBalance(
+                "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.VIRTUAL,
+                null, "only-nk");
 
         // then
         assertThat(result.hasNext()).isFalse();

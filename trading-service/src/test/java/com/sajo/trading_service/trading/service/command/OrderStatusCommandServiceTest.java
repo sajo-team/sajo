@@ -108,4 +108,126 @@ class OrderStatusCommandServiceTest {
         assertThat(order.getAccountRetryCount())
                 .isEqualTo(1);
     }
+
+    @Test
+    @DisplayName("Market 시세 조회 재시도 시 Market 전용 재시도 정책을 적용한다")
+    void retryMarketQuote() {
+        // given
+        Order order = mock(Order.class);
+
+        when(orderCommandRepository.findByIdForUpdate(orderId))
+                .thenReturn(Optional.of(order));
+
+        // when
+        orderStatusCommandService.retryMarketQuote(
+                orderId,
+                "MARKET_QUOTE_RETRY_EXHAUSTED",
+                "시세 정보 조회 재시도 횟수를 초과했습니다."
+        );
+
+        // then
+        verify(orderCommandRepository)
+                .findByIdForUpdate(orderId);
+
+        verify(order)
+                .retryMarketQuote(
+                        3,
+                        "MARKET_QUOTE_RETRY_EXHAUSTED",
+                        "시세 정보 조회 재시도 횟수를 초과했습니다."
+                );
+    }
+
+    @Test
+    @DisplayName("Market 시세 조회 재시도 횟수를 초과하면 Market 전용 실패 사유로 FAILED 처리한다")
+    void marketQuoteRetryExhausted() {
+        // given
+        Order order = Order.create(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "005930",
+                OrderType.BUY,
+                70_000L,
+                4
+        );
+
+        String failureCode =
+                "MARKET_QUOTE_RETRY_EXHAUSTED";
+
+        String failureMessage =
+                "시세 정보 조회 재시도 횟수를 초과했습니다.";
+
+        // when
+
+        // 1회차
+        order.startProcessing();
+        order.retryMarketQuote(3, failureCode, failureMessage);
+
+        // 2회차
+        order.startProcessing();
+        order.retryMarketQuote(3, failureCode, failureMessage);
+
+        // 3회차
+        order.startProcessing();
+        order.retryMarketQuote(3, failureCode, failureMessage);
+
+        // then
+        assertThat(order.getStatus())
+                .isEqualTo(OrderStatus.FAILED);
+
+        assertThat(order.getMarketRetryCount())
+                .isEqualTo(3);
+
+        assertThat(order.getAccountRetryCount())
+                .isEqualTo(0);
+
+        assertThat(order.getFailureCode())
+                .isEqualTo(failureCode);
+
+        assertThat(order.getFailureMessage())
+                .isEqualTo(failureMessage);
+    }
+
+    @Test
+    @DisplayName("Account 재시도 횟수와 Market 재시도 횟수는 서로 독립적이다")
+    void accountAndMarketRetryCountAreIndependent() {
+        // given
+        Order order = Order.create(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "005930",
+                OrderType.BUY,
+                70_000L,
+                4
+        );
+
+        // Account 1회 실패
+        order.startProcessing();
+        order.retry(
+                3,
+                "ACCOUNT_RETRY_EXHAUSTED",
+                "계좌 정보 조회 재시도 횟수를 초과했습니다."
+        );
+
+        // Market 1회 실패
+        order.startProcessing();
+        order.retryMarketQuote(
+                3,
+                "MARKET_QUOTE_RETRY_EXHAUSTED",
+                "시세 정보 조회 재시도 횟수를 초과했습니다."
+        );
+
+        // then
+        assertThat(order.getAccountRetryCount())
+                .isEqualTo(1);
+
+        assertThat(order.getMarketRetryCount())
+                .isEqualTo(1);
+
+        assertThat(order.getStatus())
+                .isEqualTo(OrderStatus.REQUESTED);
+    }
 }

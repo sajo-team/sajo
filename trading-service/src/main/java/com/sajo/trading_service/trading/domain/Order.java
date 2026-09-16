@@ -72,6 +72,9 @@ public class Order extends BaseUpdatableEntity {
     @Column(name = "account_retry_count", nullable = false)
     private Integer accountRetryCount;
 
+    @Column(name = "market_retry_count", nullable = false)
+    private Integer marketRetryCount;
+
     @Column(name = "reconciliation_retry_count", nullable = false)
     private Integer reconciliationRetryCount;
 
@@ -102,6 +105,7 @@ public class Order extends BaseUpdatableEntity {
                 signalPrice * orderQuantity.longValue();
         this.status = OrderStatus.REQUESTED;
         this.accountRetryCount = 0;
+        this.marketRetryCount = 0;
         this.reconciliationRetryCount = 0;
     }
 
@@ -214,6 +218,31 @@ public class Order extends BaseUpdatableEntity {
         this.accountRetryCount++;
 
         if (this.accountRetryCount >= maxRetryCount) {
+            this.status = OrderStatus.FAILED;
+            this.failureCode = failureCode;
+            this.failureMessage = failureMessage;
+            return;
+        }
+
+        this.status = OrderStatus.REQUESTED;
+        this.failureCode = null;
+        this.failureMessage = null;
+    }
+
+    public void retryMarketQuote(
+            int maxRetryCount,
+            String failureCode,
+            String failureMessage
+    ) {
+        if (this.status != OrderStatus.PROCESSING) {
+            throw new BusinessException(
+                    TradingErrorCode.ORDER_STATUS_CHANGE_NOT_ALLOWED
+            );
+        }
+
+        this.marketRetryCount++;
+
+        if (this.marketRetryCount >= maxRetryCount) {
             this.status = OrderStatus.FAILED;
             this.failureCode = failureCode;
             this.failureMessage = failureMessage;

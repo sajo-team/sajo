@@ -2,13 +2,16 @@ package com.sajo.trading_service.trading.service.command;
 
 import com.sajo.common.exception.BusinessException;
 import com.sajo.common.feign.FeignApiException;
+import com.sajo.common.response.GeneralResponse;
 import com.sajo.trading_service.trading.client.AccountClient;
 import com.sajo.trading_service.trading.client.KisOrderClient;
+import com.sajo.trading_service.trading.client.MarketStockClient;
 import com.sajo.trading_service.trading.client.dto.request.KisOrderRequest;
 import com.sajo.trading_service.trading.client.dto.response.*;
 import com.sajo.trading_service.trading.domain.Order;
 import com.sajo.trading_service.trading.domain.enums.AccountType;
 import com.sajo.trading_service.trading.domain.enums.OrderType;
+import com.sajo.trading_service.trading.validation.KisOrderPriceValidator;
 import feign.FeignException;
 import feign.RetryableException;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +28,8 @@ public class KisOrderCommandService {
     private final AccountClient accountClient;
     private final KisOrderClient kisOrderClient;
     private final OrderStatusCommandService orderStatusCommandService;
+    private final MarketStockClient marketStockClient;
+    private final KisOrderPriceValidator kisOrderPriceValidator;
 
     public void executeOrder(UUID orderId) {
 
@@ -180,6 +185,147 @@ public class KisOrderCommandService {
                 );
                 return;
             }
+        }
+        /*
+         * 주문 가격 사전 검증
+         */
+        GeneralResponse<MarketStockQuoteResponse> marketResponse;
+
+        try {
+            marketResponse =
+                    marketStockClient.getQuote(
+                            order.getUserId(),
+                            order.getStockCode()
+                    );
+
+        } catch (RetryableException e) {
+            log.warn(
+                    "Market Service 일시 장애로 주문을 재시도 상태로 복구합니다. orderId={}",
+                    orderId,
+                    e
+            );
+
+            orderStatusCommandService.retryMarketQuote(
+                    orderId,
+                    "MARKET_QUOTE_RETRY_EXHAUSTED",
+                    "시세 정보 조회 재시도 횟수를 초과했습니다."
+            );
+
+            return;
+
+        } catch (FeignApiException e) {
+            log.warn(
+                    "Market Service 비즈니스 오류가 발생했습니다. orderId={}, errorCode={}",
+                    orderId,
+                    e.getErrorCode(),
+                    e
+            );
+
+            orderStatusCommandService.fail(
+                    orderId,
+                    e.getErrorCode(),
+                    "주문 가격 검증을 위한 시세 정보를 확인할 수 없습니다."
+            );
+
+            return;
+
+        }  catch (FeignException e) {
+
+            if (e.status() >= 500 || e.status() == 429) {
+                log.warn(
+                        "Market Service 일시 오류로 주문을 재시도 상태로 복구합니다. orderId={}, status={}",
+                        orderId,
+                        e.status(),
+                        e
+                );
+
+                orderStatusCommandService.retryMarketQuote(
+                        orderId,
+                        "MARKET_QUOTE_RETRY_EXHAUSTED",
+                        "시세 정보 조회 재시도 횟수를 초과했습니다."
+                );
+
+            } else {
+                orderStatusCommandService.fail(
+                        orderId,
+                        "MARKET_SERVICE_HTTP_" + e.status(),
+                        "주문 가격 검증을 위한 시세 정보를 확인할 수 없습니다."
+                );
+            }
+
+            return;
+
+        } catch (RuntimeException e) {
+            log.error(
+                    "Market Service 처리 중 예상하지 못한 오류가 발생했습니다. orderId={}",
+                    orderId,
+                    e
+            );
+
+            try {
+                orderStatusCommandService.fail(
+                        orderId,
+                        "MARKET_QUOTE_UNEXPECTED_ERROR",
+                        "시세 정보 처리 중 예상하지 못한 오류가 발생했습니다."
+                );
+            } catch (RuntimeException statusException) {
+                log.error(
+                        "Market 예상하지 못한 오류 후 FAILED 상태 저장 실패. orderId={}",
+                        orderId,
+                        statusException
+                );
+            }
+
+            throw e;
+        }
+
+        /*
+         * GeneralResponse envelope 검증 및 data 추출
+         */
+        if (marketResponse == null || marketResponse.data() == null) {
+            orderStatusCommandService.fail(
+                    orderId,
+                    "ORDER_PRICE_VALIDATION_UNAVAILABLE",
+                    "주문 가격 검증에 필요한 시세 정보를 확인할 수 없습니다."
+            );
+            return;
+        }
+
+        MarketStockQuoteResponse quoteResponse =
+                marketResponse.data();
+
+        Long previousClosePrice = quoteResponse.previousClosePrice();
+
+        if (previousClosePrice == null || previousClosePrice <= 0) {
+            orderStatusCommandService.fail(
+                    orderId,
+                    "ORDER_PRICE_VALIDATION_UNAVAILABLE",
+                    "주문 가격 검증에 필요한 시세 정보를 확인할 수 없습니다."
+            );
+            return;
+        }
+
+        long orderPrice = order.getSignalPrice();
+
+        if (!kisOrderPriceValidator.isValidTickSize(orderPrice)) {
+            orderStatusCommandService.fail( // 호가 단위 검증
+                    orderId,
+                    "INVALID_ORDER_TICK_SIZE",
+                    "주문 가격이 해당 가격대의 호가단위에 맞지 않습니다."
+            );
+            return;
+        }
+
+        if (!kisOrderPriceValidator.isWithinDailyPriceLimit(
+                orderPrice,
+                previousClosePrice
+        )) {
+            orderStatusCommandService.fail( // 상·하한가 검증
+                    orderId,
+                    "ORDER_PRICE_OUT_OF_RANGE",
+                    "주문 가격이 당일 허용 가격 범위를 벗어났습니다."
+            );
+            return;
         }
 
         /*
