@@ -13,6 +13,7 @@ import com.sajo.trading_service.trading.kafka.dto.TradingSignalPayload;
 import com.sajo.trading_service.trading.repository.command.AutoTradingCommandRepository;
 import com.sajo.trading_service.trading.repository.command.OrderCommandRepository;
 import com.sajo.trading_service.trading.repository.command.TradingLimitCommandRepository;
+import com.sajo.trading_service.trading.repository.query.OrderQueryRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -39,6 +40,9 @@ class TradingSignalCommandServiceTest {
 
     @Mock
     private OrderCommandRepository orderCommandRepository;
+
+    @Mock
+    private OrderQueryRepository orderQueryRepository;
 
     @Mock
     private AutoTradingCommandRepository autoTradingCommandRepository;
@@ -107,7 +111,7 @@ class TradingSignalCommandServiceTest {
                 any(Instant.class)
         )).willReturn(0L);
 
-        given(orderCommandRepository.existsActiveOrderByAutoTradingId(autoTradingId))
+        given(orderQueryRepository.existsActiveOrderByAutoTradingId(autoTradingId))
                 .willReturn(false);
 
         given(orderCommandRepository.sumEstimatedOrderAmountByUserIdAndCreatedAtBetween(
@@ -666,7 +670,7 @@ class TradingSignalCommandServiceTest {
         given(autoTrading.getEnabled())
                 .willReturn(true);
 
-        given(orderCommandRepository.existsActiveOrderByAutoTradingId(autoTradingId))
+        given(orderQueryRepository.existsActiveOrderByAutoTradingId(autoTradingId))
                 .willReturn(true);
 
         // when

@@ -12,6 +12,7 @@ import com.sajo.trading_service.trading.kafka.dto.TradingSignalPayload;
 import com.sajo.trading_service.trading.repository.command.AutoTradingCommandRepository;
 import com.sajo.trading_service.trading.repository.command.OrderCommandRepository;
 import com.sajo.trading_service.trading.repository.command.TradingLimitCommandRepository;
+import com.sajo.trading_service.trading.repository.query.OrderQueryRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -30,6 +31,7 @@ public class TradingSignalCommandService {
     private final AutoTradingCommandRepository autoTradingCommandRepository;
     private final TradingLimitCommandRepository tradingLimitCommandRepository;
     private final ApplicationEventPublisher applicationEventPublisher;
+    private final OrderQueryRepository orderQueryRepository;
 
 
     @Transactional
@@ -63,7 +65,7 @@ public class TradingSignalCommandService {
                 payload.signalType()
         );
 
-        if (orderCommandRepository.existsActiveOrderByAutoTradingId(
+        if (orderQueryRepository.existsActiveOrderByAutoTradingId(
                 autoTrading.getId()
         )) {
             log.info(
