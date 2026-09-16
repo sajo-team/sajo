@@ -98,17 +98,20 @@ public class MarketRealtimePriceUpdateService {
     }
 
     /**
-     * Redis 반영까지 끝난 뒤(#236) Trading에 실시간 가격을 전달할 Kafka 이벤트를 발행한다. 발행
-     * 실패는 여기서 흡수한다 — Kafka가 잠깐 불안정하다고 WebSocket 메시지 처리 스레드가 죽거나
-     * Redis 반영이 롤백돼서는 안 된다(Redis 캐시 갱신은 이미 끝난 뒤이므로 되돌릴 이유도 없다).
+     * Redis 반영까지 끝난 뒤(#236) Trading에 실시간 가격을 전달할 Kafka 이벤트를 발행한다.
+     * {@link MarketPriceEventProducer#publish}는 블로킹으로 ack을 기다리지 않고, 발행 실패도
+     * 자체적으로 흡수해 로그만 남긴다(코드 리뷰 반영, #236) — 이 메서드는 KIS WebSocket 메시지
+     * 수신 스레드에서 직접 호출되므로, Kafka가 잠깐 불안정하다고 그 스레드가 지연되거나 죽어서는
+     * 안 되고, 이미 끝난 Redis 반영이 롤백될 이유도 없다. try/catch는 방어적으로만 남겨둔다
+     * (producer 구현이 바뀌어 동기적으로 예외를 던지게 되더라도 이 스레드에 전파되지 않도록).
      */
     private void publishPriceUpdatedEvent(KisRealtimePriceMessage message, QuoteResponse updated) {
         try {
             MarketPriceUpdatedEvent event = MarketPriceUpdatedEvent.from(message, updated, Instant.now(clock));
             priceEventProducer.publish(event);
         } catch (RuntimeException exception) {
-            log.warn("MarketPriceUpdatedEvent Kafka 발행에 실패했습니다. stockCode={}, exceptionType={}",
-                    updated.stockCode(), exception.getClass().getSimpleName());
+            log.warn("MarketPriceUpdatedEvent Kafka 발행 요청 중 예상치 못한 예외가 발생했습니다. stockCode={}",
+                    updated.stockCode(), exception);
         }
     }
 }

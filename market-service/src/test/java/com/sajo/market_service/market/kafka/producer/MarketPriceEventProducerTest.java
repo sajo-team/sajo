@@ -11,14 +11,8 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.mock;
@@ -45,7 +39,7 @@ class MarketPriceEventProducerTest {
 
     @SuppressWarnings("unchecked")
     private CompletableFuture<SendResult<String, Object>> stubFuture() {
-        CompletableFuture<SendResult<String, Object>> future = mock(CompletableFuture.class);
+        CompletableFuture<SendResult<String, Object>> future = new CompletableFuture<>();
         given(kafkaTemplate.send(eq(TOPIC), eq("005930"), eq(event))).willReturn(future);
         return future;
     }
@@ -60,37 +54,32 @@ class MarketPriceEventProducerTest {
     }
 
     @Test
-    void throwsIllegalStateExceptionWhenKafkaSendFails() throws Exception {
+    void doesNotBlockCallerWhileKafkaAckIsPending() {
+        // send()가 반환하는 future를 절대 완료시키지 않는다 — publish()가 블로킹 get()을 여전히
+        // 쓰고 있다면 이 테스트는 타임아웃으로 실패한다(코드 리뷰 반영, #236).
         CompletableFuture<SendResult<String, Object>> future = stubFuture();
-        given(future.get(anyLong(), any(TimeUnit.class)))
-                .willThrow(new ExecutionException("broker down", new RuntimeException("cause")));
 
-        assertThatThrownBy(() -> producer.publish(event))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("발행에 실패");
+        assertThatCode(() -> producer.publish(event)).doesNotThrowAnyException();
+        assertThatCode(future::isDone).doesNotThrowAnyException();
     }
 
     @Test
-    void throwsIllegalStateExceptionWhenPublishTimesOut() throws Exception {
+    void doesNotPropagateWhenKafkaAckCompletesExceptionally() {
         CompletableFuture<SendResult<String, Object>> future = stubFuture();
-        given(future.get(anyLong(), any(TimeUnit.class))).willThrow(new TimeoutException("too slow"));
 
-        assertThatThrownBy(() -> producer.publish(event))
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("시간이 초과");
+        assertThatCode(() -> producer.publish(event)).doesNotThrowAnyException();
+
+        // 비동기 ack이 나중에 실패로 도착해도(#236) 이미 리턴한 publish() 호출부에는
+        // 아무 영향이 없어야 한다 — 실패 처리는 whenComplete 콜백 내부에서 로깅으로 끝난다.
+        assertThatCode(() -> future.completeExceptionally(new RuntimeException("broker down")))
+                .doesNotThrowAnyException();
     }
 
     @Test
-    void restoresInterruptedStatusAndThrowsWhenPublishIsInterrupted() throws Exception {
-        CompletableFuture<SendResult<String, Object>> future = stubFuture();
-        given(future.get(anyLong(), any(TimeUnit.class))).willThrow(new InterruptedException());
+    void doesNotPropagateWhenKafkaTemplateSendThrowsSynchronously() {
+        given(kafkaTemplate.send(eq(TOPIC), eq("005930"), eq(event)))
+                .willThrow(new IllegalStateException("producer is closing"));
 
-        try {
-            assertThatThrownBy(() -> producer.publish(event)).isInstanceOf(IllegalStateException.class);
-            assertThat(Thread.interrupted()).isTrue();
-        } finally {
-            // 다음 테스트에 인터럽트 상태가 새어나가지 않도록 확실히 정리한다.
-            Thread.interrupted();
-        }
+        assertThatCode(() -> producer.publish(event)).doesNotThrowAnyException();
     }
 }
