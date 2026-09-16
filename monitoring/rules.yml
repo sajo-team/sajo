@@ -202,13 +202,13 @@ groups:
       # group id를 잘못 적었을 때도 바로 울려서 위 룰의 오설정을 드러내줌
       # absent()는 정규식이 아닌 정확한 이름이어야 하므로 그룹마다 하나씩 추가
       - alert: TradingConsumerGroupMissing
-        expr: absent(kafka_consumergroup_members{consumergroup="trading-consumer-group"})
+        expr: absent(kafka_consumergroup_members{consumergroup="trading-consumer-group", application="kafka"})
         for: 5m
         labels:
           severity: critical
         annotations:
           summary: "매매 컨슈머 그룹 메트릭 없음"
-          description: "trading-service 컨슈머 그룹 메트릭이 5분간 수집되지 않았습니다. 그룹 삭제 또는 group id 설정 오류를 확인하세요."
+          description: "trading-consumer-group 컨슈머 그룹 메트릭이 5분간 수집되지 않았습니다. 그룹 삭제 또는 group id 설정 오류를 확인하세요."
 
       # DefaultErrorHandler + DeadLetterPublishingRecoverer면 실패 메시지가 DLT로 넘어가며
       # 원본 offset은 정상 진행 → lag 0인데 메시지는 버려지는 상태. DLT 유입 자체를 알림
@@ -255,7 +255,7 @@ groups:
           description: "현재 처리 속도로 {{ $labels.topic }}의 밀린 메시지를 소진하는 데 약 {{ $value | humanizeDuration }}가 걸립니다(임계 5m)."
 
       - alert: KafkaConsumerNoMembers
-        expr: kafka_consumergroup_members{consumergroup!~"trading-service"} == 0
+        expr: kafka_consumergroup_members{consumergroup!~"trading-consumer-group"} == 0
         for: 5m
         labels:
           severity: warning

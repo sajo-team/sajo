@@ -16,9 +16,7 @@ route:
   repeat_interval: 1h
 
 # 같은 대상에서 critical이 firing 중이면 같은 alertname의 warning은 억제 (중복 알림 방지)
-# rules.yml에서 severity만 다르고 alertname은 같게 만든 쌍(HighCpuUsage, RedisMemoryHigh,
-# HighNodeCpuUsage, NodeDiskLow)에 맞춰 하나씩 지정 - NodeDiskLow는 같은 instance라도
-# mountpoint(파티션)가 다르면 별개 문제라 equal에 mountpoint까지 넣어야 함
+# rules.yml에서 severity만 다르고 alertname은 같게 만든 쌍
 inhibit_rules:
   - source_matchers:
       - alertname="HighCpuUsage"
@@ -61,5 +59,11 @@ receivers:
       - api_url_file: /etc/alertmanager/secrets/slack_webhook_url
         channel: "#sajo-alerts"
         send_resolved: true
-        title: '{{ .CommonLabels.severity | toUpper }}: {{ .CommonAnnotations.summary }}'
-        text: '{{ .CommonAnnotations.description }}'
+        title: '{{ .GroupLabels.alertname }} ({{ .GroupLabels.application }})'
+        # 알람 상태(firing/resolved)를 명시하지 않으면, resolved 알림도 firing 때와 완전히
+        # 똑같은 summary/description(마지막 firing 시점 값이 그대로 얼려짐)이 와서 Slack에서
+        # "새로 터진 건지 방금 해결된 건지" 구분이 안 됨
+        text: |-
+          {{ range .Alerts }}[{{ .Status | toUpper }}][{{ .Labels.severity | toUpper }}] {{ .Annotations.summary }}
+          {{ .Annotations.description }}
+          {{ end }}
