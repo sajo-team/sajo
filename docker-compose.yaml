@@ -188,7 +188,7 @@ services:
     restart: unless-stopped
 
   alertmanager:
-    image: prom/alertmanager:latest
+    image: prom/alertmanager:v0.34.0
     container_name: sajo-alertmanager
     volumes:
       - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
@@ -200,7 +200,7 @@ services:
     restart: unless-stopped
 
   node-exporter:
-    image: prom/node-exporter:latest
+    image: prom/node-exporter:v1.12.1
     container_name: sajo-node-exporter
     pid: host
     volumes:
