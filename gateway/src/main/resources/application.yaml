@@ -77,7 +77,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,prometheus
+        include: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:health,prometheus}
   metrics:
     distribution:
       slo:

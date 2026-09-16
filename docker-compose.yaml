@@ -125,6 +125,22 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
+  kafka-ui:
+    platform: linux/amd64
+    image: provectuslabs/kafka-ui:v0.7.2
+    container_name: sajo-kafka-ui
+    environment:
+      KAFKA_CLUSTERS_0_NAME: sajo
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+    ports:
+      - "127.0.0.1:8090:8080"
+    networks:
+      - sajo-net
+    depends_on:
+      kafka:
+        condition: service_healthy
+    restart: unless-stopped
+
   redis:
     image: redis:8.0-alpine
     container_name: sajo-redis

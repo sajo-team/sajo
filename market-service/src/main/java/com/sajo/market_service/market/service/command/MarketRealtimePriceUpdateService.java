@@ -5,6 +5,8 @@ import com.sajo.market_service.market.cache.MarketQuoteCacheLock;
 import com.sajo.market_service.market.config.MarketQuoteCacheProperties;
 import com.sajo.market_service.market.dto.kis.KisRealtimePriceMessage;
 import com.sajo.market_service.market.dto.response.QuoteResponse;
+import com.sajo.market_service.market.kafka.dto.MarketPriceUpdatedEvent;
+import com.sajo.market_service.market.kafka.producer.MarketPriceEventProducer;
 import com.sajo.market_service.market.service.parser.KisRealtimePriceMessageParser;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,6 +32,9 @@ import java.util.UUID;
  * 보호하며 갱신한다. 이 서비스가 락 없이 get→병합→set을 수행하면, REST 경로가 막 갱신한
  * PER/PBR/시가총액 같은 REST 전용 필드를 이 서비스가 읽어둔 오래된 값 기준으로 되돌려 쓰는 경쟁이
  * 생길 수 있어 동일한 락을 짧게 사용한다(코드 리뷰 반영).</p>
+ *
+ * <p>Redis 반영이 끝나면 Trading에 실시간 가격을 전달하기 위해 {@code market.price.updated} 토픽에
+ * {@code MarketPriceUpdatedEvent}를 발행한다(#236).</p>
  */
 @Slf4j
 @Service
@@ -45,6 +50,7 @@ public class MarketRealtimePriceUpdateService {
     private final RedisTemplate<String, QuoteResponse> quoteRedisTemplate;
     private final MarketQuoteCacheProperties cacheProperties;
     private final MarketQuoteCacheLock cacheLock;
+    private final MarketPriceEventProducer priceEventProducer;
     private final Clock clock;
 
     /**
@@ -63,6 +69,7 @@ public class MarketRealtimePriceUpdateService {
         String stockCode = message.stockCode();
         String cacheKey = MarketQuoteCacheKey.of(stockCode);
         String lockToken = UUID.randomUUID().toString();
+        QuoteResponse updated;
         try {
             if (!cacheLock.tryLock(stockCode, lockToken, LOCK_TTL)) {
                 // REST 경로(MarketQuoteQueryService)가 같은 종목의 캐시를 갱신 중이다. 여기서 굳이
@@ -74,16 +81,46 @@ public class MarketRealtimePriceUpdateService {
             }
             try {
                 QuoteResponse previous = quoteRedisTemplate.opsForValue().get(cacheKey);
-                QuoteResponse updated = QuoteResponse.fromRealtime(message, previous, Instant.now(clock));
+                updated = QuoteResponse.fromRealtime(message, previous, Instant.now(clock));
                 quoteRedisTemplate.opsForValue().set(cacheKey, updated, cacheProperties.ttl());
             } finally {
-                cacheLock.unlock(stockCode, lockToken);
+                unlockQuietly(stockCode, lockToken);
             }
         } catch (DataAccessException exception) {
             log.warn("KIS 실시간 체결가 Redis 반영에 실패했습니다. stockCode={}", stockCode, exception);
+            return;
         } catch (RuntimeException exception) {
             log.warn("KIS 실시간 체결가 정규화에 실패했습니다. stockCode={}, exceptionType={}",
-                    stockCode, exception.getClass().getSimpleName());
+                    stockCode, exception.getClass().getSimpleName(), exception);
+            return;
+        }
+        publishPriceUpdatedEvent(message, updated);
+    }
+
+    /**
+     * 락은 {@code LOCK_TTL}로 자동 해제되므로 unlock() 실패가 데이터 정합성에 영향을 주지 않는다.
+     * set 성공 여부와 unlock 성공 여부를 분리해서 판단한다.
+     */
+    private void unlockQuietly(String stockCode, String lockToken) {
+        try {
+            cacheLock.unlock(stockCode, lockToken);
+        } catch (DataAccessException exception) {
+            log.warn("KIS 실시간 시세 캐시 락 해제에 실패했습니다(TTL로 자동 해제됨). stockCode={}",
+                    stockCode, exception);
+        }
+    }
+
+    /**
+     * Redis 반영까지 끝난 뒤(#236) Trading에 실시간 가격을 전달할 Kafka 이벤트를 발행한다.
+     * {@link MarketPriceEventProducer#publish}는 블로킹으로 ack을 기다리지 않고, 발행 실패도 자체적으로 흡수해 로그만 남긴다
+     */
+    private void publishPriceUpdatedEvent(KisRealtimePriceMessage message, QuoteResponse updated) {
+        try {
+            MarketPriceUpdatedEvent event = MarketPriceUpdatedEvent.from(message, updated, Instant.now(clock));
+            priceEventProducer.publish(event);
+        } catch (RuntimeException exception) {
+            log.warn("MarketPriceUpdatedEvent Kafka 발행 요청 중 예상치 못한 예외가 발생했습니다. stockCode={}",
+                    updated.stockCode(), exception);
         }
     }
 }
