@@ -825,6 +825,47 @@ class OrderQueryRepositoryTest {
                 .isEqualTo(140_000L);
     }
 
+    @Test
+    @DisplayName("동일 AutoTrading에서 같은 방향의 진행 중 주문만 조회한다")
+    void existsActiveOrderByAutoTradingIdAndOrderType() {
+        // given
+        UUID userId = UUID.randomUUID();
+        UUID autoTradingId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+
+        Order buyOrder = Order.create(
+                userId,
+                autoTradingId,
+                strategyId,
+                UUID.randomUUID(),
+                "005930",
+                OrderType.BUY,
+                70_000L,
+                10
+        );
+
+        orderCommandRepository.saveAndFlush(buyOrder);
+
+        // when
+        boolean buyExists =
+                orderQueryRepository
+                        .existsActiveOrderByAutoTradingIdAndOrderType(
+                                autoTradingId,
+                                OrderType.BUY
+                        );
+
+        boolean sellExists =
+                orderQueryRepository
+                        .existsActiveOrderByAutoTradingIdAndOrderType(
+                                autoTradingId,
+                                OrderType.SELL
+                        );
+
+        // then
+        assertThat(buyExists).isTrue();
+        assertThat(sellExists).isFalse();
+    }
+
     private Order createTimeoutOrderWithRetryCount(
             int retryCount,
             Instant updatedAt
