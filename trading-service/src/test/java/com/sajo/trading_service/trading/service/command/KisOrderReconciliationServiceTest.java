@@ -1,5 +1,6 @@
 package com.sajo.trading_service.trading.service.command;
 
+import com.sajo.common.exception.BusinessException;
 import com.sajo.trading_service.trading.client.AccountClient;
 import com.sajo.trading_service.trading.client.KisOrderClient;
 import com.sajo.trading_service.trading.client.dto.response.AccountOrderInfoResponse;
@@ -9,6 +10,7 @@ import com.sajo.trading_service.trading.client.dto.response.KisOrderInquiryRespo
 import com.sajo.trading_service.trading.domain.Order;
 import com.sajo.trading_service.trading.domain.enums.OrderStatus;
 import com.sajo.trading_service.trading.domain.enums.OrderType;
+import com.sajo.trading_service.trading.exception.TradingErrorCode;
 import com.sajo.trading_service.trading.reconciliation.KisOrderMatcher;
 import com.sajo.trading_service.trading.reconciliation.MatchResult;
 import com.sajo.trading_service.trading.repository.query.OrderQueryRepository;
@@ -1090,5 +1092,103 @@ class KisOrderReconciliationServiceTest {
                         any(),
                         anyLong()
                 );
+    }
+
+    @Test
+    @DisplayName("취소 주문 보정 중 주문 정보 불일치가 발생하면 재조정 실패를 기록한다")
+    void reconcileMatchedOrder_canceledInvalidOrder_recordFailure() {
+        // given
+        UUID orderId = UUID.randomUUID();
+
+        KisOrderInquiryItem item =
+                new KisOrderInquiryItem(
+                        "20260906",
+                        "00000",
+                        "0001234567",
+                        "02",
+                        "005930",
+                        "10",
+                        "69900",
+                        "100000",
+                        "3",      // totalFilledQuantity
+                        "70000",  // averageExecutionPrice
+                        "210000", // totalExecutionAmount
+                        "0",
+                        "0",
+                        "Y"
+                );
+
+        doThrow(
+                new BusinessException(
+                        TradingErrorCode.INVALID_ORDER
+                )
+        )
+                .when(orderExecutionCommandService)
+                .applyReconciledCancellation(
+                        eq(orderId),
+                        eq("0001234567"),
+                        eq(3),
+                        eq(new BigDecimal("70000")),
+                        eq(210000L)
+                );
+
+        // when
+        kisOrderReconciliationService.reconcileMatchedOrder(
+                orderId,
+                item
+        );
+
+        // then
+        verify(orderStatusCommandService)
+                .recordReconciliationFailure(orderId);
+    }
+
+    @Test
+    @DisplayName("취소 주문 보정 전에 상태가 변경되면 재조정 실패로 기록하지 않는다")
+    void reconcileMatchedOrder_statusAlreadyChanged_doNotRecordFailure() {
+        // given
+        UUID orderId = UUID.randomUUID();
+
+        KisOrderInquiryItem item =
+                new KisOrderInquiryItem(
+                        "20260906",
+                        "00000",
+                        "0001234567",
+                        "02",
+                        "005930",
+                        "10",
+                        "69900",
+                        "100000",
+                        "3",
+                        "70000",
+                        "210000",
+                        "0",
+                        "0",
+                        "Y"
+                );
+
+        doThrow(
+                new BusinessException(
+                        TradingErrorCode.ORDER_STATUS_CHANGE_NOT_ALLOWED
+                )
+        )
+                .when(orderExecutionCommandService)
+                .applyReconciledCancellation(
+                        eq(orderId),
+                        eq("0001234567"),
+                        eq(3),
+                        eq(new BigDecimal("70000")),
+                        eq(210000L)
+                );
+
+        // when
+        kisOrderReconciliationService.reconcileMatchedOrder(
+                orderId,
+                item
+        );
+
+        // then
+        verify(orderStatusCommandService, never())
+                .recordReconciliationFailure(any());
     }
 }

@@ -278,13 +278,45 @@ public class KisOrderReconciliationService {
                 return;
             }
 
-            orderExecutionCommandService.applyReconciledCancellation(
-                    orderId,
-                    item.orderNo(),
-                    totalFilledQuantity,
-                    averageExecutionPrice,
-                    totalExecutionAmount
-            );
+            try {
+                orderExecutionCommandService.applyReconciledCancellation(
+                        orderId,
+                        item.orderNo(),
+                        totalFilledQuantity,
+                        averageExecutionPrice,
+                        totalExecutionAmount
+                );
+
+            } catch (BusinessException e) {
+
+                if (e.getErrorCode()
+                        == TradingErrorCode.ORDER_STATUS_CHANGE_NOT_ALLOWED) {
+
+                    log.info(
+                            "KIS 취소 주문 보정 중 이미 다른 흐름에서 상태가 변경되었습니다. "
+                                    + "orderId={}",
+                            orderId
+                    );
+
+                    return;
+                }
+
+                if (e.getErrorCode()
+                        == TradingErrorCode.INVALID_ORDER) {
+
+                    log.warn(
+                            "KIS 취소 주문과 내부 주문 정보가 일치하지 않아 "
+                                    + "상태를 확정할 수 없습니다. orderId={}, orderNo={}",
+                            orderId,
+                            item.orderNo()
+                    );
+
+                    recordReconciliationFailureSafely(orderId);
+                    return;
+                }
+
+                throw e;
+            }
 
             return;
         }
@@ -346,5 +378,30 @@ public class KisOrderReconciliationService {
                         brokerOrderNo,
                         orderId
                 );
+    }
+
+    private void recordReconciliationFailureSafely(
+            UUID orderId
+    ) {
+        try {
+            orderStatusCommandService
+                    .recordReconciliationFailure(orderId);
+
+        } catch (BusinessException e) {
+
+            if (e.getErrorCode()
+                    == TradingErrorCode.ORDER_STATUS_CHANGE_NOT_ALLOWED) {
+
+                log.info(
+                        "재조정 실패 기록 전에 주문 상태가 변경되었습니다. "
+                                + "orderId={}",
+                        orderId
+                );
+
+                return;
+            }
+
+            throw e;
+        }
     }
 }
