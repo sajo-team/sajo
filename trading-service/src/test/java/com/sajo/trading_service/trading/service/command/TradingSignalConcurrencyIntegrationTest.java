@@ -120,14 +120,16 @@ class TradingSignalConcurrencyIntegrationTest {
                 createEvent(
                         UUID.randomUUID(),
                         userId,
-                        strategyId
+                        strategyId,
+                        OrderType.BUY
                 );
 
         TradingSignalGeneratedEvent secondEvent =
                 createEvent(
                         UUID.randomUUID(),
                         userId,
-                        strategyId
+                        strategyId,
+                        OrderType.BUY
                 );
 
         CountDownLatch ready =
@@ -182,10 +184,113 @@ class TradingSignalConcurrencyIntegrationTest {
                 .isEqualTo(1L);
     }
 
+    @Test
+    @DisplayName(
+            "동일 AutoTrading에 BUY와 SELL Signal이 동시에 들어오면 서로 다른 방향이므로 Order가 각각 생성된다"
+    )
+    void concurrentOppositeDirectionSignals_createTwoOrders() throws Exception {
+
+        // given
+        UUID userId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+
+        AutoTrading autoTrading =
+                AutoTrading.create(
+                        userId,
+                        strategyId,
+                        AutoTradingDirection.BOTH
+                );
+
+        autoTrading.update(
+                true,
+                AutoTradingDirection.BOTH
+        );
+
+        autoTradingCommandRepository.saveAndFlush(autoTrading);
+
+        TradingLimit tradingLimit =
+                TradingLimit.create(
+                        userId,
+                        10_000_000L,
+                        10,
+                        BigDecimal.valueOf(5.0)
+                );
+
+        tradingLimitCommandRepository.saveAndFlush(tradingLimit);
+
+        TradingSignalGeneratedEvent buyEvent =
+                createEvent(
+                        UUID.randomUUID(),
+                        userId,
+                        strategyId,
+                        OrderType.BUY
+                );
+
+        TradingSignalGeneratedEvent sellEvent =
+                createEvent(
+                        UUID.randomUUID(),
+                        userId,
+                        strategyId,
+                        OrderType.SELL
+                );
+
+        CountDownLatch ready =
+                new CountDownLatch(2);
+
+        CountDownLatch start =
+                new CountDownLatch(1);
+
+        ExecutorService executor =
+                Executors.newFixedThreadPool(2);
+
+        // when
+        Future<?> buyFuture =
+                executor.submit(() -> {
+                    ready.countDown();
+                    start.await();
+
+                    tradingSignalCommandService
+                            .processSignal(buyEvent);
+
+                    return null;
+                });
+
+        Future<?> sellFuture =
+                executor.submit(() -> {
+                    ready.countDown();
+                    start.await();
+
+                    tradingSignalCommandService
+                            .processSignal(sellEvent);
+
+                    return null;
+                });
+
+        ready.await();
+
+        start.countDown();
+
+        buyFuture.get();
+        sellFuture.get();
+
+        executor.shutdown();
+
+        // then
+        long orderCount =
+                orderCommandRepository
+                        .countByAutoTradingIdAndDeletedAtIsNull(
+                                autoTrading.getId()
+                        );
+
+        assertThat(orderCount)
+                .isEqualTo(2L);
+    }
+
     private TradingSignalGeneratedEvent createEvent(
             UUID signalId,
             UUID userId,
-            UUID strategyId
+            UUID strategyId,
+            OrderType orderType
     ) {
         TradingSignalPayload payload =
                 new TradingSignalPayload(
@@ -193,7 +298,7 @@ class TradingSignalConcurrencyIntegrationTest {
                         strategyId,
                         userId,
                         "005930",
-                        OrderType.BUY,
+                        orderType,
                         70_000L,
                         300_000L,
                         "동시성 테스트"

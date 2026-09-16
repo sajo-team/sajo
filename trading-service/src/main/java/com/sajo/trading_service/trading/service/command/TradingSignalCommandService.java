@@ -65,12 +65,15 @@ public class TradingSignalCommandService {
                 payload.signalType()
         );
 
-        if (orderQueryRepository.existsActiveOrderByAutoTradingId(
-                autoTrading.getId()
+        if (orderQueryRepository.existsActiveOrderByAutoTradingIdAndOrderType(
+                autoTrading.getId(),
+                payload.signalType()
         )) {
             log.info(
-                    "진행 중 주문이 존재하여 Signal을 건너뜁니다. autoTradingId={}, signalId={}",
+                    "동일 방향의 진행 중 주문이 존재하여 Signal을 건너뜁니다. "
+                            + "autoTradingId={}, orderType={}, signalId={}",
                     autoTrading.getId(),
+                    payload.signalType(),
                     payload.signalId()
             );
             return;
