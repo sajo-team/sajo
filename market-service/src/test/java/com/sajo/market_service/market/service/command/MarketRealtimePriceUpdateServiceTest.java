@@ -101,6 +101,23 @@ class MarketRealtimePriceUpdateServiceTest {
     }
 
     @Test
+    void publishesEventEvenWhenLockReleaseFailsAfterSuccessfulRedisUpdate() {
+        // Redis set()은 성공했지만 unlock()에서 일시적인 DataAccessException이 나는 좁은 타이밍
+        // (코드 리뷰 반영, #239) — 락은 TTL로 자동 해제되므로 unlock 실패가 "이미 끝난 갱신"의
+        // Kafka 이벤트 발행까지 막아서는 안 된다.
+        given(cacheLock.tryLock(eq("005930"), anyString(), any(Duration.class))).willReturn(true);
+        given(quoteRedisTemplate.opsForValue()).willReturn(valueOperations);
+        given(valueOperations.get("market:quote:005930")).willReturn(null);
+        doThrow(new QueryTimeoutException("unlock timeout"))
+                .when(cacheLock).unlock(eq("005930"), anyString());
+
+        service.updateFromRawMessage(RAW_SINGLE_RECORD);
+
+        verify(valueOperations).set(eq("market:quote:005930"), any(QuoteResponse.class), eq(Duration.ofSeconds(60)));
+        verify(priceEventProducer).publish(any(MarketPriceUpdatedEvent.class));
+    }
+
+    @Test
     void doesNotPropagateWhenRedisReadFails() {
         given(cacheLock.tryLock(eq("005930"), anyString(), any(Duration.class))).willReturn(true);
         given(quoteRedisTemplate.opsForValue()).willReturn(valueOperations);

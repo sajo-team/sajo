@@ -84,7 +84,7 @@ public class MarketRealtimePriceUpdateService {
                 updated = QuoteResponse.fromRealtime(message, previous, Instant.now(clock));
                 quoteRedisTemplate.opsForValue().set(cacheKey, updated, cacheProperties.ttl());
             } finally {
-                cacheLock.unlock(stockCode, lockToken);
+                unlockQuietly(stockCode, lockToken);
             }
         } catch (DataAccessException exception) {
             log.warn("KIS 실시간 체결가 Redis 반영에 실패했습니다. stockCode={}", stockCode, exception);
@@ -98,12 +98,21 @@ public class MarketRealtimePriceUpdateService {
     }
 
     /**
+     * 락은 {@code LOCK_TTL}로 자동 해제되므로 unlock() 실패가 데이터 정합성에 영향을 주지 않는다.
+     * set 성공 여부와 unlock 성공 여부를 분리해서 판단한다.
+     */
+    private void unlockQuietly(String stockCode, String lockToken) {
+        try {
+            cacheLock.unlock(stockCode, lockToken);
+        } catch (DataAccessException exception) {
+            log.warn("KIS 실시간 시세 캐시 락 해제에 실패했습니다(TTL로 자동 해제됨). stockCode={}",
+                    stockCode, exception);
+        }
+    }
+
+    /**
      * Redis 반영까지 끝난 뒤(#236) Trading에 실시간 가격을 전달할 Kafka 이벤트를 발행한다.
-     * {@link MarketPriceEventProducer#publish}는 블로킹으로 ack을 기다리지 않고, 발행 실패도
-     * 자체적으로 흡수해 로그만 남긴다(코드 리뷰 반영, #236) — 이 메서드는 KIS WebSocket 메시지
-     * 수신 스레드에서 직접 호출되므로, Kafka가 잠깐 불안정하다고 그 스레드가 지연되거나 죽어서는
-     * 안 되고, 이미 끝난 Redis 반영이 롤백될 이유도 없다. try/catch는 방어적으로만 남겨둔다
-     * (producer 구현이 바뀌어 동기적으로 예외를 던지게 되더라도 이 스레드에 전파되지 않도록).
+     * {@link MarketPriceEventProducer#publish}는 블로킹으로 ack을 기다리지 않고, 발행 실패도 자체적으로 흡수해 로그만 남긴다
      */
     private void publishPriceUpdatedEvent(KisRealtimePriceMessage message, QuoteResponse updated) {
         try {
