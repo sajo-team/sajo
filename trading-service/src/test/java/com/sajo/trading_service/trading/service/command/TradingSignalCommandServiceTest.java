@@ -404,6 +404,17 @@ class TradingSignalCommandServiceTest {
         given(autoTrading.getId())
                 .willReturn(autoTradingId);
 
+        given(orderQueryRepository
+                .existsActiveOrderByAutoTradingIdAndOrderType(
+                        autoTradingId,
+                        OrderType.SELL
+                ))
+                .willReturn(false);
+
+        given(orderQueryRepository
+                .existsOpenPositionByAutoTradingId(autoTradingId))
+                .willReturn(true);
+
         given(autoTrading.getEnabled())
                 .willReturn(true);
 
@@ -779,5 +790,56 @@ class TradingSignalCommandServiceTest {
 
         verify(applicationEventPublisher)
                 .publishEvent(any(OrderRequestedEvent.class));
+    }
+
+    @Test
+    @DisplayName("SELL Signal 수신 시 보유 포지션이 없으면 Order를 생성하지 않는다")
+    void sellSignalWithoutOpenPosition_skipsOrder() {
+        // given
+        TradingSignalGeneratedEvent event =
+                createEvent(
+                        300_000L,
+                        70_000L,
+                        OrderType.SELL
+                );
+
+        given(orderCommandRepository.existsBySignalId(signalId))
+                .willReturn(false);
+
+        given(autoTradingCommandRepository
+                .findByUserIdAndStrategyIdForUpdate(
+                        userId,
+                        strategyId
+                ))
+                .willReturn(Optional.of(autoTrading));
+
+        given(autoTrading.getId())
+                .willReturn(autoTradingId);
+
+        given(autoTrading.getEnabled())
+                .willReturn(true);
+
+        given(orderQueryRepository
+                .existsActiveOrderByAutoTradingIdAndOrderType(
+                        autoTradingId,
+                        OrderType.SELL
+                ))
+                .willReturn(false);
+
+        given(orderQueryRepository
+                .existsOpenPositionByAutoTradingId(autoTradingId))
+                .willReturn(false);
+
+        // when
+        tradingSignalCommandService.processSignal(event);
+
+        // then
+        verify(orderCommandRepository, never())
+                .save(any(Order.class));
+
+        verify(applicationEventPublisher, never())
+                .publishEvent(any(OrderRequestedEvent.class));
+
+        verifyNoInteractions(tradingLimitCommandRepository);
     }
 }

@@ -2,6 +2,7 @@ package com.sajo.trading_service.trading.service.command;
 
 import com.sajo.common.config.CommonJpaAuditingAutoConfiguration;
 import com.sajo.trading_service.trading.domain.AutoTrading;
+import com.sajo.trading_service.trading.domain.Order;
 import com.sajo.trading_service.trading.domain.TradingLimit;
 import com.sajo.trading_service.trading.domain.enums.AutoTradingDirection;
 import com.sajo.trading_service.trading.domain.enums.OrderType;
@@ -186,7 +187,7 @@ class TradingSignalConcurrencyIntegrationTest {
 
     @Test
     @DisplayName(
-            "동일 AutoTrading에 BUY와 SELL Signal이 동시에 들어오면 서로 다른 방향이므로 Order가 각각 생성된다"
+            "보유 포지션이 있는 상태에서 BUY와 SELL Signal이 동시에 들어오면 각각 Order가 생성된다"
     )
     void concurrentOppositeDirectionSignals_createTwoOrders() throws Exception {
 
@@ -217,6 +218,29 @@ class TradingSignalConcurrencyIntegrationTest {
                 );
 
         tradingLimitCommandRepository.saveAndFlush(tradingLimit);
+
+        Order existingFilledBuyOrder =
+                Order.create(
+                        userId,
+                        autoTrading.getId(),
+                        strategyId,
+                        UUID.randomUUID(),
+                        "005930",
+                        OrderType.BUY,
+                        70_000L,
+                        10
+                );
+
+        existingFilledBuyOrder.startProcessing();
+        existingFilledBuyOrder.accept("EXISTING-BUY-001");
+        existingFilledBuyOrder.applyFill(
+                10,
+                0
+        );
+
+        orderCommandRepository.saveAndFlush(
+                existingFilledBuyOrder
+        );
 
         TradingSignalGeneratedEvent buyEvent =
                 createEvent(
@@ -283,7 +307,7 @@ class TradingSignalConcurrencyIntegrationTest {
                         );
 
         assertThat(orderCount)
-                .isEqualTo(2L);
+                .isEqualTo(3L);
     }
 
     private TradingSignalGeneratedEvent createEvent(

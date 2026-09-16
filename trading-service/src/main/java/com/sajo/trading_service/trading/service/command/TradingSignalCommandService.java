@@ -5,6 +5,7 @@ import com.sajo.trading_service.trading.domain.AutoTrading;
 import com.sajo.trading_service.trading.domain.Order;
 import com.sajo.trading_service.trading.domain.TradingLimit;
 import com.sajo.trading_service.trading.domain.enums.OrderStatus;
+import com.sajo.trading_service.trading.domain.enums.OrderType;
 import com.sajo.trading_service.trading.event.OrderRequestedEvent;
 import com.sajo.trading_service.trading.exception.TradingErrorCode;
 import com.sajo.trading_service.trading.kafka.dto.TradingSignalGeneratedEvent;
@@ -76,6 +77,21 @@ public class TradingSignalCommandService {
                     payload.signalType(),
                     payload.signalId()
             );
+            return;
+        }
+
+        if (payload.signalType() == OrderType.SELL
+                && !orderQueryRepository.existsOpenPositionByAutoTradingId(
+                autoTrading.getId()
+        )) {
+
+            log.info(
+                    "확정된 보유 포지션이 없어 SELL Signal을 건너뜁니다. "
+                            + "autoTradingId={}, signalId={}",
+                    autoTrading.getId(),
+                    payload.signalId()
+            );
+
             return;
         }
 

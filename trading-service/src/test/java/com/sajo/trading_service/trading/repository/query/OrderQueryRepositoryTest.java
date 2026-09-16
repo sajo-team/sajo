@@ -866,6 +866,51 @@ class OrderQueryRepositoryTest {
         assertThat(sellExists).isFalse();
     }
 
+    @Test
+    @DisplayName("TIMEOUT 주문은 같은 방향의 진행 중 주문으로 조회한다")
+    void timeoutOrder_isActiveForSameOrderType() {
+        // given
+        UUID userId = UUID.randomUUID();
+        UUID autoTradingId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+
+        Order order = Order.create(
+                userId,
+                autoTradingId,
+                strategyId,
+                UUID.randomUUID(),
+                "005930",
+                OrderType.BUY,
+                70_000L,
+                10
+        );
+
+        order.startProcessing();
+
+        order.recordReconciliationFailure(
+                3,
+                "KIS_RECONCILIATION_FAILED",
+                "재조정 실패"
+        );
+
+        orderCommandRepository.saveAndFlush(order);
+
+        // when
+        boolean result =
+                orderQueryRepository
+                        .existsActiveOrderByAutoTradingIdAndOrderType(
+                                autoTradingId,
+                                OrderType.BUY
+                        );
+
+        // then
+        assertThat(order.getStatus())
+                .isEqualTo(OrderStatus.TIMEOUT);
+
+        assertThat(result)
+                .isTrue();
+    }
+
     private Order createTimeoutOrderWithRetryCount(
             int retryCount,
             Instant updatedAt
