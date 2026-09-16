@@ -230,4 +230,54 @@ class OrderStatusCommandServiceTest {
         assertThat(order.getStatus())
                 .isEqualTo(OrderStatus.REQUESTED);
     }
+
+    @Test
+    @DisplayName("KIS 주문 보정 실패가 최대 횟수에 도달하면 FAILED 처리한다")
+    void reconciliationFailureExhausted() {
+        // given
+        Order order = Order.create(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "005930",
+                OrderType.BUY,
+                70_000L,
+                1
+        );
+
+        order.startProcessing();
+
+        // when
+        order.recordReconciliationFailure(
+                3,
+                "KIS_RECONCILIATION_EXHAUSTED",
+                "KIS 주문 조회로 주문 상태를 확정하지 못했습니다."
+        );
+
+        order.recordReconciliationFailure(
+                3,
+                "KIS_RECONCILIATION_EXHAUSTED",
+                "KIS 주문 조회로 주문 상태를 확정하지 못했습니다."
+        );
+
+        order.recordReconciliationFailure(
+                3,
+                "KIS_RECONCILIATION_EXHAUSTED",
+                "KIS 주문 조회로 주문 상태를 확정하지 못했습니다."
+        );
+
+        // then
+        assertThat(order.getReconciliationRetryCount())
+                .isEqualTo(3);
+
+        assertThat(order.getStatus())
+                .isEqualTo(OrderStatus.FAILED);
+
+        assertThat(order.getFailureCode())
+                .isEqualTo("KIS_RECONCILIATION_EXHAUSTED");
+
+        assertThat(order.getFailureMessage())
+                .isEqualTo("KIS 주문 조회로 주문 상태를 확정하지 못했습니다.");
+    }
 }

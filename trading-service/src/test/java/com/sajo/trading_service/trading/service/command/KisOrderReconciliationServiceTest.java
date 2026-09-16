@@ -427,7 +427,7 @@ class KisOrderReconciliationServiceTest {
     }
 
     @Test
-    @DisplayName("KIS 주문 조회 중 오류가 발생하면 기존 상태를 유지한다")
+    @DisplayName("KIS 주문 조회 중 오류가 발생하면 주문 보정 실패 횟수를 기록한다")
     void reconcile_kisError_keepStatus() {
         // given
         UUID orderId = UUID.randomUUID();
@@ -465,8 +465,8 @@ class KisOrderReconciliationServiceTest {
         kisOrderReconciliationService.reconcile(orderId);
 
         // then
-        verify(orderStatusCommandService, never())
-                .recordReconciliationFailure(any());
+        verify(orderStatusCommandService)
+                .recordReconciliationFailure(orderId);
 
         verifyNoInteractions(kisOrderMatcher);
 
@@ -550,7 +550,7 @@ class KisOrderReconciliationServiceTest {
     }
 
     @Test
-    @DisplayName("KIS 주문 조회가 실패 응답이면 기존 상태를 유지한다")
+    @DisplayName("KIS 주문 조회가 실패 응답이면 주문 보정 실패 횟수를 기록한다")
     void reconcile_kisFailureResponse_keepStatus() {
         // given
         UUID orderId = UUID.randomUUID();
@@ -601,8 +601,8 @@ class KisOrderReconciliationServiceTest {
         // then
         verifyNoInteractions(kisOrderMatcher);
 
-        verify(orderStatusCommandService, never())
-                .recordReconciliationFailure(any());
+        verify(orderStatusCommandService)
+                .recordReconciliationFailure(orderId);
 
         verify(orderStatusCommandService, never())
                 .accept(any(), any());
@@ -612,7 +612,7 @@ class KisOrderReconciliationServiceTest {
     }
 
     @Test
-    @DisplayName("KIS 조회 결과가 취소 주문이면 ACCEPTED로 보정하지 않는다")
+    @DisplayName("KIS 조회 결과가 취소 주문이면 ACCEPTED로 보정하지 않고 실패 횟수를 기록한다")
     void reconcileMatchedOrder_canceled_keepStatus() {
         // given
         UUID orderId = UUID.randomUUID();
@@ -642,8 +642,8 @@ class KisOrderReconciliationServiceTest {
         );
 
         // then
-        verify(orderStatusCommandService, never())
-                .recordReconciliationFailure(any());
+        verify(orderStatusCommandService)
+                .recordReconciliationFailure(orderId);
 
         verify(orderStatusCommandService, never())
                 .accept(any(), any());
@@ -653,7 +653,7 @@ class KisOrderReconciliationServiceTest {
     }
 
     @Test
-    @DisplayName("계좌 정보 조회 중 오류가 발생하면 기존 상태를 유지한다")
+    @DisplayName("계좌 정보 조회 중 오류가 발생하면 주문 보정 실패 횟수를 기록한다")
     void reconcile_accountError_keepStatus() {
         // given
         UUID orderId = UUID.randomUUID();
@@ -669,8 +669,8 @@ class KisOrderReconciliationServiceTest {
         kisOrderReconciliationService.reconcile(orderId);
 
         // then
-        verify(orderStatusCommandService, never())
-                .recordReconciliationFailure(any());
+        verify(orderStatusCommandService)
+                .recordReconciliationFailure(orderId);
 
         verifyNoInteractions(kisOrderClient);
         verifyNoInteractions(kisOrderMatcher);
@@ -731,6 +731,113 @@ class KisOrderReconciliationServiceTest {
 
         verify(orderStatusCommandService, never())
                 .accept(any(), any());
+    }
+
+    @Test
+    @DisplayName("TIMEOUT 주문은 신규 주문을 재전송하지 않고 KIS 조회 결과로 ACCEPTED 보정한다")
+    void reconcile_timeoutMatched_acceptWithoutReorder() {
+        // given
+        UUID orderId = UUID.randomUUID();
+
+        Order order = createProcessingOrder();
+
+        ReflectionTestUtils.setField(
+                order,
+                "status",
+                OrderStatus.TIMEOUT
+        );
+
+        when(orderQueryRepository.findByIdAndDeletedAtIsNull(orderId))
+                .thenReturn(Optional.of(order));
+
+        mockAccountResponses(order);
+
+        KisOrderInquiryItem item =
+                createItem(
+                        "0001234567",
+                        "7",
+                        "0"
+                );
+
+        KisOrderInquiryResponse response =
+                new KisOrderInquiryResponse(
+                        "0",
+                        "MCA00000",
+                        "정상 처리되었습니다.",
+                        "",
+                        "",
+                        List.of(item)
+                );
+
+        when(kisOrderClient.inquireDailyOrders(
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString()
+        )).thenReturn(response);
+
+        when(kisOrderMatcher.match(order, response.output1()))
+                .thenReturn(MatchResult.matched(item));
+
+        // when
+        kisOrderReconciliationService.reconcile(orderId);
+
+        // then
+        verify(kisOrderClient)
+                .inquireDailyOrders(
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        anyString()
+                );
+
+        verify(kisOrderClient, never())
+                .placeOrder(
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any()
+                );
+
+        verify(orderStatusCommandService)
+                .accept(
+                        orderId,
+                        "0001234567"
+                );
     }
 
     private Order createOrder() {
