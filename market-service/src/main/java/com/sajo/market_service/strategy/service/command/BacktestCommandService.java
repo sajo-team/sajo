@@ -31,11 +31,7 @@ public class BacktestCommandService {
         log.info("백테스트 생성 요청 시작. strategyId={}, startDate={}, endDate={}",
                 strategyId, request.startDate(), request.endDate());
 
-        Strategy strategy = strategyCommandRepository.findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId)
-                .orElseThrow(() -> {
-                    log.warn("백테스트 생성 실패: 전략을 찾을 수 없습니다. strategyId={}", strategyId);
-                    return new BusinessException(StrategyErrorCode.STRATEGY_NOT_FOUND);
-                });
+        Strategy strategy = getOwnedStrategy(strategyId, userId);
 
         Backtest backtest = Backtest.request(
                 strategy,
@@ -52,5 +48,16 @@ public class BacktestCommandService {
                 savedBacktest.getId(), strategyId, savedBacktest.getStatus());
 
         return BacktestCreateResponse.from(savedBacktest);
+    }
+
+    private Strategy getOwnedStrategy(UUID strategyId, UUID userId) {
+        Strategy strategy = strategyCommandRepository.findByIdAndDeletedAtIsNull(strategyId)
+                .orElseThrow(() -> {
+                    log.warn("백테스트 생성 실패: 전략을 찾을 수 없습니다. strategyId={}", strategyId);
+                    return new BusinessException(StrategyErrorCode.STRATEGY_NOT_FOUND);
+                });
+
+        strategy.validateOwner(userId);
+        return strategy;
     }
 }
