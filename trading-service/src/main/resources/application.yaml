@@ -30,6 +30,12 @@ management:
     web:
       exposure:
         include: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:health,prometheus}
+  metrics:
+    distribution:
+      slo:
+        "[http.server.requests]": 1s
+      percentiles-histogram:
+        "[http.server.requests]": true
 
 ---
 spring:
