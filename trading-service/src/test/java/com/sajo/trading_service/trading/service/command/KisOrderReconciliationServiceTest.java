@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.assertj.core.api.AssertionsForClassTypes.assertThatCode;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -1190,5 +1191,49 @@ class KisOrderReconciliationServiceTest {
         // then
         verify(orderStatusCommandService, never())
                 .recordReconciliationFailure(any());
+    }
+
+    @Test
+    @DisplayName("재조정 실패 기록 전에 주문 상태가 변경되면 예외를 전파하지 않는다")
+    void reconciliationFailure_statusChanged_doNotThrow() {
+        // given
+        UUID orderId = UUID.randomUUID();
+
+        KisOrderInquiryItem item =
+                new KisOrderInquiryItem(
+                        "20260906",
+                        "00000",
+                        "",
+                        "02",
+                        "005930",
+                        "10",
+                        "69900",
+                        "100000",
+                        "0",
+                        "0",
+                        "0",
+                        "10",
+                        "0",
+                        "N"
+                );
+
+        doThrow(
+                new BusinessException(
+                        TradingErrorCode.ORDER_STATUS_CHANGE_NOT_ALLOWED
+                )
+        )
+                .when(orderStatusCommandService)
+                .recordReconciliationFailure(orderId);
+
+        // when / then
+        assertThatCode(() ->
+                kisOrderReconciliationService.reconcileMatchedOrder(
+                        orderId,
+                        item
+                )
+        ).doesNotThrowAnyException();
+
+        verify(orderStatusCommandService)
+                .recordReconciliationFailure(orderId);
     }
 }

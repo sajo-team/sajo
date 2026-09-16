@@ -189,7 +189,7 @@ public class KisOrderReconciliationService {
                             item.orderNo()
                     );
 
-                    orderStatusCommandService.recordReconciliationFailure(orderId);
+                    recordReconciliationFailureSafely(orderId);
                     return;
                 }
 
@@ -205,7 +205,7 @@ public class KisOrderReconciliationService {
                         orderId
                 );
 
-                orderStatusCommandService.recordReconciliationFailure(orderId);
+                recordReconciliationFailureSafely(orderId);
             }
 
             case AMBIGUOUS -> {
@@ -214,7 +214,7 @@ public class KisOrderReconciliationService {
                         orderId
                 );
 
-                orderStatusCommandService.recordReconciliationFailure(orderId);
+                recordReconciliationFailureSafely(orderId);
             }
         }
 
@@ -242,7 +242,7 @@ public class KisOrderReconciliationService {
                     item.orderNo()
             );
 
-            orderStatusCommandService.recordReconciliationFailure(orderId);
+            recordReconciliationFailureSafely(orderId);
             return;
         }
 
@@ -274,7 +274,7 @@ public class KisOrderReconciliationService {
                         item.orderNo()
                 );
 
-                orderStatusCommandService.recordReconciliationFailure(orderId);
+                recordReconciliationFailureSafely(orderId);
                 return;
             }
 
@@ -362,7 +362,7 @@ public class KisOrderReconciliationService {
                 orderId
         );
 
-        orderStatusCommandService.recordReconciliationFailure(orderId);
+        recordReconciliationFailureSafely(orderId);
     }
 
     private boolean isBrokerOrderNoAlreadyUsed(
