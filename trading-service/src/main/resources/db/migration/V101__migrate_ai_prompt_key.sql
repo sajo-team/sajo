@@ -12,6 +12,7 @@ ALTER TABLE p_ai_prompt_versions
     ADD CONSTRAINT p_ai_prompt_versions_prompt_key_check
     CHECK (
         prompt_key IN (
-            'STRATEGY_RISK_ANALYSIS'
+            'STRATEGY_RISK_ANALYSIS',
+            'BACKTEST_ANALYSIS'
         )
     );
