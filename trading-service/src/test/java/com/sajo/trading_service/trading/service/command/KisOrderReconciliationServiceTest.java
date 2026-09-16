@@ -1041,4 +1041,54 @@ class KisOrderReconciliationServiceTest {
         verify(orderStatusCommandService, never())
                 .fail(any(), any(), any());
     }
+
+    @Test
+    @DisplayName("취소되지 않은 주문은 체결 정보 필드가 비어 있어도 ACCEPTED로 보정한다")
+    void reconcileMatchedOrder_notCanceled_acceptWithoutExecutionFields() {
+        // given
+        UUID orderId = UUID.randomUUID();
+
+        KisOrderInquiryItem item =
+                new KisOrderInquiryItem(
+                        "20260906",
+                        "00000",
+                        "0001234567",
+                        "02",
+                        "005930",
+                        "10",
+                        "69900",
+                        "100000",
+                        "0",
+                        "",   // averageExecutionPrice
+                        "",   // totalExecutionAmount
+                        "10",
+                        "0",
+                        "N"
+                );
+
+        // when
+        kisOrderReconciliationService.reconcileMatchedOrder(
+                orderId,
+                item
+        );
+
+        // then
+        verify(orderStatusCommandService)
+                .accept(
+                        orderId,
+                        "0001234567"
+                );
+
+        verify(orderStatusCommandService, never())
+                .recordReconciliationFailure(any());
+
+        verify(orderExecutionCommandService, never())
+                .applyReconciledCancellation(
+                        any(),
+                        any(),
+                        anyInt(),
+                        any(),
+                        anyLong()
+                );
+    }
 }

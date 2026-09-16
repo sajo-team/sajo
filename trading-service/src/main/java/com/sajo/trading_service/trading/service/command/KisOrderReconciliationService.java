@@ -226,9 +226,6 @@ public class KisOrderReconciliationService {
     ){
         int orderQuantity;
         int rejectedQuantity;
-        int totalFilledQuantity;
-        BigDecimal averageExecutionPrice;
-        long totalExecutionAmount;
 
         try {
             orderQuantity =
@@ -237,24 +234,58 @@ public class KisOrderReconciliationService {
             rejectedQuantity =
                     Integer.parseInt(item.rejectedQuantity());
 
-            totalFilledQuantity =
-                    Integer.parseInt(item.totalFilledQuantity());
-
-            averageExecutionPrice =
-                    new BigDecimal(item.averageExecutionPrice());
-
-            totalExecutionAmount =
-                    Long.parseLong(item.totalExecutionAmount());
-
         } catch (NumberFormatException | NullPointerException e) {
             log.warn(
-                    "KIS 주문 수량 또는 체결 정보 파싱 실패로 상태를 확정할 수 없습니다. "
+                    "KIS 주문 수량 파싱 실패로 상태를 확정할 수 없습니다. "
                             + "orderId={}, orderNo={}",
                     orderId,
                     item.orderNo()
             );
 
             orderStatusCommandService.recordReconciliationFailure(orderId);
+            return;
+        }
+
+        /*
+         * KIS에서 취소가 확인된 주문은 단순 보정 실패로 처리하지 않고
+         * 실제 체결 수량을 반영하여 CANCELED 상태로 보정한다.
+         */
+        if ("Y".equalsIgnoreCase(item.canceled())) {
+
+            int totalFilledQuantity;
+            BigDecimal averageExecutionPrice;
+            long totalExecutionAmount;
+
+            try {
+                totalFilledQuantity =
+                        Integer.parseInt(item.totalFilledQuantity());
+
+                averageExecutionPrice =
+                        new BigDecimal(item.averageExecutionPrice());
+
+                totalExecutionAmount =
+                        Long.parseLong(item.totalExecutionAmount());
+
+            } catch (NumberFormatException | NullPointerException e) {
+                log.warn(
+                        "KIS 취소 주문 체결 정보 파싱 실패로 상태를 확정할 수 없습니다. "
+                                + "orderId={}, orderNo={}",
+                        orderId,
+                        item.orderNo()
+                );
+
+                orderStatusCommandService.recordReconciliationFailure(orderId);
+                return;
+            }
+
+            orderExecutionCommandService.applyReconciledCancellation(
+                    orderId,
+                    item.orderNo(),
+                    totalFilledQuantity,
+                    averageExecutionPrice,
+                    totalExecutionAmount
+            );
+
             return;
         }
 
@@ -270,25 +301,6 @@ public class KisOrderReconciliationService {
                     "KIS_ORDER_REJECTED",
                     "KIS에서 주문이 거절되었습니다."
             );
-            return;
-        }
-
-        /*
-         * KIS에서 취소된 주문으로 확인된 경우
-         * 주문번호가 존재한다는 이유만으로 ACCEPTED 처리하지 않는다.
-         *
-         * 체결이 일부 발생한 뒤 잔여 주문이 취소되는 경우도 있을 수 있으므로
-         * 이번 이슈에서는 임의로 FAILED 처리하지 않고 상태 보정을 보류한다.
-         */
-        if ("Y".equalsIgnoreCase(item.canceled())) {
-            orderExecutionCommandService.applyReconciledCancellation(
-                    orderId,
-                    item.orderNo(),
-                    totalFilledQuantity,
-                    averageExecutionPrice,
-                    totalExecutionAmount
-            );
-
             return;
         }
 

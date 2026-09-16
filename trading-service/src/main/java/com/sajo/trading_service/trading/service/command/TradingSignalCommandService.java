@@ -139,6 +139,12 @@ public class TradingSignalCommandService {
                 .atStartOfDay(zoneId)
                 .toInstant();
 
+        /*
+         * 재조정 횟수를 소진한 TIMEOUT 주문도 실제 KIS 주문이 존재할 수 있으므로
+         * 일일 주문 횟수/금액 한도에 계속 포함한다.
+         * 최종 상태는 운영자 확인 후 확정한다.
+         * FAILED만 제외하며, TIMEOUT은 위험 한도 계산에 포함한다.
+         */
         long todayOrderCount =
                 orderCommandRepository.countOrdersByUserIdAndCreatedAtBetween(
                         payload.userId(),

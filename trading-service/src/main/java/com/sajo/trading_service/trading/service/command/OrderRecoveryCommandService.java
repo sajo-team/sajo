@@ -10,6 +10,8 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 
+import static com.sajo.trading_service.trading.domain.policy.TradingOrderPolicy.MAX_RECONCILIATION_RETRY_COUNT;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -17,7 +19,6 @@ public class OrderRecoveryCommandService {
 
     private static final long REQUESTED_STALE_MINUTES = 5L;
     private static final long ACCOUNT_RETRY_STALE_SECONDS = 30L;
-    private static final int MAX_RECONCILIATION_RETRY_COUNT = 3;
 
     // KIS 주문 요청 후 응답 지연이나 상태 반영 실패로 PROCESSING 상태가 장시간 유지되는 경우,
     // 5분 이후 주문 조회 기반 reconciliation 대상으로 처리한다.
