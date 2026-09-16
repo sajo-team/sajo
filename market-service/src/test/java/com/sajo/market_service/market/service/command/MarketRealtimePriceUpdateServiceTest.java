@@ -39,7 +39,7 @@ class MarketRealtimePriceUpdateServiceTest {
     @SuppressWarnings("unchecked")
     private final ValueOperations<String, QuoteResponse> valueOperations = mock(ValueOperations.class);
     private final MarketQuoteCacheProperties cacheProperties =
-            new MarketQuoteCacheProperties(Duration.ofSeconds(60), null, null);
+            new MarketQuoteCacheProperties(Duration.ofSeconds(60), null, null, null);
     private final MarketQuoteCacheLock cacheLock = mock(MarketQuoteCacheLock.class);
     private final Clock clock = Clock.fixed(Instant.parse("2026-09-14T15:07:46Z"), ZoneOffset.UTC);
 

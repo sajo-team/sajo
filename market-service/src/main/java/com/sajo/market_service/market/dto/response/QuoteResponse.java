@@ -9,8 +9,15 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 
-/** Market 내부 현재가 모델. fetchedAt은 실제 체결 시각이 아니라 KIS 응답을 받은 시각이다. */
+/**
+ * Market 내부 현재가 모델. fetchedAt은 실제 체결 시각이 아니라 KIS 응답을 받은 시각이다.
+ * <p>baseTime("기준 시각")은 KIS REST 응답(inquire-price)과 실시간 체결가 메시지 모두 별도의
+ * 기준 시각 필드를 내려주지 않아, fetchedAt을 그대로 기준 시각으로 사용한다 (#228 코드리뷰에서
+ * baseTime이 항상 null로 채워지던 기존 버그를 함께 수정).
+ */
 @Slf4j
 @JsonIgnoreProperties(ignoreUnknown = true)
 public record QuoteResponse(
@@ -86,7 +93,7 @@ public record QuoteResponse(
                 toOptionalBigDecimal(output.pbr(), stockCode, "pbr"),
                 toOptionalBigDecimal(output.eps(), stockCode, "eps"),
                 toOptionalBigDecimal(output.bps(), stockCode, "bps"),
-                null,
+                toBaseTime(fetchedAt),
                 fetchedAt
         );
     }
@@ -119,7 +126,7 @@ public record QuoteResponse(
                 previous != null ? previous.pbr() : null,
                 previous != null ? previous.eps() : null,
                 previous != null ? previous.bps() : null,
-                null,
+                toBaseTime(fetchedAt),
                 fetchedAt
         );
     }
@@ -143,6 +150,15 @@ public record QuoteResponse(
 
     private static Long toLong(String value) {
         return value == null || value.isBlank() ? null : Long.valueOf(value);
+    }
+
+    /**
+     * fetchedAt(KIS 응답을 받은 시각)을 InternalStockQuoteResponse가 요구하는 baseTime 문자열로
+     * 변환한다. KIS REST/WebSocket 응답 모두 자체 기준 시각 필드를 제공하지 않으므로, 응답을 받은
+     * 시각을 기준 시각으로 대체한다. fetchedAt이 없으면(2-arg from() 등) baseTime도 null이다.
+     */
+    private static String toBaseTime(Instant fetchedAt) {
+        return fetchedAt == null ? null : OffsetDateTime.ofInstant(fetchedAt, ZoneOffset.UTC).toString();
     }
 
     private static BigDecimal toBigDecimal(String value) {
