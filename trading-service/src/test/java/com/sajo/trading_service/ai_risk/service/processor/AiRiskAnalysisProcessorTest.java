@@ -122,6 +122,9 @@ class AiRiskAnalysisProcessorTest {
         assertThat(history.getStrategyId()).isEqualTo(strategyId);
         assertThat(history.getBacktestId()).isEqualTo(backtestId);
 
+        assertThat(history.getPrompt().promptKey())
+                .isEqualTo(AiPromptKey.STRATEGY_RISK_ANALYSIS);
+
         assertThat(history.getPrompt().version())
                 .isEqualTo("v3");
 
@@ -262,6 +265,7 @@ class AiRiskAnalysisProcessorTest {
                 new AiResponseParseException(
                         "AI 응답 변환에 실패했습니다.",
                         rawResponse,
+                        AiPromptKey.STRATEGY_RISK_ANALYSIS,
                         "v3",
                         "테스트 시스템 프롬프트",
                         "gpt-5-mini",
@@ -314,6 +318,14 @@ class AiRiskAnalysisProcessorTest {
         assertThat(history.getMetadata().latencyMs())
                 .isEqualTo(100L);
 
+        assertThat(history.getPrompt()).isNotNull();
+
+        assertThat(history.getPrompt().promptKey())
+                .isEqualTo(AiPromptKey.STRATEGY_RISK_ANALYSIS);
+
+        assertThat(history.getPrompt().version())
+                .isEqualTo("v3");
+
         assertThat(history.getResult()).isNotNull();
         assertThat(history.getResult().status())
                 .isEqualTo(AiAnalysisStatus.FAILED);
@@ -329,6 +341,7 @@ class AiRiskAnalysisProcessorTest {
                 new AiAnalysisException(
                         AiAnalysisFailureType.LLM_API_ERROR,
                         "LLM API 호출에 실패했습니다.",
+                        AiPromptKey.STRATEGY_RISK_ANALYSIS,
                         "v3",
                         "테스트 시스템 프롬프트",
                         "gpt-5-mini",
@@ -376,6 +389,13 @@ class AiRiskAnalysisProcessorTest {
 
         assertThat(history.getMetadata().latencyMs())
                 .isEqualTo(150L);
+        assertThat(history.getPrompt()).isNotNull();
+
+        assertThat(history.getPrompt().promptKey())
+                .isEqualTo(AiPromptKey.STRATEGY_RISK_ANALYSIS);
+
+        assertThat(history.getPrompt().version())
+                .isEqualTo("v3");
 
         assertThat(history.getValidation().structureValid())
                 .isFalse();
@@ -472,6 +492,14 @@ class AiRiskAnalysisProcessorTest {
         assertThat(history.getMetadata().latencyMs())
                 .isEqualTo(100L);
 
+        assertThat(history.getPrompt()).isNotNull();
+
+        assertThat(history.getPrompt().promptKey())
+                .isEqualTo(AiPromptKey.STRATEGY_RISK_ANALYSIS);
+
+        assertThat(history.getPrompt().version())
+                .isEqualTo("v3");
+
         assertThat(history.getResult()).isNotNull();
         assertThat(history.getResult().status())
                 .isEqualTo(AiAnalysisStatus.FAILED);
@@ -487,6 +515,7 @@ class AiRiskAnalysisProcessorTest {
                 new AiAnalysisException(
                         AiAnalysisFailureType.PROMPT_NOT_FOUND,
                         "활성화된 AI 프롬프트를 찾을 수 없습니다.",
+                        AiPromptKey.STRATEGY_RISK_ANALYSIS,
                         null,
                         null,
                         "gpt-5-mini",
@@ -567,6 +596,7 @@ class AiRiskAnalysisProcessorTest {
         return new AiRiskAnalysisOutput(
                 result,
                 "{\"riskLevel\":\"HIGH\"}",
+                AiPromptKey.STRATEGY_RISK_ANALYSIS,
                 "테스트 시스템 프롬프트",
                 "v3",
                 "gpt-5-mini",

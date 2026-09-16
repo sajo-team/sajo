@@ -55,7 +55,10 @@ tasks.named('test') {
 }
 
 tasks.register('aiRiskUnitTest', Test){
-    useJUnitPlatform{
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+
+    useJUnitPlatform {
         includeTags 'unit & ai-risk'
     }
 
@@ -64,7 +67,13 @@ tasks.register('aiRiskUnitTest', Test){
 }
 
 tasks.register('aiRiskIntegrationTest', Test){
-    useJUnitPlatform{
-            includeTags 'integration & ai-risk'
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+
+    useJUnitPlatform {
+        includeTags 'integration & ai-risk'
     }
+
+    group = 'verification'
+    description = 'Runs AI risk integration tests only.'
 }

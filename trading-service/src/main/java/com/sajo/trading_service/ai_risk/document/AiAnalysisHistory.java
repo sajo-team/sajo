@@ -2,6 +2,7 @@ package com.sajo.trading_service.ai_risk.document;
 
 import com.sajo.trading_service.ai_risk.domain.AiAnalysisFailureType;
 import com.sajo.trading_service.ai_risk.domain.AiAnalysisStatus;
+import com.sajo.trading_service.ai_risk.domain.AiPromptKey;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -20,8 +21,8 @@ import java.util.UUID;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Document(collection = "p_ai_analysis_histories")
 @CompoundIndex(
-        name = "idx_ai_analysis_history_prompt_version",
-        def = "{'prompt.version': 1}"
+        name = "idx_ai_analysis_history_prompt_key_version",
+        def = "{'prompt.promptKey': 1, 'prompt.version': 1}"
 )
 public class AiAnalysisHistory {
 
@@ -78,6 +79,7 @@ public class AiAnalysisHistory {
     }
 
     public record PromptSnapshot(
+            AiPromptKey promptKey,
             String version,
             String content
     ){}

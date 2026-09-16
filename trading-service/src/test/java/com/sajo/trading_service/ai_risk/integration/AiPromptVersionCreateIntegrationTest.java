@@ -65,7 +65,7 @@ public class AiPromptVersionCreateIntegrationTest {
 
         String request = """
             {
-              "promptKey": "RISK_ANALYSIS",
+              "promptKey": "STRATEGY_RISK_ANALYSIS",
               "promptContent": "AI 위험 분석 프롬프트입니다.",
               "changeSummary": "최초 프롬프트 등록"
             }
@@ -80,7 +80,7 @@ public class AiPromptVersionCreateIntegrationTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.id").exists())
                 .andExpect(jsonPath("$.data.promptKey")
-                        .value("RISK_ANALYSIS"))
+                        .value("STRATEGY_RISK_ANALYSIS"))
                 .andExpect(jsonPath("$.data.version")
                         .value("v1"))
                 .andExpect(jsonPath("$.data.status")
@@ -95,7 +95,7 @@ public class AiPromptVersionCreateIntegrationTest {
         AiPromptVersion saved = prompts.getFirst();
 
         assertThat(saved.getPromptKey())
-                .isEqualTo(AiPromptKey.RISK_ANALYSIS);
+                .isEqualTo(AiPromptKey.STRATEGY_RISK_ANALYSIS);
         assertThat(saved.getVersion())
                 .isEqualTo("v1");
         assertThat(saved.getStatus())
@@ -107,12 +107,12 @@ public class AiPromptVersionCreateIntegrationTest {
     }
 
     @Test
-    @DisplayName("새 프롬프트를 등록하면 기존 ACTIVE 버전은 비활성화되고 v2가 ACTIVE로 등록된다")
+    @DisplayName("동일한 Prompt Key의 새 버전을 등록하면 기존 ACTIVE는 RETIRED되고 v2가 ACTIVE로 등록된다")
     void createPromptVersion_shouldRetirePreviousVersion() throws Exception {
 
         String firstRequest = """
             {
-              "promptKey": "RISK_ANALYSIS",
+              "promptKey": "STRATEGY_RISK_ANALYSIS",
               "promptContent": "기존 프롬프트",
               "changeSummary": "최초 등록"
             }
@@ -129,7 +129,7 @@ public class AiPromptVersionCreateIntegrationTest {
 
         String secondRequest = """
             {
-              "promptKey": "RISK_ANALYSIS",
+              "promptKey": "STRATEGY_RISK_ANALYSIS",
               "promptContent": "개선된 프롬프트",
               "changeSummary": "위험 분석 정확도 개선"
             }
@@ -143,7 +143,7 @@ public class AiPromptVersionCreateIntegrationTest {
                 )
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.data.promptKey")
-                        .value("RISK_ANALYSIS"))
+                        .value("STRATEGY_RISK_ANALYSIS"))
                 .andExpect(jsonPath("$.data.version")
                         .value("v2"))
                 .andExpect(jsonPath("$.data.status")
@@ -182,7 +182,7 @@ public class AiPromptVersionCreateIntegrationTest {
 
         String request = """
             {
-              "promptKey": "RISK_ANALYSIS",
+              "promptKey": "STRATEGY_RISK_ANALYSIS",
               "promptContent": "AI 위험 분석 프롬프트입니다.",
               "changeSummary": "프롬프트 변경"
             }
@@ -205,7 +205,7 @@ public class AiPromptVersionCreateIntegrationTest {
 
         String request = """
             {
-              "promptKey": "RISK_ANALYSIS",
+              "promptKey": "STRATEGY_RISK_ANALYSIS",
               "promptContent": "   ",
               "changeSummary": "프롬프트 변경"
             }
@@ -220,5 +220,110 @@ public class AiPromptVersionCreateIntegrationTest {
                 .andExpect(status().isBadRequest());
 
         assertThat(repository.findAll()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("서로 다른 Prompt Key는 각각 독립적인 ACTIVE 버전을 관리한다")
+    void createPromptVersion_shouldManageActiveVersionByPromptKey() throws Exception {
+
+        // given - STRATEGY_RISK_ANALYSIS v1 등록
+        String strategyV1Request = """
+        {
+          "promptKey": "STRATEGY_RISK_ANALYSIS",
+          "promptContent": "전략 위험 분석 v1",
+          "changeSummary": "전략 위험 분석 최초 등록"
+        }
+        """;
+
+        mockMvc.perform(
+                        post("/api/v1/admin/ai/prompt-versions")
+                                .header("X-User-Role", "ADMIN")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(strategyV1Request)
+                )
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.version").value("v1"))
+                .andExpect(jsonPath("$.data.status").value("ACTIVE"));
+
+        // given - BACKTEST_ANALYSIS v1 등록
+        String backtestV1Request = """
+        {
+          "promptKey": "BACKTEST_ANALYSIS",
+          "promptContent": "백테스트 분석 v1",
+          "changeSummary": "백테스트 분석 최초 등록"
+        }
+        """;
+
+        mockMvc.perform(
+                        post("/api/v1/admin/ai/prompt-versions")
+                                .header("X-User-Role", "ADMIN")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(backtestV1Request)
+                )
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.version").value("v1"))
+                .andExpect(jsonPath("$.data.status").value("ACTIVE"));
+
+        // when - STRATEGY_RISK_ANALYSIS만 새 버전 등록
+        String strategyV2Request = """
+        {
+          "promptKey": "STRATEGY_RISK_ANALYSIS",
+          "promptContent": "전략 위험 분석 v2",
+          "changeSummary": "전략 위험 분석 개선"
+        }
+        """;
+
+        mockMvc.perform(
+                        post("/api/v1/admin/ai/prompt-versions")
+                                .header("X-User-Role", "ADMIN")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(strategyV2Request)
+                )
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.data.promptKey")
+                        .value("STRATEGY_RISK_ANALYSIS"))
+                .andExpect(jsonPath("$.data.version").value("v2"))
+                .andExpect(jsonPath("$.data.status").value("ACTIVE"));
+
+        // then
+        List<AiPromptVersion> prompts = repository.findAll();
+
+        assertThat(prompts).hasSize(3);
+
+        AiPromptVersion strategyV1 = prompts.stream()
+                .filter(prompt ->
+                        prompt.getPromptKey() == AiPromptKey.STRATEGY_RISK_ANALYSIS
+                                && prompt.getVersion().equals("v1"))
+                .findFirst()
+                .orElseThrow();
+
+        AiPromptVersion strategyV2 = prompts.stream()
+                .filter(prompt ->
+                        prompt.getPromptKey() == AiPromptKey.STRATEGY_RISK_ANALYSIS
+                                && prompt.getVersion().equals("v2"))
+                .findFirst()
+                .orElseThrow();
+
+        AiPromptVersion backtestV1 = prompts.stream()
+                .filter(prompt ->
+                        prompt.getPromptKey() == AiPromptKey.BACKTEST_ANALYSIS
+                                && prompt.getVersion().equals("v1"))
+                .findFirst()
+                .orElseThrow();
+
+        assertThat(strategyV1.getStatus())
+                .isEqualTo(AiPromptStatus.RETIRED);
+        assertThat(strategyV1.getRetiredAt())
+                .isNotNull();
+
+        assertThat(strategyV2.getStatus())
+                .isEqualTo(AiPromptStatus.ACTIVE);
+        assertThat(strategyV2.getRetiredAt())
+                .isNull();
+
+        assertThat(backtestV1.getStatus())
+                .isEqualTo(AiPromptStatus.ACTIVE);
+        assertThat(backtestV1.getRetiredAt())
+                .isNull();
     }
 }

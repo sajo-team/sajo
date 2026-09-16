@@ -9,11 +9,6 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 
-//TODO:
-//AiPromptKey 종류 확장 시 Audit Snapshot에
-//promptKey 또는 promptVersionId를 추가하여
-//프롬프트 식별자를 명확하게 관리한다.
-
 public record AiPromptVersionHistoryResponse(
         UUID id,
         AiPromptKey promptKey,
