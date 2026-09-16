@@ -203,3 +203,73 @@ erDiagram
 - DB에 일별 시세가 없으면 `/prices`는 빈 목록을 반환한다.
 - DB에 투자지표가 없으면 `/indicators`는 투자지표 미존재 오류를 반환한다.
 - Docker 환경 문제로 실제 PostgreSQL 통합 동작은 별도 검증이 필요하다.
+
+## 10. 환경 변수 (수집 스케줄러 / 실시간 웹소켓)
+
+Market 서비스가 실제로 데이터를 채워 넣는 부분(일별 시세, 투자지표, 종목 마스터, 실시간 현재가)은 아래 환경 변수들로 제어된다. 담당 클래스는 `MarketSchedulerProperties`, `MarketDailyPriceScheduler`, `MarketStockIndicatorScheduler`이며, `market.*` prefix 변수는 `application.yaml`에서 직접 매핑된다.
+
+### 10-1. 일별 시세 수집 스케줄러 (`MarketDailyPriceScheduler`)
+
+"과거 날짜별 가격"(2번 항목의 일별 시세)을 수집하는 스케줄러다. 투자지표 스케줄러와는 **별개의 스케줄러**이며 실행 시각도 다르다.
+
+| 변수명 | 기본값 | 설명 |
+|---|---|---|
+| `MARKET_SCHEDULER_ENABLED` | `false` | 이 스케줄러 전체 on/off. |
+| `MARKET_SCHEDULER_DAILY_PRICE_CRON` | `0 10 16 * * MON-FRI` | 실행 주기(cron, Asia/Seoul). 기본은 평일 16:10. |
+| `MARKET_SCHEDULER_SYSTEM_USER_ID` | (빈 값) | KIS API 호출 인증에 쓰는 시스템 계정 userId(UUID). 비어있으면 스케줄러가 스킵된다. |
+| `MARKET_SCHEDULER_TARGET_STOCK_CODES` | (빈 값 → 전체 종목) | 수집 대상 종목코드(6자리, 콤마 구분). **비워두면 DB에 등록된 한국주식 전체를 커서 페이징으로 순회 수집**하고, `005930`처럼 값을 채우면 그 종목만 수집한다. |
+
+### 10-2. 투자지표 수집 스케줄러 (`MarketStockIndicatorScheduler`)
+
+"투자지표"(PER, PBR 등)를 수집하는 스케줄러. 위 일별 시세 스케줄러와 `SYSTEM_USER_ID`, `TARGET_STOCK_CODES`를 공유하지만, on/off와 실행 주기는 별도로 관리된다.
+
+| 변수명 | 기본값 | 설명 |
+|---|---|---|
+| `MARKET_INDICATOR_SCHEDULER_ENABLED` | `false` | 이 스케줄러 전체 on/off. |
+| `MARKET_INDICATOR_SCHEDULER_CRON` | `0 20 16 * * MON-FRI` | 실행 주기(cron, Asia/Seoul). 기본은 평일 16:20. |
+
+> `MARKET_SCHEDULER_SYSTEM_USER_ID` / `MARKET_SCHEDULER_TARGET_STOCK_CODES`는 10-1과 10-2 두 스케줄러가 함께 사용하는 값이다. 즉 "일별 시세용 계정/종목"과 "투자지표용 계정/종목"이 따로 있는 게 아니라 하나로 공유된다.
+
+### 10-3. 종목 마스터 동기화 (`market.stock-master-sync.*`)
+
+**주의: 현재가(가격) 수집이 아니라 종목코드·종목명 같은 "종목 기본정보(마스터)"를 KIS로부터 내려받아 동기화하는 작업이다.** 1번 항목의 "이 종목은 무엇인가?"에 해당하는 데이터를 채우는 용도이며, 가격 데이터와는 무관하다.
+
+| 변수명 | 기본값 | 설명 |
+|---|---|---|
+| `MARKET_STOCK_MASTER_SYNC_ENABLED` | `false` | 종목 마스터 동기화 작업 on/off. |
+| `MARKET_STOCK_MASTER_SYNC_CHUNK_SIZE` | `500` | 동기화 시 처리 단위(chunk) 크기. |
+| `MARKET_STOCK_MASTER_SYNC_MAX_DOWNLOAD_BYTES` | `52428800`(50MB) | 마스터 파일 다운로드 허용 최대 크기. |
+| `MARKET_STOCK_MASTER_SYNC_CONNECT_TIMEOUT` | `3s` | 다운로드 연결 타임아웃. |
+| `MARKET_STOCK_MASTER_SYNC_READ_TIMEOUT` | `10s` | 다운로드 읽기 타임아웃. |
+
+### 10-4. 실시간 현재가 WebSocket (`market.websocket.*`)
+
+"지금 가격은 얼마인가?"(1번 항목의 현재가)를 실시간으로 받아오는 KIS WebSocket 연결이다. 스케줄러처럼 전체 종목을 순회하는 방식이 아니라, **지정한 종목만 구독**하는 방식이다.
+
+| 변수명 | 기본값 | 설명 |
+|---|---|---|
+| `MARKET_WEBSOCKET_ENABLED` | `false` | 실시간 체결가 WebSocket 연결 on/off. |
+| `MARKET_WEBSOCKET_SYSTEM_USER_ID` | (빈 값) | WebSocket 인증용 시스템 계정 userId. 보통 `MARKET_SCHEDULER_SYSTEM_USER_ID`와 동일 값 사용. |
+| `MARKET_WEBSOCKET_TARGET_STOCK_CODES` | (빈 값 → 구독 없음) | 실시간 구독 대상 종목코드(6자리, 콤마 구분, 예: `005930,000660`). **주의: 스케줄러와 반대로, 비워두면 "전체 종목"이 아니라 "구독 대상 없음"이 된다** (전체 종목 실시간 구독은 미지원). `MARKET_SCHEDULER_TARGET_STOCK_CODES`와는 별개 값이라 따로 채워야 한다. |
+| `MARKET_WEBSOCKET_URL` | `ws://ops.koreainvestment.com:31000` | KIS WebSocket 접속 주소. |
+| `MARKET_WEBSOCKET_REALTIME_PRICE_SNAPSHOT_CRON` | `0 * * * * *` | 실시간 체결가 스냅샷 저장 주기(기본 매분 정각). |
+| `MARKET_WEBSOCKET_INITIAL_BACKOFF` / `MARKET_WEBSOCKET_MAX_BACKOFF` / `MARKET_WEBSOCKET_BACKOFF_MULTIPLIER` | `1s` / `30s` / `2.0` | 연결 끊김 시 재연결 백오프 설정. |
+| `MARKET_WEBSOCKET_HANDSHAKE_TIMEOUT` | `10s` | 핸드셰이크 타임아웃. |
+| `MARKET_WEBSOCKET_TEXT_MESSAGE_BUFFER_SIZE` | `131072`(128KB) | 수신 메시지 버퍼 크기. |
+
+### 10-5. 스케줄링 스레드풀
+
+| 변수명 | 기본값 | 설명 |
+|---|---|---|
+| `MARKET_SCHEDULING_POOL_SIZE` | `4` | `@Scheduled` 빈들이 공유하는 스레드풀 크기. 장시간 실행되는 10-1/10-2 스케줄러 때문에 1분 정확도가 중요한 10-4 실시간 스냅샷 스케줄러가 밀리지 않도록 여유 있게 설정. |
+
+### 10-6. 요약 — 어떤 변수가 무엇을 수집하는가
+
+| 목적 | 켜는 변수 | 수집 방식 |
+|---|---|---|
+| 일별 시세(가격) 수집 | `MARKET_SCHEDULER_ENABLED` | cron 시각에 전체(또는 지정) 종목 순회, DB 저장 |
+| 투자지표 수집 | `MARKET_INDICATOR_SCHEDULER_ENABLED` | cron 시각에 전체(또는 지정) 종목 순회, DB 저장 |
+| 종목 기본정보(마스터) 동기화 | `MARKET_STOCK_MASTER_SYNC_ENABLED` | 종목코드/종목명 등 기준정보 동기화 (가격 아님) |
+| 실시간 현재가 수집 | `MARKET_WEBSOCKET_ENABLED` | 지정한 종목만 WebSocket 구독 |
+
+> 이 섹션은 초안입니다. 실제 운영값, 스케줄러 상태(9번 항목의 "구현 상태와 제한사항"과의 정합성)는 코드 배포 상태와 다시 대조해 확정해주세요.
