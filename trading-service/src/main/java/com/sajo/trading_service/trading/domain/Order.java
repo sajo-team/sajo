@@ -467,4 +467,33 @@ public class Order extends BaseUpdatableEntity {
 
         return newlyFilledQuantity;
     }
+
+    public void reconcileCanceled(
+            String brokerOrderNo,
+            int totalFilledQuantity
+    ) {
+        if (this.status != OrderStatus.PROCESSING
+                && this.status != OrderStatus.TIMEOUT) {
+            throw new BusinessException(
+                    TradingErrorCode.ORDER_STATUS_CHANGE_NOT_ALLOWED
+            );
+        }
+
+        if (brokerOrderNo == null
+                || brokerOrderNo.isBlank()
+                || totalFilledQuantity < 0
+                || totalFilledQuantity > this.orderQuantity) {
+            throw new BusinessException(
+                    TradingErrorCode.INVALID_ORDER
+            );
+        }
+
+        this.brokerOrderNo = brokerOrderNo;
+        this.filledQuantity = totalFilledQuantity;
+        this.remainingQuantity = 0;
+
+        this.failureCode = null;
+        this.failureMessage = null;
+        this.status = OrderStatus.CANCELED;
+    }
 }

@@ -18,6 +18,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.UUID;
@@ -39,6 +40,7 @@ public class KisOrderReconciliationService {
     private final KisOrderClient kisOrderClient;
     private final OrderStatusCommandService orderStatusCommandService;
     private final KisOrderMatcher kisOrderMatcher;
+    private final OrderExecutionCommandService orderExecutionCommandService;
 
     public void reconcile(UUID orderId){
         Order order =
@@ -87,7 +89,6 @@ public class KisOrderReconciliationService {
                     e
             );
 
-            orderStatusCommandService.recordReconciliationFailure(orderId);
             return;
         }
 
@@ -157,7 +158,6 @@ public class KisOrderReconciliationService {
                     e
             );
 
-            orderStatusCommandService.recordReconciliationFailure(orderId);
             return;
         }
 
@@ -169,7 +169,6 @@ public class KisOrderReconciliationService {
                     response.message()
             );
 
-            orderStatusCommandService.recordReconciliationFailure(orderId);
             return;
         }
 
@@ -227,6 +226,9 @@ public class KisOrderReconciliationService {
     ){
         int orderQuantity;
         int rejectedQuantity;
+        int totalFilledQuantity;
+        BigDecimal averageExecutionPrice;
+        long totalExecutionAmount;
 
         try {
             orderQuantity =
@@ -234,10 +236,20 @@ public class KisOrderReconciliationService {
 
             rejectedQuantity =
                     Integer.parseInt(item.rejectedQuantity());
-        }
-        catch (NumberFormatException | NullPointerException e) {
+
+            totalFilledQuantity =
+                    Integer.parseInt(item.totalFilledQuantity());
+
+            averageExecutionPrice =
+                    new BigDecimal(item.averageExecutionPrice());
+
+            totalExecutionAmount =
+                    Long.parseLong(item.totalExecutionAmount());
+
+        } catch (NumberFormatException | NullPointerException e) {
             log.warn(
-                    "KIS 주문 수량 파싱 실패로 상태를 확정할 수 없습니다. orderId={}, orderNo={}",
+                    "KIS 주문 수량 또는 체결 정보 파싱 실패로 상태를 확정할 수 없습니다. "
+                            + "orderId={}, orderNo={}",
                     orderId,
                     item.orderNo()
             );
@@ -269,13 +281,14 @@ public class KisOrderReconciliationService {
          * 이번 이슈에서는 임의로 FAILED 처리하지 않고 상태 보정을 보류한다.
          */
         if ("Y".equalsIgnoreCase(item.canceled())) {
-            log.warn(
-                    "KIS에서 취소된 주문으로 확인되어 현재 이슈 범위에서는 상태를 확정하지 않습니다. orderId={}, orderNo={}",
+            orderExecutionCommandService.applyReconciledCancellation(
                     orderId,
-                    item.orderNo()
+                    item.orderNo(),
+                    totalFilledQuantity,
+                    averageExecutionPrice,
+                    totalExecutionAmount
             );
 
-            orderStatusCommandService.recordReconciliationFailure(orderId);
             return;
         }
 

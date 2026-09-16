@@ -205,4 +205,57 @@ public class OrderExecutionCommandService {
                 0
         );
     }
+
+    @Transactional
+    public void applyReconciledCancellation(
+            UUID orderId,
+            String brokerOrderNo,
+            int totalFilledQuantity,
+            BigDecimal averageExecutionPrice,
+            long totalExecutionAmount
+    ) {
+        Order order =
+                orderCommandRepository.findByIdForUpdate(orderId)
+                        .orElseThrow(() ->
+                                new BusinessException(
+                                        TradingErrorCode.ORDER_NOT_FOUND
+                                )
+                        );
+
+        order.reconcileCanceled(
+                brokerOrderNo,
+                totalFilledQuantity
+        );
+
+        /*
+         * 체결 없이 전체 취소된 경우 Execution은 생성하지 않는다.
+         */
+        if (totalFilledQuantity == 0) {
+            return;
+        }
+
+        Execution execution =
+                executionCommandRepository.findByOrderId(orderId)
+                        .orElse(null);
+
+        if (execution == null) {
+            executionCommandRepository.save(
+                    Execution.create(
+                            orderId,
+                            totalFilledQuantity,
+                            averageExecutionPrice,
+                            totalExecutionAmount,
+                            0
+                    )
+            );
+            return;
+        }
+
+        execution.update(
+                totalFilledQuantity,
+                averageExecutionPrice,
+                totalExecutionAmount,
+                0
+        );
+    }
 }
