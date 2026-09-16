@@ -107,6 +107,9 @@ class TradingSignalCommandServiceTest {
                 any(Instant.class)
         )).willReturn(0L);
 
+        given(orderCommandRepository.existsActiveOrderByAutoTradingId(autoTradingId))
+                .willReturn(false);
+
         given(orderCommandRepository.sumEstimatedOrderAmountByUserIdAndCreatedAtBetween(
                 eq(userId),
                 any(),
@@ -643,4 +646,39 @@ class TradingSignalCommandServiceTest {
                 .publishEvent(any(OrderRequestedEvent.class));
     }
 
+    @Test
+    @DisplayName("진행 중 주문이 존재하면 신규 Order를 생성하지 않는다")
+    void activeOrderExists_skipNewOrder() {
+        // given
+        TradingSignalGeneratedEvent event =
+                createEvent(300_000L, 70_000L, OrderType.BUY);
+
+        given(orderCommandRepository.existsBySignalId(signalId))
+                .willReturn(false);
+
+        given(autoTradingCommandRepository
+                .findByUserIdAndStrategyIdForUpdate(userId, strategyId))
+                .willReturn(Optional.of(autoTrading));
+
+        given(autoTrading.getId())
+                .willReturn(autoTradingId);
+
+        given(autoTrading.getEnabled())
+                .willReturn(true);
+
+        given(orderCommandRepository.existsActiveOrderByAutoTradingId(autoTradingId))
+                .willReturn(true);
+
+        // when
+        tradingSignalCommandService.processSignal(event);
+
+        // then
+        verify(orderCommandRepository, never())
+                .save(any(Order.class));
+
+        verify(applicationEventPublisher, never())
+                .publishEvent(any(OrderRequestedEvent.class));
+
+        verifyNoInteractions(tradingLimitCommandRepository);
+    }
 }

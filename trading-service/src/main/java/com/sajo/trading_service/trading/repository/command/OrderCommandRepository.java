@@ -16,6 +16,23 @@ public interface OrderCommandRepository extends JpaRepository<Order, UUID> {
     boolean existsBySignalId(UUID signalId);
 
     @Query("""
+    select case when count(o) > 0 then true else false end
+    from Order o
+    where o.autoTradingId = :autoTradingId
+      and o.deletedAt is null
+      and o.status in (
+          com.sajo.trading_service.trading.domain.enums.OrderStatus.REQUESTED,
+          com.sajo.trading_service.trading.domain.enums.OrderStatus.PROCESSING,
+          com.sajo.trading_service.trading.domain.enums.OrderStatus.TIMEOUT,
+          com.sajo.trading_service.trading.domain.enums.OrderStatus.ACCEPTED,
+          com.sajo.trading_service.trading.domain.enums.OrderStatus.PARTIALLY_FILLED
+      )
+    """)
+    boolean existsActiveOrderByAutoTradingId(
+            @Param("autoTradingId") UUID autoTradingId
+    );
+
+    @Query("""
     select count(o)
     from Order o
     where o.userId = :userId

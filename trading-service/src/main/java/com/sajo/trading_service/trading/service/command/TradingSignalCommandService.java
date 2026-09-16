@@ -63,6 +63,17 @@ public class TradingSignalCommandService {
                 payload.signalType()
         );
 
+        if (orderCommandRepository.existsActiveOrderByAutoTradingId(
+                autoTrading.getId()
+        )) {
+            log.info(
+                    "진행 중 주문이 존재하여 Signal을 건너뜁니다. autoTradingId={}, signalId={}",
+                    autoTrading.getId(),
+                    payload.signalId()
+            );
+            return;
+        }
+
         TradingLimit tradingLimit =
                 tradingLimitCommandRepository.findByUserIdForUpdate(
                                 payload.userId()

@@ -15,8 +15,6 @@ public interface AutoTradingCommandRepository extends JpaRepository<AutoTrading,
 
     Optional<AutoTrading> findByIdAndUserIdAndDeletedAtIsNull(UUID autoTradingId, UUID userId);
 
-    Optional<AutoTrading> findByUserIdAndStrategyIdAndDeletedAtIsNull(UUID userId, UUID strategyId);
-
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("""
     select a
