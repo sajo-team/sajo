@@ -12,4 +12,6 @@ import java.util.UUID;
 @Repository
 public interface BacktestCommandRepository extends JpaRepository<Backtest, UUID> {
     List<Backtest> findByStatusAndUpdatedAtBefore(BacktestStatus status, Instant threshold);
+
+    List<Backtest> findByStatusInAndUpdatedAtBefore(List<BacktestStatus> statuses, Instant threshold);
 }
