@@ -10,6 +10,8 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 
+import static com.sajo.trading_service.trading.domain.policy.TradingOrderPolicy.MAX_RECONCILIATION_RETRY_COUNT;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -25,7 +27,6 @@ public class OrderRecoveryCommandService {
     private static final long EXECUTION_INQUIRY_INTERVAL_SECONDS = 30L;
 
     private final OrderQueryRepository orderQueryRepository;
-    private final OrderStatusCommandService orderStatusCommandService;
     private final OrderRecoveryExecutor orderRecoveryExecutor;
     private final KisOrderReconciliationService kisOrderReconciliationService;
     private final KisOrderExecutionService kisOrderExecutionService;
@@ -89,7 +90,10 @@ public class OrderRecoveryCommandService {
                 );
 
         List<UUID> orderIds =
-                orderQueryRepository.findStaleTimeoutOrderIds(cutoff);
+                orderQueryRepository.findStaleTimeoutOrderIds(
+                        cutoff,
+                        MAX_RECONCILIATION_RETRY_COUNT
+                );
 
         for (UUID orderId : orderIds) {
             try {

@@ -1,5 +1,6 @@
 package com.sajo.trading_service.trading.service.command;
 
+import com.sajo.common.exception.BusinessException;
 import com.sajo.trading_service.trading.client.AccountClient;
 import com.sajo.trading_service.trading.client.KisOrderClient;
 import com.sajo.trading_service.trading.client.dto.response.AccountOrderInfoResponse;
@@ -9,6 +10,7 @@ import com.sajo.trading_service.trading.client.dto.response.KisOrderInquiryRespo
 import com.sajo.trading_service.trading.domain.Order;
 import com.sajo.trading_service.trading.domain.enums.OrderStatus;
 import com.sajo.trading_service.trading.domain.enums.OrderType;
+import com.sajo.trading_service.trading.exception.TradingErrorCode;
 import com.sajo.trading_service.trading.reconciliation.KisOrderMatcher;
 import com.sajo.trading_service.trading.reconciliation.MatchResult;
 import com.sajo.trading_service.trading.repository.query.OrderQueryRepository;
@@ -20,11 +22,13 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static org.assertj.core.api.AssertionsForClassTypes.assertThatCode;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -44,6 +48,9 @@ class KisOrderReconciliationServiceTest {
 
     @Mock
     private KisOrderMatcher kisOrderMatcher;
+
+    @Mock
+    private OrderExecutionCommandService orderExecutionCommandService;
 
     @InjectMocks
     private KisOrderReconciliationService kisOrderReconciliationService;
@@ -427,7 +434,7 @@ class KisOrderReconciliationServiceTest {
     }
 
     @Test
-    @DisplayName("KIS 주문 조회 중 오류가 발생하면 기존 상태를 유지한다")
+    @DisplayName("KIS 주문 조회 예외는 주문 보정 실패 횟수에 포함하지 않는다")
     void reconcile_kisError_keepStatus() {
         // given
         UUID orderId = UUID.randomUUID();
@@ -550,7 +557,7 @@ class KisOrderReconciliationServiceTest {
     }
 
     @Test
-    @DisplayName("KIS 주문 조회가 실패 응답이면 기존 상태를 유지한다")
+    @DisplayName("KIS 주문 조회 실패 응답은 주문 보정 실패 횟수에 포함하지 않는다")
     void reconcile_kisFailureResponse_keepStatus() {
         // given
         UUID orderId = UUID.randomUUID();
@@ -612,8 +619,8 @@ class KisOrderReconciliationServiceTest {
     }
 
     @Test
-    @DisplayName("KIS 조회 결과가 취소 주문이면 ACCEPTED로 보정하지 않는다")
-    void reconcileMatchedOrder_canceled_keepStatus() {
+    @DisplayName("KIS 조회 결과가 미체결 취소 주문이면 CANCELED로 보정한다")
+    void reconcileMatchedOrder_canceledWithoutFill_reconcileCanceled() {
         // given
         UUID orderId = UUID.randomUUID();
 
@@ -642,6 +649,15 @@ class KisOrderReconciliationServiceTest {
         );
 
         // then
+        verify(orderExecutionCommandService)
+                .applyReconciledCancellation(
+                        eq(orderId),
+                        eq("0001234567"),
+                        eq(0),
+                        any(BigDecimal.class),
+                        eq(0L)
+                );
+
         verify(orderStatusCommandService, never())
                 .recordReconciliationFailure(any());
 
@@ -653,7 +669,7 @@ class KisOrderReconciliationServiceTest {
     }
 
     @Test
-    @DisplayName("계좌 정보 조회 중 오류가 발생하면 기존 상태를 유지한다")
+    @DisplayName("계좌 정보 조회 오류는 주문 보정 실패 횟수에 포함하지 않는다")
     void reconcile_accountError_keepStatus() {
         // given
         UUID orderId = UUID.randomUUID();
@@ -731,6 +747,113 @@ class KisOrderReconciliationServiceTest {
 
         verify(orderStatusCommandService, never())
                 .accept(any(), any());
+    }
+
+    @Test
+    @DisplayName("TIMEOUT 주문은 신규 주문을 재전송하지 않고 KIS 조회 결과로 ACCEPTED 보정한다")
+    void reconcile_timeoutMatched_acceptWithoutReorder() {
+        // given
+        UUID orderId = UUID.randomUUID();
+
+        Order order = createProcessingOrder();
+
+        ReflectionTestUtils.setField(
+                order,
+                "status",
+                OrderStatus.TIMEOUT
+        );
+
+        when(orderQueryRepository.findByIdAndDeletedAtIsNull(orderId))
+                .thenReturn(Optional.of(order));
+
+        mockAccountResponses(order);
+
+        KisOrderInquiryItem item =
+                createItem(
+                        "0001234567",
+                        "7",
+                        "0"
+                );
+
+        KisOrderInquiryResponse response =
+                new KisOrderInquiryResponse(
+                        "0",
+                        "MCA00000",
+                        "정상 처리되었습니다.",
+                        "",
+                        "",
+                        List.of(item)
+                );
+
+        when(kisOrderClient.inquireDailyOrders(
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString()
+        )).thenReturn(response);
+
+        when(kisOrderMatcher.match(order, response.output1()))
+                .thenReturn(MatchResult.matched(item));
+
+        // when
+        kisOrderReconciliationService.reconcile(orderId);
+
+        // then
+        verify(kisOrderClient)
+                .inquireDailyOrders(
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        anyString(),
+                        anyString()
+                );
+
+        verify(kisOrderClient, never())
+                .placeOrder(
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any(),
+                        any()
+                );
+
+        verify(orderStatusCommandService)
+                .accept(
+                        orderId,
+                        "0001234567"
+                );
     }
 
     private Order createOrder() {
@@ -820,5 +943,297 @@ class KisOrderReconciliationServiceTest {
         );
 
         return order;
+    }
+
+    @Test
+    @DisplayName("KIS 조회 결과가 미체결 취소 주문이면 보정 취소 처리한다")
+    void reconcileMatchedOrder_canceledWithoutFill_applyReconciledCancellation() {
+        // given
+        UUID orderId = UUID.randomUUID();
+
+        KisOrderInquiryItem item =
+                new KisOrderInquiryItem(
+                        "20260906",
+                        "00000",
+                        "0001234567",
+                        "02",
+                        "005930",
+                        "10",
+                        "69900",
+                        "100000",
+                        "0",
+                        "0",
+                        "0",
+                        "0",
+                        "0",
+                        "Y"
+                );
+
+        // when
+        kisOrderReconciliationService.reconcileMatchedOrder(
+                orderId,
+                item
+        );
+
+        // then
+        verify(orderExecutionCommandService)
+                .applyReconciledCancellation(
+                        eq(orderId),
+                        eq("0001234567"),
+                        eq(0),
+                        eq(BigDecimal.ZERO),
+                        eq(0L)
+                );
+
+        verify(orderStatusCommandService, never())
+                .recordReconciliationFailure(any());
+
+        verify(orderStatusCommandService, never())
+                .accept(any(), any());
+
+        verify(orderStatusCommandService, never())
+                .fail(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("KIS 조회 결과가 일부 체결 후 취소 주문이면 체결 정보와 함께 보정 취소 처리한다")
+    void reconcileMatchedOrder_partiallyFilledCanceled_applyReconciledCancellation() {
+        // given
+        UUID orderId = UUID.randomUUID();
+
+        KisOrderInquiryItem item =
+                new KisOrderInquiryItem(
+                        "20260906",
+                        "00000",
+                        "0001234567",
+                        "02",
+                        "005930",
+                        "10",
+                        "69900",
+                        "100000",
+                        "3",      // totalFilledQuantity
+                        "70000",  // averageExecutionPrice
+                        "210000", // totalExecutionAmount
+                        "0",
+                        "0",
+                        "Y"
+                );
+
+        // when
+        kisOrderReconciliationService.reconcileMatchedOrder(
+                orderId,
+                item
+        );
+
+        // then
+        verify(orderExecutionCommandService)
+                .applyReconciledCancellation(
+                        eq(orderId),
+                        eq("0001234567"),
+                        eq(3),
+                        eq(new BigDecimal("70000")),
+                        eq(210000L)
+                );
+
+        verify(orderStatusCommandService, never())
+                .recordReconciliationFailure(any());
+
+        verify(orderStatusCommandService, never())
+                .accept(any(), any());
+
+        verify(orderStatusCommandService, never())
+                .fail(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("취소되지 않은 주문은 체결 정보 필드가 비어 있어도 ACCEPTED로 보정한다")
+    void reconcileMatchedOrder_notCanceled_acceptWithoutExecutionFields() {
+        // given
+        UUID orderId = UUID.randomUUID();
+
+        KisOrderInquiryItem item =
+                new KisOrderInquiryItem(
+                        "20260906",
+                        "00000",
+                        "0001234567",
+                        "02",
+                        "005930",
+                        "10",
+                        "69900",
+                        "100000",
+                        "0",
+                        "",   // averageExecutionPrice
+                        "",   // totalExecutionAmount
+                        "10",
+                        "0",
+                        "N"
+                );
+
+        // when
+        kisOrderReconciliationService.reconcileMatchedOrder(
+                orderId,
+                item
+        );
+
+        // then
+        verify(orderStatusCommandService)
+                .accept(
+                        orderId,
+                        "0001234567"
+                );
+
+        verify(orderStatusCommandService, never())
+                .recordReconciliationFailure(any());
+
+        verify(orderExecutionCommandService, never())
+                .applyReconciledCancellation(
+                        any(),
+                        any(),
+                        anyInt(),
+                        any(),
+                        anyLong()
+                );
+    }
+
+    @Test
+    @DisplayName("취소 주문 보정 중 주문 정보 불일치가 발생하면 재조정 실패를 기록한다")
+    void reconcileMatchedOrder_canceledInvalidOrder_recordFailure() {
+        // given
+        UUID orderId = UUID.randomUUID();
+
+        KisOrderInquiryItem item =
+                new KisOrderInquiryItem(
+                        "20260906",
+                        "00000",
+                        "0001234567",
+                        "02",
+                        "005930",
+                        "10",
+                        "69900",
+                        "100000",
+                        "3",      // totalFilledQuantity
+                        "70000",  // averageExecutionPrice
+                        "210000", // totalExecutionAmount
+                        "0",
+                        "0",
+                        "Y"
+                );
+
+        doThrow(
+                new BusinessException(
+                        TradingErrorCode.INVALID_ORDER
+                )
+        )
+                .when(orderExecutionCommandService)
+                .applyReconciledCancellation(
+                        eq(orderId),
+                        eq("0001234567"),
+                        eq(3),
+                        eq(new BigDecimal("70000")),
+                        eq(210000L)
+                );
+
+        // when
+        kisOrderReconciliationService.reconcileMatchedOrder(
+                orderId,
+                item
+        );
+
+        // then
+        verify(orderStatusCommandService)
+                .recordReconciliationFailure(orderId);
+    }
+
+    @Test
+    @DisplayName("취소 주문 보정 전에 상태가 변경되면 재조정 실패로 기록하지 않는다")
+    void reconcileMatchedOrder_statusAlreadyChanged_doNotRecordFailure() {
+        // given
+        UUID orderId = UUID.randomUUID();
+
+        KisOrderInquiryItem item =
+                new KisOrderInquiryItem(
+                        "20260906",
+                        "00000",
+                        "0001234567",
+                        "02",
+                        "005930",
+                        "10",
+                        "69900",
+                        "100000",
+                        "3",
+                        "70000",
+                        "210000",
+                        "0",
+                        "0",
+                        "Y"
+                );
+
+        doThrow(
+                new BusinessException(
+                        TradingErrorCode.ORDER_STATUS_CHANGE_NOT_ALLOWED
+                )
+        )
+                .when(orderExecutionCommandService)
+                .applyReconciledCancellation(
+                        eq(orderId),
+                        eq("0001234567"),
+                        eq(3),
+                        eq(new BigDecimal("70000")),
+                        eq(210000L)
+                );
+
+        // when
+        kisOrderReconciliationService.reconcileMatchedOrder(
+                orderId,
+                item
+        );
+
+        // then
+        verify(orderStatusCommandService, never())
+                .recordReconciliationFailure(any());
+    }
+
+    @Test
+    @DisplayName("재조정 실패 기록 전에 주문 상태가 변경되면 예외를 전파하지 않는다")
+    void reconciliationFailure_statusChanged_doNotThrow() {
+        // given
+        UUID orderId = UUID.randomUUID();
+
+        KisOrderInquiryItem item =
+                new KisOrderInquiryItem(
+                        "20260906",
+                        "00000",
+                        "",
+                        "02",
+                        "005930",
+                        "10",
+                        "69900",
+                        "100000",
+                        "0",
+                        "0",
+                        "0",
+                        "10",
+                        "0",
+                        "N"
+                );
+
+        doThrow(
+                new BusinessException(
+                        TradingErrorCode.ORDER_STATUS_CHANGE_NOT_ALLOWED
+                )
+        )
+                .when(orderStatusCommandService)
+                .recordReconciliationFailure(orderId);
+
+        // when / then
+        assertThatCode(() ->
+                kisOrderReconciliationService.reconcileMatchedOrder(
+                        orderId,
+                        item
+                )
+        ).doesNotThrowAnyException();
+
+        verify(orderStatusCommandService)
+                .recordReconciliationFailure(orderId);
     }
 }
