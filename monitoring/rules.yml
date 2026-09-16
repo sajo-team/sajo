@@ -1,0 +1,440 @@
+groups:
+  # ============================================================
+  # 애플리케이션 (Spring Boot / Micrometer)
+  # ============================================================
+  - name: sajo-services
+    rules:
+      # up은 타겟 라벨만 가짐 → Micrometer의 application 태그가 없으므로 job/instance 사용
+      # 배포/재시작 한 번에 울리지 않도록 for를 1m으로
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.job }} 스크랩 실패"
+          description: "{{ $labels.job }}({{ $labels.instance }})에서 1분 이상 메트릭을 수집하지 못했습니다."
+
+      # /actuator 요청(Prometheus 스크랩 포함)은 분모·분자에서 제외 (스크랩 요청이 에러율을 희석함)
+      # 조건 = "5xx 비율 5% 초과" AND "5xx가 실제로 3건 이상"
+      #  - 비율만 보면 저트래픽에서 1/2건 실패 = 50%로 튐
+      #  - 전체 요청 수 대신 실패 건수로 하한을 둬서 트래픽 규모와 무관하게 동작
+      #    (요청 4건 중 3건 실패도 진짜 장애이므로 알림이 맞음)
+      # 5xx가 0건이면 분자 시계열 자체가 없어 0 나눗셈도 발생하지 않음
+      # TODO: 실트래픽 기준으로 5% / 3건 재조정
+      - alert: HighErrorRate
+        expr: |
+          (
+            sum by (application) (
+              rate(http_server_requests_seconds_count{status=~"5..", uri!~"/actuator.*"}[5m])
+            )
+            /
+            sum by (application) (
+              rate(http_server_requests_seconds_count{uri!~"/actuator.*"}[5m])
+            )
+            > 0.05
+          )
+          and
+          sum by (application) (
+            increase(http_server_requests_seconds_count{status=~"5..", uri!~"/actuator.*"}[5m])
+          ) >= 3
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.application }} 5xx 비율 증가"
+          description: "{{ $labels.application }}의 최근 5분 5xx 비율이 {{ $value | humanizePercentage }}입니다(임계 5%)."
+
+      # 전제: management.metrics.distribution.slo.http.server.requests=1s
+      # "1초 넘는 요청 비율 1% 초과"(= p99 > 1s와 같은 의미) AND "느린 요청이 실제로 3건 이상"
+      #  - histogram_quantile은 버킷 사이를 보간한 추정치라 저트래픽에서 부정확하고,
+      #    건수 하한을 걸 대상도 모호함 → 느린 요청을 직접 세는 방식으로 변경
+      # TODO: 1s / 1% / 3건 부하 테스트 후 재조정
+      - alert: HighLatency
+        expr: |
+          (
+            1 - (
+              sum by (application) (
+                rate(http_server_requests_seconds_bucket{le="1.0", uri!~"/actuator.*"}[5m])
+              )
+              /
+              sum by (application) (
+                rate(http_server_requests_seconds_count{uri!~"/actuator.*"}[5m])
+              )
+            ) > 0.01
+          )
+          and
+          (
+            sum by (application) (
+              increase(http_server_requests_seconds_count{uri!~"/actuator.*"}[5m])
+            )
+            -
+            sum by (application) (
+              increase(http_server_requests_seconds_bucket{le="1.0", uri!~"/actuator.*"}[5m])
+            )
+          ) >= 3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.application }} 1초 초과 요청 증가"
+          description: "{{ $labels.application }}의 최근 5분 요청 중 {{ $value | humanizePercentage }}가 1초를 넘었습니다(임계 1%)."
+
+      # JVM 프로세스 CPU 사용률 (process_cpu_usage, 0~1).
+      # warning/critical을 같은 alertname으로 두고 Alertmanager inhibit_rules로 critical이 warning을 억제
+      - alert: HighCpuUsage
+        expr: process_cpu_usage > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.application }} CPU 사용률 80% 초과"
+          description: "{{ $labels.application }}({{ $labels.instance }})의 CPU 사용률이 5분간 {{ $value | humanizePercentage }}입니다."
+
+      - alert: HighCpuUsage
+        expr: process_cpu_usage > 0.95
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.application }} CPU 사용률 95% 초과"
+          description: "{{ $labels.application }}({{ $labels.instance }})의 CPU 사용률이 5분간 {{ $value | humanizePercentage }}입니다."
+
+      # G1은 GC 직전에 heap이 차는 게 정상이라 heap used/max는 OOM 신호로 약함
+      # GC 직후 Old Gen에 남은 live data(= 회수 불가능한 양)가 한도에 가까워야 진짜 메모리 부족
+      # (jvm_gc_live_data_size_bytes는 Old GC/concurrent cycle 이후에만 갱신됨)
+      - alert: HighMemoryUsage
+        expr: |
+          jvm_gc_live_data_size_bytes
+          /
+          (jvm_gc_max_data_size_bytes > 0)
+          > 0.85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.application }} GC 후 Old Gen 사용률 85% 초과"
+          description: "{{ $labels.application }}({{ $labels.instance }})에서 GC 후에도 Old Gen이 {{ $value | humanizePercentage }} 차 있습니다. OOM 위험이 있습니다."
+
+      # jvm_gc_pause_seconds_max는 약 2분간 유지되는 값이라 pause 1회로도 for를 통과함
+      # → 5분 중 GC에 쓴 시간 비율(GC overhead)로 판단
+      # 참고: 각 서비스 MaxGCPauseMillis 200ms
+      # TODO: 10% 임계값 부하 테스트 후 재조정
+      - alert: HighGcOverhead
+        expr: |
+          sum by (application, instance) (
+            rate(jvm_gc_pause_seconds_sum[5m])
+          ) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.application }} GC 시간 비율 10% 초과"
+          description: "{{ $labels.application }}({{ $labels.instance }})이 최근 5분 중 {{ $value | humanizePercentage }}를 GC pause에 쓰고 있습니다. 응답 지연으로 이어질 수 있습니다."
+
+      # DB(max_connections)엔 여유가 있어도 앱 풀이 먼저 막힐 수 있음
+      - alert: HikariPoolPending
+        expr: hikaricp_connections_pending > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "{{ $labels.application }} HikariCP 커넥션 대기 발생"
+          description: "{{ $labels.application }}의 {{ $labels.pool }} 풀에서 커넥션을 기다리는 스레드가 1분 이상 존재합니다({{ $value }}개)."
+
+  # ============================================================
+  # Kafka (danielqsj/kafka-exporter v1.10.0)
+  # ============================================================
+  - name: sajo-kafka
+    rules:
+      #  - 정체: lag > 0인데 offset이 안 움직임 (유입량과 무관)
+      #  - 소진 시간: lag / 초당 처리량 = "지금 속도로 밀린 걸 다 처리하는 데 걸리는 초"
+      #    lag 150이 1초 거리인 토픽도, 1시간 거리인 토픽도 같은 기준으로 판단 가능
+      # 매매 경로(trading.*)는 지연 시 잘못된 가격으로 주문이 나가므로 critical + 엄격한 임계값,
+      # 나머지는 warning. alertname을 분리해 inhibit_rules에 서로 걸리지 않게 함
+      # _sum 메트릭은 group+topic 단위 합계 → 파티션 수와 무관
+      # 참고: exporter의 --group.filter로 모니터링 대상 그룹을 좁혀야 죽은 옛 그룹이 노이즈를 만들지 않음
+
+      # ---------- 매매 경로 (critical) ----------
+      - alert: TradingConsumerStalled
+        expr: |
+          kafka_consumergroup_lag_sum{topic=~"trading\\..*"} > 0
+          and
+          rate(kafka_consumergroup_current_offset_sum{topic=~"trading\\..*"}[3m]) == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "매매 컨슈머 정체 ({{ $labels.consumergroup }} / {{ $labels.topic }})"
+          description: "{{ $labels.consumergroup }}가 {{ $labels.topic }}에 미처리 메시지({{ $value }}건)가 있는데 5분간 offset이 진행되지 않았습니다."
+
+      # 처리는 되지만 현재 속도로 30초 안에 못 따라잡음
+      # 처리량 0이면 분모 필터(> 0)로 제외 → 그 경우는 Stalled가 담당
+      # TODO: 30s / 5건 재조정
+      - alert: TradingConsumerFallingBehind
+        expr: |
+          (
+            kafka_consumergroup_lag_sum{topic=~"trading\\..*"}
+            /
+            (rate(kafka_consumergroup_current_offset_sum{topic=~"trading\\..*"}[5m]) > 0)
+          ) > 30
+          and
+          kafka_consumergroup_lag_sum{topic=~"trading\\..*"} > 5
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "매매 컨슈머 처리 지연 ({{ $labels.consumergroup }} / {{ $labels.topic }})"
+          description: "현재 처리 속도로 {{ $labels.topic }}의 밀린 메시지를 소진하는 데 약 {{ $value | humanizeDuration }}가 걸립니다(임계 30s)."
+
+      # 그룹 단위 메트릭이라 topic 라벨이 없음 → 매매 경로 그룹은 이름으로 지정
+      # trading-service의 실제 group-id (trading-service/application.yaml)
+      - alert: TradingConsumerNoMembers
+        expr: kafka_consumergroup_members{consumergroup=~"trading-consumer-group"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "매매 컨슈머 없음 ({{ $labels.consumergroup }})"
+          description: "{{ $labels.consumergroup }} 그룹에 활성 컨슈머가 없습니다."
+
+      # offset retention 만료로 그룹 자체가 사라지면 members == 0으로도 못 잡음
+      # group id를 잘못 적었을 때도 바로 울려서 위 룰의 오설정을 드러내줌
+      # absent()는 정규식이 아닌 정확한 이름이어야 하므로 그룹마다 하나씩 추가
+      - alert: TradingConsumerGroupMissing
+        expr: absent(kafka_consumergroup_members{consumergroup="trading-consumer-group"})
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "매매 컨슈머 그룹 메트릭 없음"
+          description: "trading-service 컨슈머 그룹 메트릭이 5분간 수집되지 않았습니다. 그룹 삭제 또는 group id 설정 오류를 확인하세요."
+
+      # DefaultErrorHandler + DeadLetterPublishingRecoverer면 실패 메시지가 DLT로 넘어가며
+      # 원본 offset은 정상 진행 → lag 0인데 메시지는 버려지는 상태. DLT 유입 자체를 알림
+      # (DeadLetterPublishingRecoverer 기본 접미사 .DLT, @RetryableTopic 기본 접미사 -dlt)
+      - alert: TradingMessageDeadLettered
+        expr: |
+          sum by (topic) (
+            increase(kafka_topic_partition_current_offset{topic=~"trading\\..*(\\.DLT|-dlt)"}[5m])
+          ) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "매매 메시지 DLT 유입 ({{ $labels.topic }})"
+          description: "최근 5분간 {{ $labels.topic }}에 약 {{ $value | printf \"%.0f\" }}건이 적재되었습니다. 처리 실패한 메시지를 확인하세요."
+
+      # ---------- 그 외 토픽 (warning) ----------
+      - alert: KafkaConsumerStalled
+        expr: |
+          kafka_consumergroup_lag_sum{topic!~"trading\\..*"} > 0
+          and
+          rate(kafka_consumergroup_current_offset_sum{topic!~"trading\\..*"}[3m]) == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kafka 컨슈머 정체 ({{ $labels.consumergroup }} / {{ $labels.topic }})"
+          description: "{{ $labels.consumergroup }}가 {{ $labels.topic }}에 미처리 메시지({{ $value }}건)가 있는데 8분간 offset이 진행되지 않았습니다."
+
+      # TODO: 5분 / 10건 재조정
+      - alert: KafkaConsumerFallingBehind
+        expr: |
+          (
+            kafka_consumergroup_lag_sum{topic!~"trading\\..*"}
+            /
+            (rate(kafka_consumergroup_current_offset_sum{topic!~"trading\\..*"}[5m]) > 0)
+          ) > 300
+          and
+          kafka_consumergroup_lag_sum{topic!~"trading\\..*"} > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kafka 컨슈머 처리 지연 ({{ $labels.consumergroup }} / {{ $labels.topic }})"
+          description: "현재 처리 속도로 {{ $labels.topic }}의 밀린 메시지를 소진하는 데 약 {{ $value | humanizeDuration }}가 걸립니다(임계 5m)."
+
+      - alert: KafkaConsumerNoMembers
+        expr: kafka_consumergroup_members{consumergroup!~"trading-service"} == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Kafka 컨슈머 없음 ({{ $labels.consumergroup }})"
+          description: "{{ $labels.consumergroup }} 그룹에 활성 컨슈머가 없습니다."
+
+      - alert: KafkaMessageDeadLettered
+        expr: |
+          sum by (topic) (
+            increase(kafka_topic_partition_current_offset{topic=~".+(\\.DLT|-dlt)", topic!~"trading\\..*"}[5m])
+          ) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "DLT 유입 ({{ $labels.topic }})"
+          description: "최근 5분간 {{ $labels.topic }}에 약 {{ $value | printf \"%.0f\" }}건이 적재되었습니다."
+
+      # ---------- 브로커 ----------
+      - alert: KafkaBrokerDown
+        expr: kafka_brokers < 1
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Kafka 브로커 없음"
+          description: "kafka-exporter가 인식하는 브로커 수가 {{ $value }}입니다."
+
+  # ============================================================
+  # 데이터 저장소
+  # ============================================================
+  - name: sajo-infra
+    rules:
+      - alert: RedisConnectionDown
+        expr: redis_up == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis 연결 끊김"
+          description: "redis-exporter가 30초 이상 redis에 연결하지 못하고 있습니다."
+
+      # maxmemory-policy가 noeviction(docker-compose.yaml)이라 512mb 한도 도달 시 쓰기가 거부됨
+      # redis_memory_max_bytes는 maxmemory 미설정 시 0 → > 0 필터로 0 나눗셈 방지
+      - alert: RedisMemoryHigh
+        expr: redis_memory_used_bytes / (redis_memory_max_bytes > 0) > 0.9
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis 메모리 사용률 90% 초과"
+          description: "Redis 메모리 사용량이 maxmemory(512mb) 대비 {{ $value | humanizePercentage }}입니다. noeviction 정책이라 한도 도달 시 쓰기가 거부됩니다."
+
+      - alert: RedisMemoryHigh
+        expr: redis_memory_used_bytes / (redis_memory_max_bytes > 0) > 0.95
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis 메모리 사용률 95% 초과"
+          description: "Redis 메모리 사용량이 maxmemory(512mb) 대비 {{ $value | humanizePercentage }}입니다. 곧 쓰기가 거부됩니다."
+
+      # postgres-exporter 프로세스는 살아있어도(up==1) postgres 연결이 끊긴 경우를 up==0으로는 못 잡음
+      # 실측 확인: postgres 컨테이너를 내렸을 때 up은 1, pg_up은 0
+      - alert: PostgresConnectionDown
+        expr: pg_up == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Postgres 연결 끊김"
+          description: "postgres-exporter가 30초 이상 postgres에 연결하지 못하고 있습니다."
+
+      # max_connections(100, 실측 확인) 대비 현재 커넥션 수
+      - alert: PostgresConnectionsHigh
+        expr: sum(pg_stat_database_numbackends) / scalar(pg_settings_max_connections) > 0.8
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Postgres 커넥션 사용률 80% 초과"
+          description: "Postgres 커넥션 수가 max_connections 대비 {{ $value | humanizePercentage }}입니다. 커넥션 고갈로 인한 요청 실패 위험이 있습니다."
+
+      # mongo-exporter는 스크랩되고 있어도(up==1) mongod 연결 끊김을 별도로 잡음
+      - alert: MongoConnectionDown
+        expr: mongodb_up == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "MongoDB 연결 끊김"
+          description: "mongo-exporter가 30초 이상 mongod에 연결하지 못하고 있습니다."
+
+      # current / (current + available)
+      # conn_type 라벨값이 달라 그대로 +/÷ 하면 매칭이 안 돼 빈 결과가 나옴 → conn_type을 집계로 제거
+      - alert: MongoConnectionsHigh
+        expr: |
+          sum without (conn_type) (mongodb_ss_connections{conn_type="current"})
+          /
+          sum without (conn_type) (mongodb_ss_connections{conn_type=~"current|available"})
+          > 0.8
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "MongoDB 커넥션 사용률 80% 초과"
+          description: "MongoDB 커넥션 사용률이 {{ $value | humanizePercentage }}입니다. 커넥션 고갈로 인한 요청 실패 위험이 있습니다."
+
+  # ============================================================
+  # 호스트 (node-exporter)
+  # ============================================================
+  - name: sajo-node
+    rules:
+      # 호스트(EC2) 전체 CPU 사용률. 관례값(80%/95%)이며 실트래픽으로 검증된 값은 아님
+      - alert: HighNodeCpuUsage
+        expr: |
+          1 - avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) > 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "호스트 CPU 사용률 80% 초과"
+          description: "{{ $labels.instance }}의 호스트 CPU 사용률이 5분간 {{ $value | humanizePercentage }}입니다."
+
+      - alert: HighNodeCpuUsage
+        expr: |
+          1 - avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) > 0.95
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "호스트 CPU 사용률 95% 초과"
+          description: "{{ $labels.instance }}의 호스트 CPU 사용률이 5분간 {{ $value | humanizePercentage }}입니다."
+
+      # MemFree가 아니라 MemAvailable 사용 - 회수 가능한 페이지 캐시를 여유로 계산
+      - alert: HighNodeMemoryUsage
+        expr: |
+          1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 0.85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "호스트 메모리 사용률 85% 초과"
+          description: "{{ $labels.instance }}의 호스트 메모리 사용률이 5분간 {{ $value | humanizePercentage }}입니다."
+
+      # Kafka 로그, Postgres WAL, Docker 로그가 한 EC2 디스크를 공유 → 차면 전부 같이 죽음
+      - alert: NodeDiskLow
+        expr: |
+          node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs"}
+          /
+          node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs"}
+          < 0.15
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "호스트 디스크 여유 15% 미만"
+          description: "{{ $labels.instance }}의 {{ $labels.mountpoint }} 여유 공간이 {{ $value | humanizePercentage }}입니다."
+
+      - alert: NodeDiskLow
+        expr: |
+          node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs"}
+          /
+          node_filesystem_size_bytes{fstype!~"tmpfs|overlay|squashfs"}
+          < 0.05
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "호스트 디스크 여유 5% 미만"
+          description: "{{ $labels.instance }}의 {{ $labels.mountpoint }} 여유 공간이 {{ $value | humanizePercentage }}입니다."
+
+      # 최근 6시간 추세대로면 24시간 안에 디스크가 가득 참
+      - alert: NodeDiskWillFillIn24h
+        expr: |
+          predict_linear(node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs"}[6h], 24 * 3600) < 0
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "호스트 디스크 24시간 내 고갈 예상"
+          description: "{{ $labels.instance }}의 {{ $labels.mountpoint }}가 현재 추세대로면 24시간 안에 가득 찹니다."

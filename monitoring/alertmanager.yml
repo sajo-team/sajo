@@ -1,0 +1,65 @@
+# Alertmanager가 수신한 알람을 어떤 Receiver로 전달할지 정의하는 최상위 Route
+route:
+  receiver: default
+
+  # alertname과 application 라벨이 같은 알람을 하나의 그룹으로 묶음
+  group_by: [alertname, application]
+
+  # 새로운 알람 그룹이 처음 발생했을 때 10초간 대기 후 전송
+  # (같은 시간대에 발생한 관련 알람을 하나로 묶기 위함)
+  group_wait: 10s
+
+  # 그룹에 새 알람이 추가됐을 때 갱신 알림을 보내는 최소 간격
+  group_interval: 30s
+
+  # firing 상태가 계속 유지될 때 같은 알림을 재전송하는 주기
+  repeat_interval: 1h
+
+# 같은 대상에서 critical이 firing 중이면 같은 alertname의 warning은 억제 (중복 알림 방지)
+# rules.yml에서 severity만 다르고 alertname은 같게 만든 쌍(HighCpuUsage, RedisMemoryHigh,
+# HighNodeCpuUsage, NodeDiskLow)에 맞춰 하나씩 지정 - NodeDiskLow는 같은 instance라도
+# mountpoint(파티션)가 다르면 별개 문제라 equal에 mountpoint까지 넣어야 함
+inhibit_rules:
+  - source_matchers:
+      - alertname="HighCpuUsage"
+      - severity="critical"
+    target_matchers:
+      - alertname="HighCpuUsage"
+      - severity="warning"
+    equal: [application, instance]
+
+  - source_matchers:
+      - alertname="RedisMemoryHigh"
+      - severity="critical"
+    target_matchers:
+      - alertname="RedisMemoryHigh"
+      - severity="warning"
+    equal: [instance]
+
+  - source_matchers:
+      - alertname="HighNodeCpuUsage"
+      - severity="critical"
+    target_matchers:
+      - alertname="HighNodeCpuUsage"
+      - severity="warning"
+    equal: [instance]
+
+  - source_matchers:
+      - alertname="NodeDiskLow"
+      - severity="critical"
+    target_matchers:
+      - alertname="NodeDiskLow"
+      - severity="warning"
+    equal: [instance, mountpoint]
+
+# Slack Incoming Webhook URL은 alertmanager.yml(git 추적됨)에 직접 못 넣음 - alertmanager 0.34.0은
+# config 내 환경변수 치환을 지원하지 않아서, api_url_file로 별도 파일(git 미추적, .gitignore 처리됨)에서 읽음
+# 이후 LLM 연동 단계에서 이 receiver에 webhook_configs(Spring 앱 주소)도 같이 추가할 예정
+receivers:
+  - name: default
+    slack_configs:
+      - api_url_file: /etc/alertmanager/secrets/slack_webhook_url
+        channel: "#sajo-alerts"
+        send_resolved: true
+        title: '{{ .CommonLabels.severity | toUpper }}: {{ .CommonAnnotations.summary }}'
+        text: '{{ .CommonAnnotations.description }}'

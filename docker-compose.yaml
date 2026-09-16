@@ -70,6 +70,7 @@ services:
   mongo-exporter:
     image: percona/mongodb_exporter:0.53.0
     container_name: sajo-mongo-exporter
+    command: ["--collector.diagnosticdata"]
     environment:
       MONGODB_URI: "mongodb://root:${MONGO_PASSWORD}@mongo-ai-risk:27017/?authSource=admin"
     ports:
@@ -162,9 +163,41 @@ services:
     container_name: sajo-prometheus
     volumes:
       - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/rules.yml:/etc/prometheus/rules.yml:ro
       - prometheus-data:/prometheus
     ports:
       - "127.0.0.1:9090:9090"
+    networks:
+      - sajo-net
+    restart: unless-stopped
+
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: sajo-alertmanager
+    volumes:
+      - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./monitoring/secrets/slack_webhook_url:/etc/alertmanager/secrets/slack_webhook_url:ro
+    ports:
+      - "127.0.0.1:9093:9093"
+    networks:
+      - sajo-net
+    restart: unless-stopped
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: sajo-node-exporter
+    pid: host
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - "--path.procfs=/host/proc"
+      - "--path.sysfs=/host/sys"
+      - "--path.rootfs=/rootfs"
+      - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
+    ports:
+      - "127.0.0.1:9100:9100"
     networks:
       - sajo-net
     restart: unless-stopped
