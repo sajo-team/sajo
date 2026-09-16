@@ -56,11 +56,7 @@ public class StrategyQueryService {
                     return new BusinessException(StrategyErrorCode.STRATEGY_NOT_FOUND);
                 });
 
-        if (!strategy.getUserId().equals(userId)) {
-            log.warn("전략 접근 거부 : 소유자가 아닙니다.\n strategyId={}, requestUserId={}, userId={}", strategyId, userId, strategy.getUserId());
-            throw new BusinessException(StrategyErrorCode.STRATEGY_ACCESS_DENIED);
-        }
-
+        strategy.validateOwner(userId);
         log.info("전략 상세 조회 완료. strategyId={}, status={}", strategyId, strategy.getStatus());
 
         return StrategyDetailResponse.from(strategy);

@@ -362,4 +362,10 @@ public class Strategy extends BaseUpdatableEntity {
             throw new BusinessException(StrategyErrorCode.STRATEGY_NOT_FOUND);
         }
     }
+
+    public void validateOwner(UUID userId) {
+        if (!this.userId.equals(userId)) {
+            throw new BusinessException(StrategyErrorCode.STRATEGY_ACCESS_DENIED);
+        }
+    }
 }
