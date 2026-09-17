@@ -1,6 +1,7 @@
 package com.sajo.trading_service.trading.repository.query;
 
 import com.sajo.common.config.CommonJpaAuditingAutoConfiguration;
+import com.sajo.trading_service.trading.controller.dto.request.OrderAdminSearchCondition;
 import com.sajo.trading_service.trading.controller.dto.request.OrderSearchCondition;
 import com.sajo.trading_service.trading.domain.Order;
 import com.sajo.trading_service.trading.domain.enums.OrderStatus;
@@ -12,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -909,6 +911,119 @@ class OrderQueryRepositoryTest {
 
         assertThat(result)
                 .isTrue();
+    }
+
+    @Test
+    @DisplayName("관리자는 userId와 status 조건으로 주문을 조회할 수 있다")
+    void findAllWithAdminCondition() {
+        // given
+        UUID userId1 = UUID.randomUUID();
+        UUID userId2 = UUID.randomUUID();
+
+        Order order1 = Order.create(
+                userId1,
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "005930",
+                OrderType.BUY,
+                70_000L,
+                1
+        );
+
+        Order order2 = Order.create(
+                userId2,
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "000660",
+                OrderType.SELL,
+                150_000L,
+                1
+        );
+
+        orderQueryRepository.saveAllAndFlush(
+                List.of(order1, order2)
+        );
+
+        OrderAdminSearchCondition condition =
+                new OrderAdminSearchCondition(
+                        userId1,
+                        null,
+                        null,
+                        OrderStatus.REQUESTED,
+                        null,
+                        null,
+                        null,
+                        null
+                );
+
+        // when
+        Page<Order> result =
+                orderQueryRepository.findAll(
+                        OrderSpecifications.withAdminCondition(condition),
+                        PageRequest.of(0, 10)
+                );
+
+        // then
+        assertThat(result.getTotalElements()).isEqualTo(1);
+        assertThat(result.getContent().get(0).getUserId())
+                .isEqualTo(userId1);
+    }
+
+    @Test
+    @DisplayName("관리자는 failureCode로 주문을 조회할 수 있다")
+    void findAllWithFailureCode() {
+        // given
+        UUID userId = UUID.randomUUID();
+
+        Order order = Order.create(
+                userId,
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "005930",
+                OrderType.BUY,
+                70_000L,
+                1
+        );
+
+        order.startProcessing();
+
+        order.recordReconciliationFailure(
+                1,
+                "KIS_RECONCILIATION_EXHAUSTED",
+                "KIS 주문 조회로 주문 상태를 확정하지 못했습니다."
+        );
+
+        orderQueryRepository.saveAndFlush(order);
+
+        OrderAdminSearchCondition condition =
+                new OrderAdminSearchCondition(
+                        null,
+                        null,
+                        null,
+                        OrderStatus.TIMEOUT,
+                        null,
+                        null,
+                        null,
+                        "KIS_RECONCILIATION_EXHAUSTED"
+                );
+
+        // when
+        Page<Order> result =
+                orderQueryRepository.findAll(
+                        OrderSpecifications.withAdminCondition(condition),
+                        PageRequest.of(0, 10)
+                );
+
+        // then
+        assertThat(result.getTotalElements()).isEqualTo(1);
+        assertThat(result.getContent().get(0).getStatus())
+                .isEqualTo(OrderStatus.TIMEOUT);
+
+        assertThat(result.getContent().get(0).getFailureCode())
+                .isEqualTo("KIS_RECONCILIATION_EXHAUSTED");
     }
 
     private Order createTimeoutOrderWithRetryCount(
