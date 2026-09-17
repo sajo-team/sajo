@@ -22,6 +22,11 @@ sajo:
     rest-client:
       connect-timeout-ms: ${PROMETHEUS_CONNECT_TIMEOUT_MS:2000}
       read-timeout-ms: ${PROMETHEUS_READ_TIMEOUT_MS:5000}
+  openai:
+    rest-client:
+      # LLM 응답 생성은 Prometheus 조회보다 오래 걸릴 수 있어 read timeout을 넉넉히 둠
+      connect-timeout-ms: ${OPENAI_CONNECT_TIMEOUT_MS:5000}
+      read-timeout-ms: ${OPENAI_READ_TIMEOUT_MS:90000}
 
 management:
   endpoints:
