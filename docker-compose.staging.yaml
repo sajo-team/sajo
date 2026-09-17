@@ -322,12 +322,6 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: prod
       CONFIG_SERVER_URL: http://config-server:8888
-      # TEMP bootstrap override (staging first-deploy only — see
-      # market-service/docs/migrations/README.md "Bootstrapping a brand-new
-      # (empty) production database"). REMOVE this override + the FLYWAY line
-      # below once V44 has been applied manually and this service reports healthy.
-      SPRING_JPA_HIBERNATE_DDL_AUTO: update
-      SPRING_FLYWAY_ENABLED: "false"
       DB_PASSWORD: ${DB_PASSWORD}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?INTERNAL_API_SECRET must be set}
