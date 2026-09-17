@@ -5,6 +5,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.util.UriComponentsBuilder;
 
@@ -52,9 +53,17 @@ public class PrometheusClient {
                     .retrieve()
                     .body(PrometheusApiResponse.class);
         } catch (RestClientResponseException e) {
+            // Prometheus가 4xx/5xx로 응답한 경우
             return PrometheusQueryResult.failure(
                     promql,
                     "HTTP " + e.getStatusCode().value() + ": " + e.getResponseBodyAsString()
+            );
+        } catch (RestClientException e) {
+            // 연결 실패/타임아웃 등 응답 자체를 못 받은 경우 - ResourceAccessException이 여기 해당.
+
+            return PrometheusQueryResult.failure(
+                    promql,
+                    "Prometheus 연결 실패: " + e.getMessage()
             );
         }
 
