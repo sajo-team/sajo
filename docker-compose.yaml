@@ -380,3 +380,23 @@ services:
       kafka:
         condition: service_healthy
     restart: unless-stopped
+
+  operation-service:
+    build:
+      context: .
+      dockerfile: operation-service/Dockerfile
+    container_name: operation-service
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      CONFIG_SERVER_URL: http://config-server:8888
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+    ports:
+      - "127.0.0.1:8084:8084"
+    networks:
+      - sajo-net
+    depends_on:
+      discovery-service:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+    restart: unless-stopped

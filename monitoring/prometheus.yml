@@ -47,6 +47,13 @@ scrape_configs:
         labels:
           application: trading-service
 
+  - job_name: operation-service
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["operation-service:8084"]
+        labels:
+          application: operation-service
+
   - job_name: redis
     static_configs:
       - targets: ["redis-exporter:9121"]

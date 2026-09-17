@@ -1,0 +1,52 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: operation-service
+
+  config:
+    import: "optional:configserver:${CONFIG_SERVER_URL:http://localhost:8888}"
+  cloud:
+    config:
+      retry:
+        max-attempts: 10
+        initial-interval: 2000
+
+  ai:
+    openai:
+      api-key: ${OPENAI_API_KEY}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: ${MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE:health,prometheus}
+  metrics:
+    distribution:
+      slo:
+        "[http.server.requests]": 1s
+      percentiles-histogram:
+        "[http.server.requests]": true
+
+---
+spring:
+  config:
+    activate:
+      on-profile: local
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://discovery-service:8761/eureka/
