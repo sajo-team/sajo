@@ -99,10 +99,15 @@ services:
       start_period: 5s
 
   # ---------------------------------------------------------------------
-  # 모니터링 스택(prometheus/grafana/exporter류)은 prod와 동일 구성으로 남겨뒀다.
-  # 스테이징 인스턴스 사양이 작다면(예: t3.small) 아래 5개 서비스를 통째로
-  # 지워도 나머지 서비스 동작에는 영향 없다. 다만 "실제 배포 환경과 최대한
-  # 동일한 구성으로 검증한다"는 스테이징의 목적상, 일단은 prod와 맞춰뒀다.
+  # 모니터링 스택(prometheus/alertmanager/node-exporter/grafana/exporter류,
+  # 아래 총 8개 서비스)은 prod와 동일 구성으로 맞췄다. monitoring/prometheus.yml이
+  # alertmanager:9093/node-exporter:9100을 고정 타겟으로 참조하기 때문에, 일부만
+  # 빼면 prometheus에 target down이 계속 잡히고 경보 라우팅도 조용히 죽는다
+  # (코드 리뷰로 실제 발견된 문제 - 처음엔 이 두 개를 빠뜨렸었다).
+  # 스테이징 인스턴스 사양이 작아서 정말 다 뺄 거면, 이 8개 서비스뿐 아니라
+  # monitoring/prometheus.yml의 해당 scrape_configs/alerting 설정도 같이
+  # 정리해야 target down 경고가 안 남는다. 다만 "실제 배포 환경과 최대한
+  # 동일한 구성으로 검증한다"는 스테이징의 목적상, 일단은 prod와 전부 맞춰뒀다.
   # ---------------------------------------------------------------------
   postgres-exporter:
     image: prometheuscommunity/postgres-exporter:v0.20.1
@@ -170,6 +175,41 @@ services:
       - prometheus-data:/prometheus
     ports:
       - "127.0.0.1:9090:9090"
+    networks:
+      - sajo-net
+    restart: unless-stopped
+
+  # prod와 동일한 monitoring/prometheus.yml을 그대로 마운트해서 쓰는데, 이 파일이
+  # alertmanager:9093/node-exporter:9100을 고정 타겟으로 참조한다. 이 두 서비스를
+  # 빼면 prometheus가 계속 "target down"으로 잡고 Alertmanager 경보 경로도 조용히
+  # 죽어있는 상태가 되므로, prod와 동일하게 포함시켜 맞췄다 (코드 리뷰 반영).
+  alertmanager:
+    image: prom/alertmanager:v0.34.0
+    container_name: sajo-alertmanager
+    volumes:
+      - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./monitoring/secrets/slack_webhook_url:/etc/alertmanager/secrets/slack_webhook_url:ro
+    ports:
+      - "127.0.0.1:9093:9093"
+    networks:
+      - sajo-net
+    restart: unless-stopped
+
+  node-exporter:
+    image: prom/node-exporter:v1.12.1
+    container_name: sajo-node-exporter
+    pid: host
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - "--path.procfs=/host/proc"
+      - "--path.sysfs=/host/sys"
+      - "--path.rootfs=/rootfs"
+      - "--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)"
+    ports:
+      - "127.0.0.1:9100:9100"
     networks:
       - sajo-net
     restart: unless-stopped
