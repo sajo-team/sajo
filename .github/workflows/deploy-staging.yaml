@@ -72,12 +72,23 @@ jobs:
 
     steps:
       # 배포 전 .env를 GitHub Secrets 기준으로 항상 새로 생성한다.
-      # DB_PASSWORD/MONGO_PASSWORD/REDIS_PASSWORD/GRAFANA_*/OPENAI_API_KEY/
-      # ENCRYPT_KEY/INTERNAL_API_SECRET 모두 prod와 별도의 STAGING_ 전용 값을
-      # 쓴다 - 인스턴스가 분리되어 있어도 "값 자체"가 유출되면 prod 자격증명으로
-      # 그대로 악용될 수 있고(예: 향후 네트워크 경로가 생기는 경우), 스테이징은
-      # prod보다 접근 권한이 느슨하므로 자격증명 분리를 별도 방어선으로 둔다
-      # (코드 리뷰 반영, EC2 접속 정보를 STAGING_EC2_*로 분리한 것과 같은 패턴).
+      # DB_PASSWORD/MONGO_PASSWORD/GRAFANA_*/OPENAI_API_KEY/INTERNAL_API_SECRET은
+      # prod와 별도의 STAGING_ 전용 값을 쓴다 - 인스턴스가 분리되어 있어도 "값
+      # 자체"가 유출되면 prod 자격증명으로 그대로 악용될 수 있고(예: 향후 네트워크
+      # 경로가 생기는 경우), 스테이징은 prod보다 접근 권한이 느슨하므로 자격증명
+      # 분리를 별도 방어선으로 둔다 (코드 리뷰 반영, EC2 접속 정보를 STAGING_EC2_*
+      # 로 분리한 것과 같은 패턴).
+      #
+      # 반면 ENCRYPT_KEY와 REDIS_PASSWORD는 예외적으로 prod와 동일한 Secrets를
+      # 그대로 재사용한다 - sajo-config-repo의 application.yml(모든 서비스 공용,
+      # profile 구분 없음)에 JWT_SECRET/ACCOUNT_ENCRYPTION_KEY/ACCOUNT_ENCRYPTION_SALT/
+      # ACCOUNT_HASH_KEY/REDIS_PASSWORD가 전부 prod의 ENCRYPT_KEY로 {cipher} 암호화
+      # 되어 저장되어 있어서, staging config-server가 다른 ENCRYPT_KEY를 쓰면 이
+      # 값들을 복호화하지 못해 config 수신 자체가 실패한다. REDIS_PASSWORD도 이
+      # 공용 파일 안의 평문 값이 실제 서비스에 쓰이므로 staging Redis 컨테이너
+      # 비밀번호와 어긋나면 안 된다. 진짜 분리를 하려면 config-repo에 staging
+      # 전용 profile을 새로 만들고 값을 재암호화해야 하는데, 이건 이번 PR 범위를
+      # 넘어서는 별도 작업으로 남겨둔다 (TODO).
       #
       # CONFIG_REPO_GITHUB_USERNAME/TOKEN은 prod와 동일한 Secrets를 계속
       # 재사용한다 - Config Repo 읽기 전용 접근 정보라 분리 필요성이 낮다.
@@ -94,12 +105,12 @@ jobs:
         env:
           DB_PASSWORD: ${{ secrets.STAGING_DB_PASSWORD }}
           MONGO_PASSWORD: ${{ secrets.STAGING_MONGO_PASSWORD }}
-          REDIS_PASSWORD: ${{ secrets.STAGING_REDIS_PASSWORD }}
+          REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
           GRAFANA_ADMIN_USER: ${{ secrets.STAGING_GRAFANA_ADMIN_USER }}
           GRAFANA_ADMIN_PASSWORD: ${{ secrets.STAGING_GRAFANA_ADMIN_PASSWORD }}
           CONFIG_REPO_GITHUB_USERNAME: ${{ secrets.CONFIG_REPO_GITHUB_USERNAME }}
           CONFIG_REPO_GITHUB_TOKEN: ${{ secrets.CONFIG_REPO_GITHUB_TOKEN }}
-          ENCRYPT_KEY: ${{ secrets.STAGING_ENCRYPT_KEY }}
+          ENCRYPT_KEY: ${{ secrets.ENCRYPT_KEY }}
           OPENAI_API_KEY: ${{ secrets.STAGING_OPENAI_API_KEY }}
           INTERNAL_API_SECRET: ${{ secrets.STAGING_INTERNAL_API_SECRET }}
           MARKET_SCHEDULER_ENABLED: ${{ secrets.STAGING_MARKET_SCHEDULER_ENABLED }}
