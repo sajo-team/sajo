@@ -500,4 +500,13 @@ public class Order extends BaseUpdatableEntity {
         this.failureMessage = null;
         this.status = OrderStatus.CANCELED;
     }
+
+    public void validateManualResolutionAllowed() {
+        if (this.status != OrderStatus.TIMEOUT
+                || !"KIS_RECONCILIATION_EXHAUSTED".equals(this.failureCode)){
+            throw new BusinessException(
+                    TradingErrorCode.ORDER_MANUAL_RESOLUTION_NOT_ALLOWED
+            );
+        }
+    }
 }
