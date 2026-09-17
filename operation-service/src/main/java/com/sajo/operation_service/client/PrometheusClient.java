@@ -1,10 +1,11 @@
 package com.sajo.operation_service.client;
 
-import com.sajo.operation_service.client.dto.response.PrometheusQueryResponse;
+import com.sajo.operation_service.client.dto.response.PrometheusApiResponse;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientResponseException;
 import org.springframework.web.util.UriComponentsBuilder;
 
 import java.net.URI;
@@ -35,10 +36,10 @@ public class PrometheusClient {
                 .build();
     }
 
-    // PromQL 결과가 스칼라 값 하나인 쿼리(p99, CPU 사용률 등)를 지정한 시점(time) 기준으로 평가해서 그 값만 뽑아온다.
-    public double queryScalar(String promql, Instant time) {
-        // PromQL에 {,},",공백/줄바꿈이 그대로 들어있어서, UriBuilder 람다(DefaultUriBuilderFactory)의
-        // 인코딩 모드에 맡기지 않고 UriComponentsBuilder.encode()로 직접 percent-encode한다
+    // PromQL을 지정한 시점(time) 기준으로 평가한다. 연결 자체가 안 되는 경우(타임아웃 등)는
+    // RestClientException을 그대로 던지고, Prometheus가 응답은 했지만 실패인 경우만
+    // PrometheusQueryResult.failure로 값으로 표현한다 (0.0으로 뭉개지 않기 위함)
+    public PrometheusQueryResult query(String promql, Instant time) {
         URI uri = UriComponentsBuilder.fromUriString(baseUrl)
                 .path("/api/v1/query")
                 .queryParam("query", promql)
@@ -47,23 +48,36 @@ public class PrometheusClient {
                 .encode()
                 .toUri();
 
-        PrometheusQueryResponse response = restClient.get()
-                .uri(uri)
-                .retrieve()
-                .body(PrometheusQueryResponse.class);
-
-        return extractValue(response);
-    }
-
-    // 매칭되는 시계열이 없으면(트래픽이 없어서 등) 0으로 처리한다
-    private double extractValue(PrometheusQueryResponse response) {
-        if (response == null
-                || response.data() == null
-                || response.data().result().isEmpty()) {
-            return 0.0;
+        PrometheusApiResponse response;
+        try {
+            response = restClient.get()
+                    .uri(uri)
+                    .retrieve()
+                    .body(PrometheusApiResponse.class);
+        } catch (RestClientResponseException e) {
+            return PrometheusQueryResult.failure(
+                    promql,
+                    "HTTP " + e.getStatusCode().value() + ": " + e.getResponseBodyAsString()
+            );
         }
 
-        List<Object> value = response.data().result().get(0).value();
-        return Double.parseDouble(String.valueOf(value.get(1)));
+        if (response == null) {
+            return PrometheusQueryResult.failure(promql, "Prometheus 응답이 비어 있습니다.");
+        }
+        if (!"success".equals(response.status())) {
+            return PrometheusQueryResult.failure(promql, response.errorType() + ": " + response.error());
+        }
+        if (response.data() == null || response.data().result() == null) {
+            return PrometheusQueryResult.success(promql, List.of());
+        }
+
+        List<PrometheusQueryResult.Series> series = response.data().result().stream()
+                .map(result -> new PrometheusQueryResult.Series(
+                        result.metric(),
+                        String.valueOf(result.value().get(1))
+                ))
+                .toList();
+
+        return PrometheusQueryResult.success(promql, series);
     }
 }

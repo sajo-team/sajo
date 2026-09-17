@@ -1,10 +1,13 @@
 package com.sajo.operation_service.service;
 
+import com.sajo.operation_service.client.PrometheusQueryResult;
 import com.sajo.operation_service.controller.dto.request.AlertManagerWebhookRequest;
-import com.sajo.operation_service.service.dto.AppDiagnosticsSnapshot;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
+
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -30,8 +33,8 @@ public class AlertAnalyzer {
                     "application 라벨이 없는 알람. alertname=" + alert.labels().get("alertname"));
         }
 
-        AppDiagnosticsSnapshot snapshot = diagnosticsService.collect(application, alert.startsAt());
-        String userPrompt = createUserPrompt(alert, snapshot);
+        Map<String, PrometheusQueryResult> metrics = diagnosticsService.collect(application, alert.startsAt());
+        String userPrompt = createUserPrompt(alert, metrics);
 
         return chatClient.prompt()
                 .system(SYSTEM_PROMPT)
@@ -40,7 +43,11 @@ public class AlertAnalyzer {
                 .content();
     }
 
-    private String createUserPrompt(AlertManagerWebhookRequest.Alert alert, AppDiagnosticsSnapshot snapshot) {
+    private String createUserPrompt(AlertManagerWebhookRequest.Alert alert, Map<String, PrometheusQueryResult> metrics) {
+        String metricsText = metrics.entrySet().stream()
+                .map(entry -> "[" + entry.getKey() + "]\n" + entry.getValue().toPromptText())
+                .collect(Collectors.joining("\n\n"));
+
         return """
                 [알람]
                 이름: %s
@@ -50,20 +57,14 @@ public class AlertAnalyzer {
                 발생 시각: %s
 
                 [진단 지표 (발생 시점 기준 조회)]
-                p99 지연시간: %.3f초
-                5xx 에러율: %.2f%%
-                CPU 사용률: %.2f%%
-                Heap(Old Gen) 사용률: %.2f%%
+                %s
                 """.formatted(
                 alert.labels().get("alertname"),
                 alert.labels().get("severity"),
                 alert.annotations().get("summary"),
                 alert.annotations().get("description"),
                 alert.startsAt(),
-                snapshot.p99LatencySeconds(),
-                snapshot.errorRate() * 100,
-                snapshot.cpuUsage() * 100,
-                snapshot.heapUsageRatio() * 100
+                metricsText
         );
     }
 }
