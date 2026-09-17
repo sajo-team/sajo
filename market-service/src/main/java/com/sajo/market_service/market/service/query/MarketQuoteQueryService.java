@@ -78,7 +78,7 @@ public class MarketQuoteQueryService {
 
         try {
             QuoteResponse result = redisAvailable
-                    ? getQuoteWithCacheLock(userId, stockCode, cacheKey)
+                    ? getQuoteWithCacheLock(userId, stockCode, cacheKey, deadline)
                     : fetchAndCacheQuote(userId, stockCode, cacheKey);
             if (isValidQuote(result)) {
                 myFuture.complete(result);
@@ -127,20 +127,38 @@ public class MarketQuoteQueryService {
             return future.get(remainingNanos, TimeUnit.NANOSECONDS);
         } catch (TimeoutException exception) {
             log.debug("in-flight 대표 스레드 조회가 남은 시간 안에 끝나지 않아 이 요청은 새로 재시도합니다. stockCode={}", stockCode);
-            return getQuoteWithDeadline(userId, stockCode, deadline);
+            return retryAfterBackoff(userId, stockCode, deadline);
         } catch (ExecutionException exception) {
             log.debug("in-flight 대표 스레드 조회가 실패(또는 무효 응답)해 이 요청은 새로 재시도합니다. stockCode={}", stockCode);
-            return getQuoteWithDeadline(userId, stockCode, deadline);
+            return retryAfterBackoff(userId, stockCode, deadline);
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
             throw new BusinessException(MarketErrorCode.QUOTE_CACHE_LOCK_TIMEOUT);
         }
     }
 
-    private QuoteResponse getQuoteWithCacheLock(UUID userId, String stockCode, String cacheKey) {
+    /**
+     * in-flight 재시도 사이에 기존 Redis 락 재시도(waitForLockRetry)와 동일한 간격(LOCK_RETRY_INTERVAL)의
+     * 백오프를 둔다. 코드 리뷰 반영: 대표가 실패/타임아웃을 반복하는 상황(KIS 장애 등)에서 새 대표가
+     * 뽑힐 때마다 지연 없이 곧바로 KIS를 다시 호출하면, 오히려 장애 상황에서 호출 빈도가 더 촘촘해질
+     * 수 있기 때문이다.
+     */
+    private QuoteResponse retryAfterBackoff(UUID userId, String stockCode, long deadline) {
+        if (!waitForLockRetry()) {
+            throw new BusinessException(MarketErrorCode.QUOTE_CACHE_LOCK_TIMEOUT);
+        }
+        return getQuoteWithDeadline(userId, stockCode, deadline);
+    }
+
+    /**
+     * 코드 리뷰 반영: 이 메서드는 더 이상 자체적으로 새 deadline을 계산하지 않고, 요청 전체의
+     * deadline(팔로워로 대기한 시간까지 포함)을 그대로 물려받는다. 그렇지 않으면 팔로워가 실패 후
+     * 새 대표로 승격될 때마다 완전히 새로운 lockWaitTimeout 예산을 다시 받아, 이 스레드의 실제
+     * 총 대기 시간이 lockWaitTimeout 하나를 크게 초과할 수 있다.
+     */
+    private QuoteResponse getQuoteWithCacheLock(UUID userId, String stockCode, String cacheKey, long deadline) {
         //Lock Token 생성
         String lockToken = UUID.randomUUID().toString();
-        long deadline = System.nanoTime() + cacheProperties.lockWaitTimeout().toNanos();
 
         while (System.nanoTime() < deadline) {
             try {

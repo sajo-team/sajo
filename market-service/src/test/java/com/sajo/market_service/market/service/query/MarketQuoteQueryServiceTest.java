@@ -690,6 +690,61 @@ class MarketQuoteQueryServiceTest {
     }
 
     @Test
+    @DisplayName("코드 리뷰 반영: 팔로워가 재시도 후 새 대표로 승격되어도 전체 deadline을 물려받아, "
+            + "총 대기 시간이 lockWaitTimeout 하나를 크게 초과하지 않는다")
+    void promotedFollowerInheritsOverallDeadlineInsteadOfFreshBudget() throws Exception {
+        Duration lockWaitTimeout = Duration.ofMillis(400);
+        MarketQuoteQueryService service = new MarketQuoteQueryService(
+                quoteRedisTemplate,
+                stringRedisTemplate,
+                marketQuoteCacheLock,
+                userAccountFeignClient,
+                kisApiClient,
+                new MarketQuoteCacheProperties(CACHE_TTL, LOCK_TTL, lockWaitTimeout, PREVIOUS_CLOSE_PRICE_MISSING_TTL)
+        );
+        UUID firstUserId = UUID.randomUUID();
+        UUID secondUserId = UUID.randomUUID();
+        UserKisTokenResponse credentials = new UserKisTokenResponse("token", "app-key", "secret-key");
+        BusinessException kisFailure = new BusinessException(
+                MarketErrorCode.KIS_QUOTE_RESPONSE_INVALID, "KIS 일시 오류");
+        AtomicInteger tryLockCallCount = new AtomicInteger();
+        CountDownLatch leaderCalledKis = new CountDownLatch(1);
+
+        given(valueOperations.get(CACHE_KEY)).willReturn(null);
+        // 첫 tryLock(대표)만 성공시키고, 이후(팔로워가 새 대표로 승격돼 재시도하는 tryLock)는
+        // 계속 실패시켜 getQuoteWithCacheLock의 재시도 루프(deadline 경계)를 타게 만든다.
+        given(marketQuoteCacheLock.tryLock(eq(STOCK_CODE), anyString(), any(Duration.class)))
+                .willAnswer(invocation -> tryLockCallCount.incrementAndGet() == 1);
+        given(userAccountFeignClient.getKisToken(any(UUID.class))).willReturn(credentials);
+        given(kisApiClient.getQuote(credentials, STOCK_CODE)).willAnswer(invocation -> {
+            leaderCalledKis.countDown();
+            Thread.sleep(200); // 대표는 200ms 뒤에 실패한다.
+            throw kisFailure;
+        });
+
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            executor.submit(() -> service.getQuote(firstUserId, STOCK_CODE));
+            assertThat(leaderCalledKis.await(1, TimeUnit.SECONDS)).isTrue();
+
+            long start = System.nanoTime();
+            Future<QuoteResponse> follower = executor.submit(() -> service.getQuote(secondUserId, STOCK_CODE));
+
+            assertThatThrownBy(() -> follower.get(2, TimeUnit.SECONDS))
+                    .hasCauseInstanceOf(BusinessException.class);
+            long elapsedMs = (System.nanoTime() - start) / 1_000_000;
+
+            // 수정 전 버그였다면, 팔로워가 대표 실패(200ms 대기)를 겪은 뒤 새 대표로 승격되면서
+            // getQuoteWithCacheLock이 완전히 새로운 lockWaitTimeout(400ms) 예산을 다시 받아
+            // 총 대기 시간이 600ms 안팎(200ms + 400ms)까지 늘어난다. 수정 후에는 원래 자신의
+            // deadline(400ms)을 그대로 물려받으므로 그 근처에서 끝나야 한다.
+            assertThat(elapsedMs).isLessThan(550);
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
     @DisplayName("서로 다른 종목의 동시 캐시 MISS는 서로 블로킹하지 않는다")
     void doesNotBlockDifferentStockCodes() throws Exception {
         String otherStockCode = "000660";
