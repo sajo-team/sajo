@@ -222,6 +222,23 @@ public class OrderExecutionCommandService {
                                 )
                         );
 
+        applyReconciledCancellation(
+                order,
+                brokerOrderNo,
+                totalFilledQuantity,
+                averageExecutionPrice,
+                totalExecutionAmount
+        );
+    }
+
+    @Transactional
+    public void applyReconciledCancellation(
+            Order order,
+            String brokerOrderNo,
+            int totalFilledQuantity,
+            BigDecimal averageExecutionPrice,
+            long totalExecutionAmount
+    ) {
         order.reconcileCanceled(
                 brokerOrderNo,
                 totalFilledQuantity
@@ -235,13 +252,13 @@ public class OrderExecutionCommandService {
         }
 
         Execution execution =
-                executionCommandRepository.findByOrderId(orderId)
+                executionCommandRepository.findByOrderId(order.getId())
                         .orElse(null);
 
         if (execution == null) {
             executionCommandRepository.save(
                     Execution.create(
-                            orderId,
+                            order.getId(),
                             totalFilledQuantity,
                             averageExecutionPrice,
                             totalExecutionAmount,

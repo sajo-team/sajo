@@ -516,6 +516,9 @@ class OrderExecutionCommandServiceTest {
         when(orderCommandRepository.findByIdForUpdate(orderId))
                 .thenReturn(Optional.of(order));
 
+        when(order.getId())
+                .thenReturn(orderId);
+
         when(executionCommandRepository.findByOrderId(orderId))
                 .thenReturn(Optional.empty());
 

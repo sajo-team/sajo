@@ -1,7 +1,9 @@
 package com.sajo.trading_service.trading.service.query;
 
 import com.sajo.common.exception.BusinessException;
+import com.sajo.trading_service.trading.controller.dto.request.OrderAdminSearchCondition;
 import com.sajo.trading_service.trading.controller.dto.request.OrderSearchCondition;
+import com.sajo.trading_service.trading.controller.dto.response.OrderAdminListResponse;
 import com.sajo.trading_service.trading.controller.dto.response.OrderDetailResponse;
 import com.sajo.trading_service.trading.controller.dto.response.OrderListResponse;
 import com.sajo.trading_service.trading.domain.Order;
@@ -48,5 +50,17 @@ public class OrderQueryService {
                                 )
                         );
         return OrderDetailResponse.from(order);
+    }
+
+    public Page<OrderAdminListResponse> findAllOrdersForAdmin(
+            OrderAdminSearchCondition condition,
+            Pageable pageable
+    ) {
+        return orderQueryRepository
+                .findAll(
+                        OrderSpecifications.withAdminCondition(condition),
+                        pageable
+                )
+                .map(OrderAdminListResponse::from);
     }
 }

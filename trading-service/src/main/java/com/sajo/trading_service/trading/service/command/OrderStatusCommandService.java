@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
+import static com.sajo.trading_service.trading.domain.policy.TradingOrderPolicy.KIS_RECONCILIATION_EXHAUSTED;
 import static com.sajo.trading_service.trading.domain.policy.TradingOrderPolicy.MAX_RECONCILIATION_RETRY_COUNT;
 
 @Service
@@ -121,7 +122,7 @@ public class OrderStatusCommandService {
 
         order.recordReconciliationFailure(
                 MAX_RECONCILIATION_RETRY_COUNT,
-                "KIS_RECONCILIATION_EXHAUSTED",
+                KIS_RECONCILIATION_EXHAUSTED,
                 "KIS 주문 조회로 주문 상태를 확정하지 못했습니다."
         );
     }

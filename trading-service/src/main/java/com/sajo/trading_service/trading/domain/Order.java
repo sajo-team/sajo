@@ -13,6 +13,8 @@ import lombok.NoArgsConstructor;
 import java.time.Instant;
 import java.util.UUID;
 
+import static com.sajo.trading_service.trading.domain.policy.TradingOrderPolicy.KIS_RECONCILIATION_EXHAUSTED;
+
 @Getter
 @Entity
 @Table(name = "p_orders")
@@ -499,5 +501,14 @@ public class Order extends BaseUpdatableEntity {
         this.failureCode = null;
         this.failureMessage = null;
         this.status = OrderStatus.CANCELED;
+    }
+
+    public void validateManualResolutionAllowed() {
+        if (this.status != OrderStatus.TIMEOUT
+                || !KIS_RECONCILIATION_EXHAUSTED.equals(this.failureCode)){
+            throw new BusinessException(
+                    TradingErrorCode.ORDER_MANUAL_RESOLUTION_NOT_ALLOWED
+            );
+        }
     }
 }
