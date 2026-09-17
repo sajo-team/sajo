@@ -7,7 +7,9 @@ import com.sajo.trading_service.ai_risk.client.strategy.dto.StrategyInternalResp
 import com.sajo.trading_service.ai_risk.domain.AiAnalysisStatus;
 import com.sajo.trading_service.ai_risk.domain.AiRiskAnalysis;
 import com.sajo.trading_service.ai_risk.repository.command.AiRiskAnalysisCommandRepository;
-import com.sajo.trading_service.ai_risk.service.processor.AiRiskAnalysisAsyncProcessor;
+import com.sajo.trading_service.outbox.domain.OutboxEvent;
+import com.sajo.trading_service.outbox.domain.OutboxStatus;
+import com.sajo.trading_service.outbox.repository.OutboxEventRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -56,14 +58,14 @@ public class AiRiskAnalysisCreateIntegrationTest {
     @Autowired
     private AiRiskAnalysisCommandRepository aiRiskAnalysisCommandRepository;
 
+    @Autowired
+    private OutboxEventRepository outboxEventRepository;
+
     @MockitoBean
     private StrategyFeignClient strategyFeignClient;
 
     @MockitoBean
     private BacktestFeignClient backtestFeignClient;
-
-    @MockitoBean
-    private AiRiskAnalysisAsyncProcessor asyncProcessor;
 
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry){
@@ -75,6 +77,7 @@ public class AiRiskAnalysisCreateIntegrationTest {
 
     @BeforeEach
     void setUp() {
+        outboxEventRepository.deleteAll();
         aiRiskAnalysisCommandRepository.deleteAll();
     }
 
@@ -143,6 +146,30 @@ public class AiRiskAnalysisCreateIntegrationTest {
         assertThat(savedAnalysis.getStrategyId()).isEqualTo(STRATEGY_ID);
         assertThat(savedAnalysis.getBacktestId()).isEqualTo(BACKTEST_ID);
         assertThat(savedAnalysis.getStatus()).isEqualTo(AiAnalysisStatus.PENDING);
+
+        List<OutboxEvent> outboxEvents = outboxEventRepository.findAll();
+
+        assertThat(outboxEvents).hasSize(1);
+
+        OutboxEvent outboxEvent = outboxEvents.get(0);
+
+        assertThat(outboxEvent.getStatus())
+                .isEqualTo(OutboxStatus.PENDING);
+
+        assertThat(outboxEvent.getEventType())
+                .isEqualTo("AI_RISK_ANALYSIS_REQUESTED");
+
+        assertThat(outboxEvent.getEventVersion())
+                .isEqualTo(1);
+
+        assertThat(outboxEvent.getEventBody())
+                .isNotNull();
+
+        assertThat(outboxEvent.getEventBody()
+                .path("payload")
+                .path("analysisId")
+                .asText())
+                .isEqualTo(savedAnalysis.getId().toString());
     }
 
     @Test
@@ -472,5 +499,6 @@ public class AiRiskAnalysisCreateIntegrationTest {
         assertThat(secondAnalysisId).isEqualTo(firstAnalysisId);
         assertThat(analyses).hasSize(1);
         assertThat(analyses.get(0).getId()).isEqualTo(UUID.fromString(firstAnalysisId));
+        assertThat(outboxEventRepository.findAll()).hasSize(1);
     }
 }

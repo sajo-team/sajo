@@ -37,6 +37,10 @@ management:
       percentiles-histogram:
         "[http.server.requests]": true
 
+outbox:
+  ai-risk:
+    publish-delay-ms: 1000
+
 ---
 spring:
   config:
@@ -96,6 +100,7 @@ sajo:
   kafka:
     type-mappings:
       trading.signal.generated: com.sajo.trading_service.trading.kafka.dto.TradingSignalGeneratedEvent
+      airiskanalysis.requested: com.sajo.trading_service.ai_risk.kafka.dto.AiRiskAnalysisRequestedEvent
   internal:
     api-secret: ${INTERNAL_API_SECRET}
 
