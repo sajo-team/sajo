@@ -309,4 +309,88 @@ class OrderAdminControllerTest {
 
         verifyNoInteractions(orderAdminCommandService);
     }
+
+    @Test
+    @DisplayName("부분 체결 취소 시 평균 체결가가 0이면 요청이 실패한다")
+    void resolveTimeoutOrderWithZeroAveragePrice() throws Exception {
+        UUID orderId = UUID.randomUUID();
+
+        mockMvc.perform(
+                        patch(
+                                "/api/v1/admin/trading/orders/{orderId}/resolutions",
+                                orderId
+                        )
+                                .header("X-User-Role", "ADMIN")
+                                .contentType("application/json")
+                                .content("""
+                                    {
+                                      "resolution": "CANCELED",
+                                      "brokerOrderNo": "0001234567",
+                                      "totalFilledQuantity": 3,
+                                      "averageExecutionPrice": 0,
+                                      "totalExecutionAmount": 210000,
+                                      "reason": "부분 체결 후 취소"
+                                    }
+                                    """)
+                )
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(orderAdminCommandService);
+    }
+
+    @Test
+    @DisplayName("부분 체결 취소 시 총 체결 금액이 음수이면 요청이 실패한다")
+    void resolveTimeoutOrderWithNegativeExecutionAmount() throws Exception {
+        UUID orderId = UUID.randomUUID();
+
+        mockMvc.perform(
+                        patch(
+                                "/api/v1/admin/trading/orders/{orderId}/resolutions",
+                                orderId
+                        )
+                                .header("X-User-Role", "ADMIN")
+                                .contentType("application/json")
+                                .content("""
+                                    {
+                                      "resolution": "CANCELED",
+                                      "brokerOrderNo": "0001234567",
+                                      "totalFilledQuantity": 3,
+                                      "averageExecutionPrice": 70000,
+                                      "totalExecutionAmount": -1,
+                                      "reason": "부분 체결 후 취소"
+                                    }
+                                    """)
+                )
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(orderAdminCommandService);
+    }
+
+    @Test
+    @DisplayName("취소 확정 시 체결 수량이 음수이면 요청이 실패한다")
+    void resolveTimeoutOrderWithNegativeFilledQuantity() throws Exception {
+        UUID orderId = UUID.randomUUID();
+
+        mockMvc.perform(
+                        patch(
+                                "/api/v1/admin/trading/orders/{orderId}/resolutions",
+                                orderId
+                        )
+                                .header("X-User-Role", "ADMIN")
+                                .contentType("application/json")
+                                .content("""
+                                    {
+                                      "resolution": "CANCELED",
+                                      "brokerOrderNo": "0001234567",
+                                      "totalFilledQuantity": -1,
+                                      "averageExecutionPrice": 70000,
+                                      "totalExecutionAmount": 70000,
+                                      "reason": "취소 확인"
+                                    }
+                                    """)
+                )
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(orderAdminCommandService);
+    }
 }
