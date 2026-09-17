@@ -1,6 +1,8 @@
 package com.sajo.trading_service.trading.service.query;
 
 import com.sajo.common.exception.BusinessException;
+import com.sajo.trading_service.trading.controller.dto.request.AutoTradingAdminSearchCondition;
+import com.sajo.trading_service.trading.controller.dto.response.AutoTradingAdminResponse;
 import com.sajo.trading_service.trading.controller.dto.response.AutoTradingQueryResponse;
 import com.sajo.trading_service.trading.domain.AutoTrading;
 import com.sajo.trading_service.trading.domain.Order;
@@ -89,5 +91,45 @@ public class AutoTradingQueryService {
                 autoTrading,
                 lastOrder
                 );
+    }
+
+    public Page<AutoTradingAdminResponse> findAllAutoTradingForAdmin(
+            AutoTradingAdminSearchCondition condition,
+            Pageable pageable
+    ) {
+        Page<AutoTrading> autoTradingPage =
+                autoTradingQueryRepository.findAllForAdmin(
+                        condition.userId(),
+                        condition.strategyId(),
+                        condition.direction(),
+                        condition.enabled(),
+                        pageable
+                );
+
+        if (autoTradingPage.isEmpty()) {
+            return Page.empty(pageable);
+        }
+
+        List<UUID> autoTradingIds =
+                autoTradingPage.getContent()
+                        .stream()
+                        .map(AutoTrading::getId)
+                        .toList();
+
+        Map<UUID, Order> latestOrderMap =
+                orderQueryRepository
+                        .findLatestOrdersByAutoTradingIds(autoTradingIds)
+                        .stream()
+                        .collect(Collectors.toMap(
+                                Order::getAutoTradingId,
+                                order -> order
+                        ));
+
+        return autoTradingPage.map(autoTrading ->
+                AutoTradingAdminResponse.from(
+                        autoTrading,
+                        latestOrderMap.get(autoTrading.getId())
+                )
+        );
     }
 }
