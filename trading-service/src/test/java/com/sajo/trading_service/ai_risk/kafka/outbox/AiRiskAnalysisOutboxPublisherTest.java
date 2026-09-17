@@ -163,4 +163,63 @@ class AiRiskAnalysisOutboxPublisherTest {
                 ))
                 .thenReturn(List.of(outboxEvent));
     }
+
+    @Test
+    void Outbox_선점_중_예외가_발생해도_다음_이벤트는_계속_처리한다() throws Exception {
+        UUID failedEventId = UUID.randomUUID();
+        UUID nextEventId = UUID.randomUUID();
+
+        OutboxEvent failedEvent = OutboxEvent.create(
+                failedEventId,
+                AiRiskAnalysisRequestedEvent.EVENT_TYPE,
+                AiRiskAnalysisRequestedEvent.EVENT_VERSION,
+                null
+        );
+
+        OutboxEvent nextEvent = OutboxEvent.create(
+                nextEventId,
+                AiRiskAnalysisRequestedEvent.EVENT_TYPE,
+                AiRiskAnalysisRequestedEvent.EVENT_VERSION,
+                null
+        );
+
+        AiRiskAnalysisRequestedEvent nextKafkaEvent =
+                mock(AiRiskAnalysisRequestedEvent.class);
+
+        when(outboxEventRepository
+                .findByStatusAndEventTypeOrderByCreatedAtAsc(
+                        eq(OutboxStatus.PENDING),
+                        eq(AiRiskAnalysisRequestedEvent.EVENT_TYPE),
+                        any(PageRequest.class)
+                ))
+                .thenReturn(List.of(failedEvent, nextEvent));
+
+        when(outboxEventStatusService.claimForPublish(failedEventId))
+                .thenThrow(new IllegalStateException("DB claim failed"));
+
+        when(outboxEventStatusService.claimForPublish(nextEventId))
+                .thenReturn(true);
+
+        when(objectMapper.treeToValue(
+                nextEvent.getEventBody(),
+                AiRiskAnalysisRequestedEvent.class
+        )).thenReturn(nextKafkaEvent);
+
+        publisher.publishPendingEvents();
+
+        verify(outboxEventStatusService)
+                .claimForPublish(failedEventId);
+
+        verify(outboxEventStatusService)
+                .claimForPublish(nextEventId);
+
+        verify(eventProducer)
+                .publish(nextKafkaEvent);
+
+        verify(outboxEventStatusService)
+                .markPublished(nextEventId);
+
+        verify(outboxEventStatusService, never())
+                .handlePublishFailure(failedEventId);
+    }
 }

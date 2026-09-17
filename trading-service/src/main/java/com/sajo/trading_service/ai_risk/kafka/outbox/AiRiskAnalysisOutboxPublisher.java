@@ -34,11 +34,20 @@ public class AiRiskAnalysisOutboxPublisher {
                 PageRequest.of(0, BATCH_SIZE)
         );
 
-        for(OutboxEvent outboxEvent : events){
-            if (!outboxEventStatusService.claimForPublish(outboxEvent.getId())) {
-                log.debug(
-                        "다른 인스턴스가 이미 Outbox 이벤트를 선점했습니다. eventId={}",
-                        outboxEvent.getId()
+        for (OutboxEvent outboxEvent : events) {
+            try {
+                if (!outboxEventStatusService.claimForPublish(outboxEvent.getId())) {
+                    log.debug(
+                            "다른 인스턴스가 이미 Outbox 이벤트를 선점했습니다. eventId={}",
+                            outboxEvent.getId()
+                    );
+                    continue;
+                }
+            } catch (Exception exception) {
+                log.error(
+                        "Outbox 이벤트 선점 중 오류가 발생했습니다. eventId={}",
+                        outboxEvent.getId(),
+                        exception
                 );
                 continue;
             }

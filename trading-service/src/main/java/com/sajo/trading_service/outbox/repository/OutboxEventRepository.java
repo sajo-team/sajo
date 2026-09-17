@@ -23,7 +23,7 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> 
     @Modifying
     @Query("""
     UPDATE OutboxEvent e
-       SET e.status = :processingStatus
+       SET e.status = :processingStatus,
            e.claimedAt = :claimedAt
      WHERE e.id = :eventId
        AND e.status = :pendingStatus
