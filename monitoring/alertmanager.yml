@@ -69,3 +69,8 @@ receivers:
     webhook_configs:
       - url: http://operation-service:8084/api/v1/operations/webhook
         send_resolved: true
+        # operation-service의 AlertWebhookAuthenticationFilter가 이 값을 검증함 - 같은 파일을
+        # operation-service 컨테이너에도 마운트해서 공유 시크릿으로 씀 (docker-compose 참고)
+        http_config:
+          authorization:
+            credentials_file: /etc/alertmanager/secrets/operation_webhook_secret

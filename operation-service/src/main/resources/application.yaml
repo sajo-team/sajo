@@ -27,6 +27,10 @@ sajo:
       # LLM 응답 생성은 Prometheus 조회보다 오래 걸릴 수 있어 read timeout을 넉넉히 둠
       connect-timeout-ms: ${OPENAI_CONNECT_TIMEOUT_MS:5000}
       read-timeout-ms: ${OPENAI_READ_TIMEOUT_MS:90000}
+  webhook:
+    # Alertmanager와 operation-service 컨테이너에 같은 파일을 마운트해서 공유 시크릿으로 씀
+    # (alertmanager.yml의 webhook_configs.http_config.authorization.credentials_file과 짝)
+    secret-file-path: /etc/operation-service/secrets/webhook_secret
 
 management:
   endpoints:

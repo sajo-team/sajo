@@ -176,6 +176,7 @@ services:
     volumes:
       - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
       - ./monitoring/secrets/slack_webhook_url:/etc/alertmanager/secrets/slack_webhook_url:ro
+      - ./monitoring/secrets/operation_webhook_secret:/etc/alertmanager/secrets/operation_webhook_secret:ro
     ports:
       - "127.0.0.1:9093:9093"
     networks:
@@ -359,6 +360,8 @@ services:
       SPRING_PROFILES_ACTIVE: prod
       CONFIG_SERVER_URL: http://config-server:8888
       OPENAI_API_KEY: ${OPENAI_API_KEY}
+    volumes:
+      - ./monitoring/secrets/operation_webhook_secret:/etc/operation-service/secrets/webhook_secret:ro
     # ports 없음 - user-service와 동일한 이유 (Gateway만 내부 DNS로 접근하면 됨)
     networks:
       - sajo-net
