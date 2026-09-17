@@ -20,7 +20,6 @@ services:
     volumes:
       - postgres-data:/var/lib/postgresql/data
       - ./postgres/db-init/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-
     ports:
       - "127.0.0.1:5432:5432"
     networks:
@@ -32,20 +31,6 @@ services:
       timeout: 3s
       retries: 10
       start_period: 10s
-
-  postgres-exporter:
-    image: prometheuscommunity/postgres-exporter:v0.20.1
-    container_name: sajo-postgres-exporter
-    environment:
-      DATA_SOURCE_NAME: "postgresql://postgres:${DB_PASSWORD}@postgres:5432/sajo?sslmode=disable"
-    ports:
-      - "127.0.0.1:9187:9187"
-    networks:
-      - sajo-net
-    depends_on:
-      postgres:
-        condition: service_healthy
-    restart: unless-stopped
 
   mongo-ai-risk:
     image: mongo:8.0
@@ -67,21 +52,6 @@ services:
       retries: 10
       start_period: 10s
 
-  mongo-exporter:
-    image: percona/mongodb_exporter:0.53.0
-    container_name: sajo-mongo-exporter
-    command: ["--collector.diagnosticdata"]
-    environment:
-      MONGODB_URI: "mongodb://root:${MONGO_PASSWORD}@mongo-ai-risk:27017/?authSource=admin"
-    ports:
-      - "127.0.0.1:9216:9216"
-    networks:
-      - sajo-net
-    depends_on:
-      mongo-ai-risk:
-        condition: service_healthy
-    restart: unless-stopped
-
   kafka:
     image: apache/kafka:3.9.0
     container_name: sajo-kafka
@@ -95,7 +65,6 @@ services:
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@localhost:9093
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
-
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
@@ -110,19 +79,6 @@ services:
       timeout: 5s
       retries: 10
       start_period: 20s
-
-  kafka-exporter:
-    image: danielqsj/kafka-exporter:v1.10.0
-    container_name: sajo-kafka-exporter
-    command: ["--kafka.server=kafka:9092"]
-    ports:
-      - "127.0.0.1:9308:9308"
-    networks:
-      - sajo-net
-    depends_on:
-      kafka:
-        condition: service_healthy
-    restart: unless-stopped
 
   redis:
     image: redis:8.0-alpine
@@ -141,6 +97,59 @@ services:
       timeout: 3s
       retries: 10
       start_period: 5s
+
+  # ---------------------------------------------------------------------
+  # 모니터링 스택(prometheus/alertmanager/node-exporter/grafana/exporter류,
+  # 아래 총 8개 서비스)은 prod와 동일 구성으로 맞췄다. monitoring/prometheus.yml이
+  # alertmanager:9093/node-exporter:9100을 고정 타겟으로 참조하기 때문에, 일부만
+  # 빼면 prometheus에 target down이 계속 잡히고 경보 라우팅도 조용히 죽는다
+  # (코드 리뷰로 실제 발견된 문제 - 처음엔 이 두 개를 빠뜨렸었다).
+  # 스테이징 인스턴스 사양이 작아서 정말 다 뺄 거면, 이 8개 서비스뿐 아니라
+  # monitoring/prometheus.yml의 해당 scrape_configs/alerting 설정도 같이
+  # 정리해야 target down 경고가 안 남는다. 다만 "실제 배포 환경과 최대한
+  # 동일한 구성으로 검증한다"는 스테이징의 목적상, 일단은 prod와 전부 맞춰뒀다.
+  # ---------------------------------------------------------------------
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.20.1
+    container_name: sajo-postgres-exporter
+    environment:
+      DATA_SOURCE_NAME: "postgresql://postgres:${DB_PASSWORD}@postgres:5432/sajo?sslmode=disable"
+    ports:
+      - "127.0.0.1:9187:9187"
+    networks:
+      - sajo-net
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  mongo-exporter:
+    image: percona/mongodb_exporter:0.53.0
+    container_name: sajo-mongo-exporter
+    command: ["--collector.diagnosticdata"]
+    environment:
+      MONGODB_URI: "mongodb://root:${MONGO_PASSWORD}@mongo-ai-risk:27017/?authSource=admin"
+    ports:
+      - "127.0.0.1:9216:9216"
+    networks:
+      - sajo-net
+    depends_on:
+      mongo-ai-risk:
+        condition: service_healthy
+    restart: unless-stopped
+
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:v1.10.0
+    container_name: sajo-kafka-exporter
+    command: ["--kafka.server=kafka:9092"]
+    ports:
+      - "127.0.0.1:9308:9308"
+    networks:
+      - sajo-net
+    depends_on:
+      kafka:
+        condition: service_healthy
+    restart: unless-stopped
 
   redis-exporter:
     image: oliver006/redis_exporter:v1.91.1
@@ -170,13 +179,16 @@ services:
       - sajo-net
     restart: unless-stopped
 
+  # prod와 동일한 monitoring/prometheus.yml을 그대로 마운트해서 쓰는데, 이 파일이
+  # alertmanager:9093/node-exporter:9100을 고정 타겟으로 참조한다. 이 두 서비스를
+  # 빼면 prometheus가 계속 "target down"으로 잡고 Alertmanager 경보 경로도 조용히
+  # 죽어있는 상태가 되므로, prod와 동일하게 포함시켜 맞췄다 (코드 리뷰 반영).
   alertmanager:
     image: prom/alertmanager:v0.34.0
     container_name: sajo-alertmanager
     volumes:
       - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
       - ./monitoring/secrets/slack_webhook_url:/etc/alertmanager/secrets/slack_webhook_url:ro
-      - ./monitoring/secrets/operation_webhook_secret:/etc/alertmanager/secrets/operation_webhook_secret:ro
     ports:
       - "127.0.0.1:9093:9093"
     networks:
@@ -216,6 +228,18 @@ services:
       - sajo-net
     restart: unless-stopped
 
+  # ---------------------------------------------------------------------
+  # 애플리케이션 서비스 (dev 브랜치 커밋 SHA로 태그된 이미지를 사용)
+  #
+  # SPRING_PROFILES_ACTIVE는 아래 전 서비스에서 staging이 아닌 prod로 의도적으로
+  # 맞춰뒀다. 스테이징의 목적이 "실제 배포 환경과 최대한 동일한 조건에서 미리
+  # 검증"하는 것이므로, 별도 staging 프로필을 만들어 설정을 다르게 가져가면
+  # 오히려 "prod에서는 안 터지던 문제가 staging enum에서만 재현/미재현"되는
+  # 식으로 검증 의미가 퇴색될 수 있다고 판단했다. 진짜 staging 전용 프로필이
+  # 필요해지면(예: 로그 레벨, 외부 연동 mock 여부 등을 prod와 다르게 가져가야
+  # 하는 상황) config-server가 참조하는 별도 저장소인 sajo-config-repo 쪽에도
+  # staging 프로필 설정을 추가해야 하므로, 이번 PR 범위에서는 다루지 않았다.
+  # ---------------------------------------------------------------------
   discovery-service:
     image: ghcr.io/sajo-team/sajo-discovery-service:${IMAGE_TAG:?IMAGE_TAG must be set}
     container_name: discovery-service
@@ -240,7 +264,7 @@ services:
       SPRING_PROFILES_ACTIVE: prod
       GITHUB_USERNAME: ${GITHUB_USERNAME}
       GITHUB_TOKEN: ${GITHUB_TOKEN}
-      ENCRYPT_KEY: ${ENCRYPT_KEY}
+      ENCRYPT_KEY: ${ENCRYPT_KEY:?ENCRYPT_KEY must be set}
     ports:
       - "127.0.0.1:8888:8888"
     networks:
@@ -281,9 +305,6 @@ services:
       CONFIG_SERVER_URL: http://config-server:8888
       DB_PASSWORD: ${DB_PASSWORD}
       INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?INTERNAL_API_SECRET must be set}
-    # ports 없음 - Gateway가 sajo-net 내부 DNS(user-service:8081)로 접근하므로
-    # 호스트 포트 노출이 필요 없다. 노출해두면 EC2 호스트 자체가 침해됐을 때
-    # Gateway를 거치지 않고 이 서비스를 직접 호출할 수 있는 경로가 하나 더 생긴다.
     networks:
       - sajo-net
     depends_on:
@@ -316,7 +337,6 @@ services:
       MARKET_WEBSOCKET_SYSTEM_USER_ID: ${MARKET_WEBSOCKET_SYSTEM_USER_ID:-}
       MARKET_WEBSOCKET_TARGET_STOCK_CODES: ${MARKET_WEBSOCKET_TARGET_STOCK_CODES:-}
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,prometheus,scheduledtasks
-    # ports 없음 - user-service와 동일한 이유 (Gateway만 내부 DNS로 접근하면 됨)
     networks:
       - sajo-net
     depends_on:
@@ -340,7 +360,14 @@ services:
       MONGO_PASSWORD: ${MONGO_PASSWORD}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?INTERNAL_API_SECRET must be set}
-    # ports 없음 - user-service와 동일한 이유 (Gateway만 내부 DNS로 접근하면 됨)
+      # KisOrderClient(실제 주문 체결 호출부)가 쓰는 값. GitHub Secrets가 아니라
+      # 여기 하드코딩해서, 나중에 누가 실수로 실전 투자 도메인을 STAGING_ 계열
+      # Secret으로 잘못 채워 넣어도 staging은 절대 실전 주문으로 못 나가게 강제로
+      # 막아둔다. 이 값을 실전 도메인으로 바꾸려면 반드시 이 파일을 직접 고쳐서
+      # PR 리뷰를 거치게 한다 (코드 리뷰의 "staging에서 실주문 나갈 수 있는지"
+      # 지적 반영 - 확인해보니 KIS_BASE_URL이 prod에도 지금 설정 안 되어 있어서
+      # 현재는 prod/staging 둘 다 이 모의투자 엔드포인트를 기본값으로 쓰고 있음).
+      KIS_BASE_URL: https://openapivts.koreainvestment.com:29443
     networks:
       - sajo-net
     depends_on:
@@ -363,9 +390,6 @@ services:
       SPRING_PROFILES_ACTIVE: prod
       CONFIG_SERVER_URL: http://config-server:8888
       OPENAI_API_KEY: ${OPENAI_API_KEY}
-    volumes:
-      - ./monitoring/secrets/operation_webhook_secret:/etc/operation-service/secrets/webhook_secret:ro
-    # ports 없음 - user-service와 동일한 이유 (Gateway만 내부 DNS로 접근하면 됨)
     networks:
       - sajo-net
     depends_on:
