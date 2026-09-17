@@ -7,6 +7,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.UUID;
 
 @Service
@@ -14,6 +16,7 @@ import java.util.UUID;
 public class OutboxEventStatusService {
 
     private static final int MAX_RETRY_COUNT = 3;
+    private static final Duration PROCESSING_TIMEOUT = Duration.ofMinutes(1);
 
     private final OutboxEventRepository outboxEventRepository;
 
@@ -22,7 +25,8 @@ public class OutboxEventStatusService {
         return outboxEventRepository.claimForPublish(
                 eventId,
                 OutboxStatus.PENDING,
-                OutboxStatus.PROCESSING
+                OutboxStatus.PROCESSING,
+                Instant.now()
         ) == 1;
     }
 
@@ -44,5 +48,16 @@ public class OutboxEventStatusService {
         }
 
         return event;
+    }
+
+    @Transactional
+    public int recoverStaleProcessingEvents() {
+        Instant threshold = Instant.now().minus(PROCESSING_TIMEOUT);
+
+        return outboxEventRepository.recoverStaleProcessingEvents(
+                OutboxStatus.PROCESSING,
+                OutboxStatus.PENDING,
+                threshold
+        );
     }
 }

@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS trading.p_outbox_events (
     retry_count INTEGER NOT NULL DEFAULT 0,
 
     created_at TIMESTAMPTZ NOT NULL,
+    claimed_at TIMESTAMPTZ,
     published_at TIMESTAMPTZ,
 
     CONSTRAINT p_outbox_events_status_check

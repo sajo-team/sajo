@@ -16,7 +16,10 @@ public class AiRiskAnalysisEventConsumer {
 
     private final AiRiskAnalysisProcessor processor;
 
-    @KafkaListener(topics = TOPIC)
+    @KafkaListener(
+            topics = TOPIC,
+            containerFactory = "aiRiskListenerFactory"
+    )
     public void consume(AiRiskAnalysisRequestedEvent event) {
 
         if (!AiRiskAnalysisRequestedEvent.EVENT_TYPE.equals(event.eventType())) {

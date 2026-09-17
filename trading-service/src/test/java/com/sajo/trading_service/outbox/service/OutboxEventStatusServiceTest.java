@@ -12,7 +12,10 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Optional;
 import java.util.UUID;
+import java.time.Instant;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.when;
 
@@ -47,9 +50,10 @@ class OutboxEventStatusServiceTest {
     @Test
     void Outbox_이벤트_선점에_성공하면_true를_반환한다() {
         when(outboxEventRepository.claimForPublish(
-                eventId,
-                OutboxStatus.PENDING,
-                OutboxStatus.PROCESSING
+                eq(eventId),
+                eq(OutboxStatus.PENDING),
+                eq(OutboxStatus.PROCESSING),
+                any(Instant.class)
         )).thenReturn(1);
 
         boolean claimed = outboxEventStatusService.claimForPublish(eventId);
@@ -60,9 +64,10 @@ class OutboxEventStatusServiceTest {
     @Test
     void 이미_선점된_Outbox_이벤트이면_false를_반환한다() {
         when(outboxEventRepository.claimForPublish(
-                eventId,
-                OutboxStatus.PENDING,
-                OutboxStatus.PROCESSING
+                eq(eventId),
+                eq(OutboxStatus.PENDING),
+                eq(OutboxStatus.PROCESSING),
+                any(Instant.class)
         )).thenReturn(0);
 
         boolean claimed = outboxEventStatusService.claimForPublish(eventId);
@@ -107,5 +112,19 @@ class OutboxEventStatusServiceTest {
         assertThat(outboxEvent.getRetryCount()).isEqualTo(3);
         assertThat(outboxEvent.getStatus())
                 .isEqualTo(OutboxStatus.FAILED);
+    }
+
+    @Test
+    void 오래된_PROCESSING_Outbox_이벤트를_PENDING으로_복구한다() {
+        when(outboxEventRepository.recoverStaleProcessingEvents(
+                eq(OutboxStatus.PROCESSING),
+                eq(OutboxStatus.PENDING),
+                any(Instant.class)
+        )).thenReturn(2);
+
+        int recoveredCount =
+                outboxEventStatusService.recoverStaleProcessingEvents();
+
+        assertThat(recoveredCount).isEqualTo(2);
     }
 }

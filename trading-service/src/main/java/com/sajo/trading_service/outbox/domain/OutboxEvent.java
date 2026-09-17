@@ -40,6 +40,9 @@ public class OutboxEvent {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
+    @Column(name = "claimed_at")
+    private Instant claimedAt;
+
     @Column(name = "published_at")
     private Instant publishedAt;
 
@@ -65,6 +68,7 @@ public class OutboxEvent {
     public void markPublished() {
         this.status = OutboxStatus.PUBLISHED;
         this.publishedAt = Instant.now();
+        this.claimedAt = null;
     }
 
     public void increaseRetryCount() {
@@ -73,9 +77,11 @@ public class OutboxEvent {
 
     public void markFailed(){
         this.status = OutboxStatus.FAILED;
+        this.claimedAt = null;
     }
 
     public void markPending(){
         this.status = OutboxStatus.PENDING;
+        this.claimedAt = null;
     }
 }

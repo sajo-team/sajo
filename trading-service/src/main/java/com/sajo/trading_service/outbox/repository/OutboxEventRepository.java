@@ -8,6 +8,7 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -29,6 +30,21 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> 
     int claimForPublish(
             @Param("eventId") UUID eventId,
             @Param("pendingStatus") OutboxStatus pendingStatus,
-            @Param("processingStatus") OutboxStatus processingStatus
+            @Param("processingStatus") OutboxStatus processingStatus,
+            @Param("claimedAt") Instant claimedAt
+    );
+
+    @Modifying
+    @Query("""
+    UPDATE OutboxEvent e
+       SET e.status = :pendingStatus,
+           e.claimedAt = null
+     WHERE e.status = :processingStatus
+       AND e.claimedAt < :threshold
+    """)
+    int recoverStaleProcessingEvents(
+            @Param("processingStatus") OutboxStatus processingStatus,
+            @Param("pendingStatus") OutboxStatus pendingStatus,
+            @Param("threshold") Instant threshold
     );
 }
