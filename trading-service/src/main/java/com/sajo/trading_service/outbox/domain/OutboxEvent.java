@@ -70,4 +70,8 @@ public class OutboxEvent {
     public void increaseRetryCount() {
         this.retryCount++;
     }
+
+    public void markFailed(){
+        this.status = OutboxStatus.FAILED;
+    }
 }

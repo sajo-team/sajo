@@ -12,6 +12,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class OutboxEventStatusService {
 
+    private static final int MAX_RETRY_COUNT = 3;
+
     private final OutboxEventRepository outboxEventRepository;
 
     @Transactional
@@ -21,8 +23,12 @@ public class OutboxEventStatusService {
     }
 
     @Transactional
-    public void increaseRetryCount(UUID eventId){
+    public void handlePublishFailure(UUID eventId){
         OutboxEvent event = outboxEventRepository.findById(eventId).orElseThrow();
         event.increaseRetryCount();
+
+        if(event.getRetryCount() >= MAX_RETRY_COUNT){
+            event.markFailed();
+        }
     }
 }

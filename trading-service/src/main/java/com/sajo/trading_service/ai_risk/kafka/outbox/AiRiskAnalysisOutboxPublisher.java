@@ -54,12 +54,11 @@ public class AiRiskAnalysisOutboxPublisher {
                     outboxEvent.getId()
             );
         } catch (Exception exception){
-            outboxEventStatusService.increaseRetryCount(outboxEvent.getId());
+            outboxEventStatusService.handlePublishFailure(outboxEvent.getId());
 
             log.error(
                     "AI 위험 분석 Outbox 이벤트 발행 실패, eventId={}, retryCount={}",
                     outboxEvent.getId(),
-                    outboxEvent.getRetryCount(),
                     exception
             );
         }
