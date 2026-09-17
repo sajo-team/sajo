@@ -231,7 +231,10 @@ jobs:
       # 직전 healthy 이미지도 이 시점에 로컬에서 지워지므로, 그 다음 배포가
       # 실패해서 롤백이 필요해지면 GHCR에서 다시 pull하게 된다(약간의 지연 발생,
       # 대신 EC2 디스크는 항상 최소로 유지됨).
-      - name: Prune unused Docker images on EC2
+      # sajo 이미지(ghcr.io/sajo-team/*)만 대상으로 한다 - docker image prune은
+      # reference 필터를 지원하지 않아서 docker images로 먼저 골라낸 뒤 rmi한다.
+      # 사용 중인 이미지는 docker rmi가 에러 없이 건너뛴다.
+      - name: Prune old sajo images on EC2
         if: success()
         continue-on-error: true
         uses: appleboy/ssh-action@v1.0.3
@@ -241,4 +244,4 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script_stop: false
           script: |
-            docker image prune -af
+            docker images 'ghcr.io/sajo-team/*' -q | xargs -r docker rmi
