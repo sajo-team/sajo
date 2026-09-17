@@ -1,6 +1,7 @@
 package com.sajo.trading_service.trading.repository.query;
 
 import com.sajo.trading_service.trading.domain.Order;
+import com.sajo.trading_service.trading.domain.enums.OrderType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
@@ -133,6 +134,25 @@ public interface OrderQueryRepository extends
     """)
     boolean existsActiveOrderByAutoTradingId(
             @Param("autoTradingId") UUID autoTradingId
+    );
+
+    @Query("""
+    select case when count(o) > 0 then true else false end
+    from Order o
+    where o.autoTradingId = :autoTradingId
+      and o.orderType = :orderType
+      and o.deletedAt is null
+      and o.status in (
+          com.sajo.trading_service.trading.domain.enums.OrderStatus.REQUESTED,
+          com.sajo.trading_service.trading.domain.enums.OrderStatus.PROCESSING,
+          com.sajo.trading_service.trading.domain.enums.OrderStatus.TIMEOUT,
+          com.sajo.trading_service.trading.domain.enums.OrderStatus.ACCEPTED,
+          com.sajo.trading_service.trading.domain.enums.OrderStatus.PARTIALLY_FILLED
+      )
+    """)
+    boolean existsActiveOrderByAutoTradingIdAndOrderType(
+            @Param("autoTradingId") UUID autoTradingId,
+            @Param("orderType") OrderType orderType
     );
 
     Optional<Order> findFirstByAutoTradingIdAndDeletedAtIsNullOrderByCreatedAtDescIdDesc(

@@ -13,6 +13,7 @@ import com.sajo.trading_service.trading.kafka.dto.TradingSignalPayload;
 import com.sajo.trading_service.trading.repository.command.AutoTradingCommandRepository;
 import com.sajo.trading_service.trading.repository.command.OrderCommandRepository;
 import com.sajo.trading_service.trading.repository.command.TradingLimitCommandRepository;
+import com.sajo.trading_service.trading.repository.query.OrderQueryRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -39,6 +40,9 @@ class TradingSignalCommandServiceTest {
 
     @Mock
     private OrderCommandRepository orderCommandRepository;
+
+    @Mock
+    private OrderQueryRepository orderQueryRepository;
 
     @Mock
     private AutoTradingCommandRepository autoTradingCommandRepository;
@@ -106,6 +110,13 @@ class TradingSignalCommandServiceTest {
                 any(Instant.class),
                 any(Instant.class)
         )).willReturn(0L);
+
+        given(orderQueryRepository
+                .existsActiveOrderByAutoTradingIdAndOrderType(
+                        autoTradingId,
+                        OrderType.BUY
+                ))
+                .willReturn(false);
 
         given(orderCommandRepository.sumEstimatedOrderAmountByUserIdAndCreatedAtBetween(
                 eq(userId),
@@ -393,6 +404,13 @@ class TradingSignalCommandServiceTest {
         given(autoTrading.getId())
                 .willReturn(autoTradingId);
 
+        given(orderQueryRepository
+                .existsActiveOrderByAutoTradingIdAndOrderType(
+                        autoTradingId,
+                        OrderType.SELL
+                ))
+                .willReturn(false);
+
         given(autoTrading.getEnabled())
                 .willReturn(true);
 
@@ -643,4 +661,130 @@ class TradingSignalCommandServiceTest {
                 .publishEvent(any(OrderRequestedEvent.class));
     }
 
+    @Test
+    @DisplayName("동일 방향의 진행 중 주문이 존재하면 신규 Order를 생성하지 않는다")
+    void activeOrderExists_skipNewOrder() {
+        // given
+        TradingSignalGeneratedEvent event =
+                createEvent(300_000L, 70_000L, OrderType.BUY);
+
+        given(orderCommandRepository.existsBySignalId(signalId))
+                .willReturn(false);
+
+        given(autoTradingCommandRepository
+                .findByUserIdAndStrategyIdForUpdate(userId, strategyId))
+                .willReturn(Optional.of(autoTrading));
+
+        given(autoTrading.getId())
+                .willReturn(autoTradingId);
+
+        given(autoTrading.getEnabled())
+                .willReturn(true);
+
+        given(orderQueryRepository.existsActiveOrderByAutoTradingIdAndOrderType(
+                autoTradingId,
+                OrderType.BUY
+        )).willReturn(true);
+
+        // when
+        tradingSignalCommandService.processSignal(event);
+
+        // then
+        verify(orderCommandRepository, never())
+                .save(any(Order.class));
+
+        verify(applicationEventPublisher, never())
+                .publishEvent(any(OrderRequestedEvent.class));
+
+        verifyNoInteractions(tradingLimitCommandRepository);
+    }
+
+    @Test
+    @DisplayName("반대 방향의 진행 중 주문만 존재하면 신규 Order를 생성할 수 있다")
+    void oppositeDirectionActiveOrder_allowsNewOrder() {
+        // given
+        TradingSignalGeneratedEvent event =
+                createEvent(
+                        300_000L,
+                        70_000L,
+                        OrderType.BUY
+                );
+
+        given(orderCommandRepository.existsBySignalId(signalId))
+                .willReturn(false);
+
+        given(autoTradingCommandRepository
+                .findByUserIdAndStrategyIdForUpdate(
+                        userId,
+                        strategyId
+                ))
+                .willReturn(Optional.of(autoTrading));
+
+        given(autoTrading.getId())
+                .willReturn(autoTradingId);
+
+        given(autoTrading.getEnabled())
+                .willReturn(true);
+
+        /*
+         * 현재 들어온 Signal은 BUY이므로
+         * BUY 방향의 진행 중 주문만 확인한다.
+         *
+         * SELL 주문이 진행 중이더라도
+         * BUY 진행 주문이 없다면 신규 BUY Order 생성 가능.
+         */
+        given(orderQueryRepository
+                .existsActiveOrderByAutoTradingIdAndOrderType(
+                        autoTradingId,
+                        OrderType.BUY
+                ))
+                .willReturn(false);
+
+        given(tradingLimitCommandRepository
+                .findByUserIdForUpdate(userId))
+                .willReturn(Optional.of(tradingLimit));
+
+        given(tradingLimit.getDailyMaxOrderCount())
+                .willReturn(10);
+
+        given(tradingLimit.getDailyMaxOrderAmount())
+                .willReturn(3_000_000L);
+
+        given(orderCommandRepository
+                .countOrdersByUserIdAndCreatedAtBetween(
+                        eq(userId),
+                        any(),
+                        any(Instant.class),
+                        any(Instant.class)
+                ))
+                .willReturn(0L);
+
+        given(orderCommandRepository
+                .sumEstimatedOrderAmountByUserIdAndCreatedAtBetween(
+                        eq(userId),
+                        any(),
+                        any(Instant.class),
+                        any(Instant.class)
+                ))
+                .willReturn(0L);
+
+        given(orderCommandRepository.save(any(Order.class)))
+                .willAnswer(invocation -> invocation.getArgument(0));
+
+        // when
+        tradingSignalCommandService.processSignal(event);
+
+        // then
+        verify(orderQueryRepository)
+                .existsActiveOrderByAutoTradingIdAndOrderType(
+                        autoTradingId,
+                        OrderType.BUY
+                );
+
+        verify(orderCommandRepository)
+                .save(any(Order.class));
+
+        verify(applicationEventPublisher)
+                .publishEvent(any(OrderRequestedEvent.class));
+    }
 }

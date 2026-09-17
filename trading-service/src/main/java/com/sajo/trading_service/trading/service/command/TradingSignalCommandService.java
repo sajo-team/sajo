@@ -12,6 +12,7 @@ import com.sajo.trading_service.trading.kafka.dto.TradingSignalPayload;
 import com.sajo.trading_service.trading.repository.command.AutoTradingCommandRepository;
 import com.sajo.trading_service.trading.repository.command.OrderCommandRepository;
 import com.sajo.trading_service.trading.repository.command.TradingLimitCommandRepository;
+import com.sajo.trading_service.trading.repository.query.OrderQueryRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -30,6 +31,7 @@ public class TradingSignalCommandService {
     private final AutoTradingCommandRepository autoTradingCommandRepository;
     private final TradingLimitCommandRepository tradingLimitCommandRepository;
     private final ApplicationEventPublisher applicationEventPublisher;
+    private final OrderQueryRepository orderQueryRepository;
 
 
     @Transactional
@@ -62,6 +64,20 @@ public class TradingSignalCommandService {
         autoTrading.validateDirection(
                 payload.signalType()
         );
+
+        if (orderQueryRepository.existsActiveOrderByAutoTradingIdAndOrderType(
+                autoTrading.getId(),
+                payload.signalType()
+        )) {
+            log.info(
+                    "동일 방향의 진행 중 주문이 존재하여 Signal을 건너뜁니다. "
+                            + "autoTradingId={}, orderType={}, signalId={}",
+                    autoTrading.getId(),
+                    payload.signalType(),
+                    payload.signalId()
+            );
+            return;
+        }
 
         TradingLimit tradingLimit =
                 tradingLimitCommandRepository.findByUserIdForUpdate(
