@@ -43,16 +43,15 @@ public class AiRiskAnalysisOutboxPublisher {
                     );
                     continue;
                 }
+
+                publish(outboxEvent);
             } catch (Exception exception) {
                 log.error(
                         "Outbox 이벤트 선점 중 오류가 발생했습니다. eventId={}",
                         outboxEvent.getId(),
                         exception
                 );
-                continue;
             }
-
-            publish(outboxEvent);
         }
     }
 

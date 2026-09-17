@@ -51,12 +51,13 @@ public class OutboxEventStatusService {
     }
 
     @Transactional
-    public int recoverStaleProcessingEvents() {
+    public int recoverStaleProcessingEvents(String eventType) {
         Instant threshold = Instant.now().minus(PROCESSING_TIMEOUT);
 
         return outboxEventRepository.recoverStaleProcessingEvents(
                 OutboxStatus.PROCESSING,
                 OutboxStatus.PENDING,
+                eventType,
                 threshold
         );
     }

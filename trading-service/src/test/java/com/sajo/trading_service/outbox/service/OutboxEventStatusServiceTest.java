@@ -1,5 +1,6 @@
 package com.sajo.trading_service.outbox.service;
 
+import com.sajo.trading_service.ai_risk.kafka.dto.AiRiskAnalysisRequestedEvent;
 import com.sajo.trading_service.outbox.domain.OutboxEvent;
 import com.sajo.trading_service.outbox.domain.OutboxStatus;
 import com.sajo.trading_service.outbox.repository.OutboxEventRepository;
@@ -116,14 +117,17 @@ class OutboxEventStatusServiceTest {
 
     @Test
     void 오래된_PROCESSING_Outbox_이벤트를_PENDING으로_복구한다() {
+        String eventType = "AI_RISK_ANALYSIS_REQUESTED";
+
         when(outboxEventRepository.recoverStaleProcessingEvents(
                 eq(OutboxStatus.PROCESSING),
                 eq(OutboxStatus.PENDING),
+                eq(eventType),
                 any(Instant.class)
         )).thenReturn(2);
 
         int recoveredCount =
-                outboxEventStatusService.recoverStaleProcessingEvents();
+                outboxEventStatusService.recoverStaleProcessingEvents(AiRiskAnalysisRequestedEvent.EVENT_TYPE);
 
         assertThat(recoveredCount).isEqualTo(2);
     }

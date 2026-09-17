@@ -1,5 +1,6 @@
 package com.sajo.trading_service.ai_risk.outbox;
 
+import com.sajo.trading_service.ai_risk.kafka.dto.AiRiskAnalysisRequestedEvent;
 import com.sajo.trading_service.ai_risk.kafka.outbox.AiRiskAnalysisOutboxPublisher;
 import com.sajo.trading_service.ai_risk.kafka.outbox.AiRiskAnalysisOutboxScheduler;
 import com.sajo.trading_service.outbox.service.OutboxEventStatusService;
@@ -39,7 +40,9 @@ class AiRiskAnalysisOutboxSchedulerTest {
         );
 
         inOrder.verify(outboxEventStatusService)
-                .recoverStaleProcessingEvents();
+                .recoverStaleProcessingEvents(
+                        AiRiskAnalysisRequestedEvent.EVENT_TYPE
+                );
 
         inOrder.verify(outboxPublisher)
                 .publishPendingEvents();

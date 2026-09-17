@@ -41,11 +41,13 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> 
        SET e.status = :pendingStatus,
            e.claimedAt = null
      WHERE e.status = :processingStatus
+       AND e.eventType = :eventType
        AND e.claimedAt < :threshold
     """)
     int recoverStaleProcessingEvents(
             @Param("processingStatus") OutboxStatus processingStatus,
             @Param("pendingStatus") OutboxStatus pendingStatus,
+            @Param("eventType") String eventType,
             @Param("threshold") Instant threshold
     );
 }

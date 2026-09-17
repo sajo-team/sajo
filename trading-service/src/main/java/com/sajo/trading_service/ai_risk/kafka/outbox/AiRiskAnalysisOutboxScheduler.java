@@ -1,5 +1,6 @@
 package com.sajo.trading_service.ai_risk.kafka.outbox;
 
+import com.sajo.trading_service.ai_risk.kafka.dto.AiRiskAnalysisRequestedEvent;
 import com.sajo.trading_service.outbox.service.OutboxEventStatusService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -16,7 +17,7 @@ public class AiRiskAnalysisOutboxScheduler {
 
     @Scheduled(fixedDelayString = "${outbox.ai-risk.publish-delay-ms:1000}")
     public void publishPendingEvents(){
-        int recoveredCount = outboxEventStatusService.recoverStaleProcessingEvents();
+        int recoveredCount = outboxEventStatusService.recoverStaleProcessingEvents(AiRiskAnalysisRequestedEvent.EVENT_TYPE);
 
         if(recoveredCount > 0){
             log.warn(
