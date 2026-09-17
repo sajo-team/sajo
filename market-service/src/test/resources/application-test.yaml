@@ -13,6 +13,9 @@ spring:
   jpa:
     hibernate:
       ddl-auto: create-drop
+  kafka:
+    listener:
+      auto-startup: false
   cloud:
     config:
       enabled: false

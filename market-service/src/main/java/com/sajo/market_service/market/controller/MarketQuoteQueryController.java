@@ -4,6 +4,7 @@ import com.sajo.common.code.GeneralResponseCode;
 import com.sajo.common.response.GeneralResponse;
 import com.sajo.market_service.market.dto.response.QuoteResponse;
 import com.sajo.market_service.market.dto.response.PublicQuoteResponse;
+import com.sajo.market_service.market.service.command.MarketQuoteRequestLogCommandService;
 import com.sajo.market_service.market.service.query.MarketQuoteQueryService;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -28,6 +29,7 @@ import java.util.UUID;
 public class MarketQuoteQueryController {
 
     private final MarketQuoteQueryService marketQuoteQueryService;
+    private final MarketQuoteRequestLogCommandService marketQuoteRequestLogCommandService;
 
     @GetMapping("/quote")
     public ResponseEntity<GeneralResponse<PublicQuoteResponse>> getQuote(
@@ -38,6 +40,9 @@ public class MarketQuoteQueryController {
             String stockCode
     ) {
         QuoteResponse response = marketQuoteQueryService.getQuote(userId, stockCode);
+        // 조회 이력 기록은 응답 경로와 무관한 부가 작업이라 Query 서비스에 섞지 않고, 별도 Command
+        // 서비스에 위임한다(#248) — 발행 자체는 전용 executor로 위임되어 논블로킹이다.
+        marketQuoteRequestLogCommandService.recordQuoteRequest(userId, stockCode);
         return GeneralResponse.toResponseEntity(GeneralResponseCode.OK, PublicQuoteResponse.from(response));
     }
 }

@@ -234,7 +234,7 @@ public class KisApiClient {
                     "KIS 접속키 발급에 실패했습니다. httpStatus=%s".formatted(exception.getStatusCode().value())
             );
         } catch (RestClientException exception) {
-            log.warn("KIS 접속키 발급 호출에 실패했습니다. exceptionType={}", exception.getClass().getSimpleName());
+            log.warn("KIS 접속키 발급 호출에 실패했습니다. exceptionType={}", exception.getClass().getSimpleName(), exception);
             throw new BusinessException(
                     MarketErrorCode.KIS_APPROVAL_KEY_ISSUE_FAILED,
                     "KIS 접속키 발급에 실패했습니다."
