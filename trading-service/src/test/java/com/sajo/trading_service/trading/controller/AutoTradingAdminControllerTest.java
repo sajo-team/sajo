@@ -132,7 +132,7 @@ class AutoTradingAdminControllerTest {
 
         mockMvc.perform(
                         patch(
-                                "/api/v1/admin/trading/auto-tradings/{autoTradingId}/suspension",
+                                "/api/v1/admin/trading/auto-tradings/{autoTradingId}/suspensions",
                                 autoTradingId
                         )
                                 .header("X-User-Role", "ADMIN")
@@ -159,7 +159,7 @@ class AutoTradingAdminControllerTest {
 
         mockMvc.perform(
                         patch(
-                                "/api/v1/admin/trading/auto-tradings/{autoTradingId}/suspension",
+                                "/api/v1/admin/trading/auto-tradings/{autoTradingId}/suspensions",
                                 autoTradingId
                         )
                                 .header("X-User-Role", "ADMIN")
@@ -188,7 +188,7 @@ class AutoTradingAdminControllerTest {
                 ServletException.class,
                 () -> mockMvc.perform(
                         patch(
-                                "/api/v1/admin/trading/auto-tradings/{autoTradingId}/suspension",
+                                "/api/v1/admin/trading/auto-tradings/{autoTradingId}/suspensions",
                                 autoTradingId
                         )
                                 .header("X-User-Role", "USER")
@@ -214,7 +214,7 @@ class AutoTradingAdminControllerTest {
 
         mockMvc.perform(
                         patch(
-                                "/api/v1/admin/trading/auto-tradings/{autoTradingId}/suspension",
+                                "/api/v1/admin/trading/auto-tradings/{autoTradingId}/suspensions",
                                 autoTradingId
                         )
                                 .contentType("application/json")
@@ -236,8 +236,102 @@ class AutoTradingAdminControllerTest {
 
         mockMvc.perform(
                         patch(
-                                "/api/v1/admin/trading/auto-tradings/{autoTradingId}/suspension",
+                                "/api/v1/admin/trading/auto-tradings/{autoTradingId}/suspensions",
                                 autoTradingId
+                        )
+                                .header("X-User-Role", "ADMIN")
+                                .contentType("application/json")
+                                .content("""
+                                    {}
+                                    """)
+                )
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(autoTradingAdminCommandService);
+    }
+
+    @Test
+    @DisplayName("ADMIN 권한이면 전체 AutoTrading을 긴급 중지할 수 있다")
+    void suspendAllAutoTrading() throws Exception {
+        // when & then
+        mockMvc.perform(
+                        patch(
+                                "/api/v1/admin/trading/auto-tradings/suspensions"
+                        )
+                                .header("X-User-Role", "ADMIN")
+                                .contentType("application/json")
+                                .content("""
+                                    {
+                                      "suspended": true
+                                    }
+                                    """)
+                )
+                .andExpect(status().isOk());
+
+        verify(autoTradingAdminCommandService)
+                .suspendAll();
+
+        verify(autoTradingAdminCommandService, never())
+                .resumeAll();
+    }
+
+    @Test
+    @DisplayName("ADMIN 권한이면 전체 AutoTrading 긴급 중지를 해제할 수 있다")
+    void resumeAllAutoTrading() throws Exception {
+        // when & then
+        mockMvc.perform(
+                        patch(
+                                "/api/v1/admin/trading/auto-tradings/suspensions"
+                        )
+                                .header("X-User-Role", "ADMIN")
+                                .contentType("application/json")
+                                .content("""
+                                    {
+                                      "suspended": false
+                                    }
+                                    """)
+                )
+                .andExpect(status().isOk());
+
+        verify(autoTradingAdminCommandService)
+                .resumeAll();
+
+        verify(autoTradingAdminCommandService, never())
+                .suspendAll();
+    }
+
+    @Test
+    @DisplayName("ADMIN 권한이 아니면 전체 AutoTrading 긴급 중지가 거부된다")
+    void suspendAllAutoTradingWithoutAdminRole() {
+        // when & then
+        ServletException exception = assertThrows(
+                ServletException.class,
+                () -> mockMvc.perform(
+                        patch(
+                                "/api/v1/admin/trading/auto-tradings/suspensions"
+                        )
+                                .header("X-User-Role", "USER")
+                                .contentType("application/json")
+                                .content("""
+                                    {
+                                      "suspended": true
+                                    }
+                                    """)
+                )
+        );
+
+        assertThat(exception.getCause())
+                .isInstanceOf(AccessDeniedException.class);
+
+        verifyNoInteractions(autoTradingAdminCommandService);
+    }
+
+    @Test
+    @DisplayName("전체 AutoTrading 제어 요청에 suspended 값이 없으면 실패한다")
+    void updateGlobalSuspensionWithoutSuspended() throws Exception {
+        mockMvc.perform(
+                        patch(
+                                "/api/v1/admin/trading/auto-tradings/suspensions"
                         )
                                 .header("X-User-Role", "ADMIN")
                                 .contentType("application/json")

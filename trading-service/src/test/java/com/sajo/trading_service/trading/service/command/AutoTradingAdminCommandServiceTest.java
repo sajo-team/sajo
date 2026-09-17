@@ -2,7 +2,9 @@ package com.sajo.trading_service.trading.service.command;
 
 import com.sajo.common.exception.BusinessException;
 import com.sajo.trading_service.trading.domain.AutoTrading;
+import com.sajo.trading_service.trading.domain.AutoTradingOperationControl;
 import com.sajo.trading_service.trading.repository.command.AutoTradingCommandRepository;
+import com.sajo.trading_service.trading.repository.command.AutoTradingOperationControlCommandRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -21,6 +23,10 @@ class AutoTradingAdminCommandServiceTest {
 
     @Mock
     private AutoTradingCommandRepository autoTradingCommandRepository;
+
+    @Mock
+    private AutoTradingOperationControlCommandRepository
+            autoTradingOperationControlCommandRepository;
 
     @InjectMocks
     private AutoTradingAdminCommandService autoTradingAdminCommandService;
@@ -92,4 +98,84 @@ class AutoTradingAdminCommandServiceTest {
                 () -> autoTradingAdminCommandService.resume(autoTradingId)
         );
     }
+
+    @Test
+    @DisplayName("관리자는 전체 AutoTrading을 긴급 중지할 수 있다")
+    void suspendAll() {
+        // given
+        AutoTradingOperationControl control =
+                mock(AutoTradingOperationControl.class);
+
+        when(autoTradingOperationControlCommandRepository.findByIdForUpdate(
+                AutoTradingOperationControl.GLOBAL_CONTROL_ID
+        )).thenReturn(Optional.of(control));
+
+        // when
+        autoTradingAdminCommandService.suspendAll();
+
+        // then
+        verify(autoTradingOperationControlCommandRepository)
+                .findByIdForUpdate(
+                        AutoTradingOperationControl.GLOBAL_CONTROL_ID
+                );
+
+        verify(control)
+                .suspend();
+    }
+
+    @Test
+    @DisplayName("관리자는 전체 AutoTrading 긴급 중지를 해제할 수 있다")
+    void resumeAll() {
+        // given
+        AutoTradingOperationControl control =
+                mock(AutoTradingOperationControl.class);
+
+        when(autoTradingOperationControlCommandRepository.findByIdForUpdate(
+                AutoTradingOperationControl.GLOBAL_CONTROL_ID
+        )).thenReturn(Optional.of(control));
+
+        // when
+        autoTradingAdminCommandService.resumeAll();
+
+        // then
+        verify(autoTradingOperationControlCommandRepository)
+                .findByIdForUpdate(
+                        AutoTradingOperationControl.GLOBAL_CONTROL_ID
+                );
+
+        verify(control)
+                .resume();
+    }
+
+    @Test
+    @DisplayName("전체 AutoTrading 운영 제어 정보가 없으면 긴급 중지에 실패한다")
+    void suspendAllControlNotFound() {
+        // given
+        when(autoTradingOperationControlCommandRepository.findByIdForUpdate(
+                AutoTradingOperationControl.GLOBAL_CONTROL_ID
+        )).thenReturn(Optional.empty());
+
+        // when & then
+        assertThrows(
+                BusinessException.class,
+                () -> autoTradingAdminCommandService.suspendAll()
+        );
+    }
+
+    @Test
+    @DisplayName("전체 AutoTrading 운영 제어 정보가 없으면 긴급 중지 해제에 실패한다")
+    void resumeAllControlNotFound() {
+        // given
+        when(autoTradingOperationControlCommandRepository.findByIdForUpdate(
+                AutoTradingOperationControl.GLOBAL_CONTROL_ID
+        )).thenReturn(Optional.empty());
+
+        // when & then
+        assertThrows(
+                BusinessException.class,
+                () -> autoTradingAdminCommandService.resumeAll()
+        );
+    }
+
+
 }

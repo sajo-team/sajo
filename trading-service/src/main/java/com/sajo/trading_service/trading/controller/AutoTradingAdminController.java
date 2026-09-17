@@ -71,4 +71,25 @@ public class AutoTradingAdminController {
                 null
         );
     }
+
+    @PatchMapping("/suspensions")
+    public ResponseEntity<GeneralResponse<Void>> updateGlobalSuspension(
+            @RequestHeader("X-User-Role") String role,
+            @Valid @RequestBody AutoTradingAdminSuspensionRequest request
+    ) {
+        if (!"ADMIN".equals(role)) {
+            throw new AccessDeniedException("관리자 권한이 필요합니다.");
+        }
+
+        if (Boolean.TRUE.equals(request.suspended())) {
+            autoTradingAdminCommandService.suspendAll();
+        } else {
+            autoTradingAdminCommandService.resumeAll();
+        }
+
+        return GeneralResponse.toResponseEntity(
+                GeneralResponseCode.OK,
+                null
+        );
+    }
 }
