@@ -52,7 +52,6 @@ inhibit_rules:
 
 # Slack Incoming Webhook URL은 alertmanager.yml(git 추적됨)에 직접 못 넣음 - alertmanager 0.34.0은
 # config 내 환경변수 치환을 지원하지 않아서, api_url_file로 별도 파일(git 미추적, .gitignore 처리됨)에서 읽음
-# 이후 LLM 연동 단계에서 이 receiver에 webhook_configs(Spring 앱 주소)도 같이 추가할 예정
 receivers:
   - name: default
     slack_configs:
@@ -67,3 +66,6 @@ receivers:
           {{ range .Alerts }}[{{ .Status | toUpper }}][{{ .Labels.severity | toUpper }}] {{ .Annotations.summary }}
           {{ .Annotations.description }}
           {{ end }}
+    webhook_configs:
+      - url: http://operation-service:8084/api/v1/operations/webhook
+        send_resolved: true

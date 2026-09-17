@@ -17,6 +17,12 @@ spring:
     openai:
       api-key: ${OPENAI_API_KEY}
 
+sajo:
+  prometheus:
+    rest-client:
+      connect-timeout-ms: ${PROMETHEUS_CONNECT_TIMEOUT_MS:2000}
+      read-timeout-ms: ${PROMETHEUS_READ_TIMEOUT_MS:5000}
+
 management:
   endpoints:
     web:
@@ -40,6 +46,10 @@ eureka:
     service-url:
       defaultZone: http://localhost:8761/eureka/
 
+sajo:
+  prometheus:
+    base-url: http://localhost:9090
+
 ---
 spring:
   config:
@@ -50,3 +60,7 @@ eureka:
   client:
     service-url:
       defaultZone: http://discovery-service:8761/eureka/
+
+sajo:
+  prometheus:
+    base-url: http://prometheus:9090
