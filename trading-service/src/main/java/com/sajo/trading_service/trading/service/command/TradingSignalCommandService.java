@@ -55,7 +55,7 @@ public class TradingSignalCommandService {
                                         TradingErrorCode.AUTO_TRADING_NOT_FOUND
                                 )
                         );
-        if(!autoTrading.getEnabled()){
+        if (!autoTrading.isTradable()) {
             throw new BusinessException(
                     TradingErrorCode.AUTO_TRADING_DISABLED
             );
