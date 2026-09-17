@@ -3,17 +3,15 @@ package com.sajo.operation_service.service;
 import com.sajo.operation_service.controller.dto.request.AlertManagerWebhookRequest;
 import com.sajo.operation_service.service.dto.AppDiagnosticsSnapshot;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-
-import java.util.List;
 
 @Service
 @RequiredArgsConstructor
-@Slf4j
 public class AlertAnalyzer {
+
+    private final DiagnosticsService diagnosticsService;
+    private final ChatClient chatClient;
 
     private static final String SYSTEM_PROMPT = """
                 너는 SRE 어시스턴트다.
@@ -25,45 +23,21 @@ public class AlertAnalyzer {
                 수치만으로 확정할 수 없는 부분은 추측임을 명시해라.
             """;
 
-    private final DiagnosticsService diagnosticsService;
-    private final ChatClient chatClient;
-
-    @Async("alertAnalysisExecutor")
-    public void process(AlertManagerWebhookRequest request) {
-        // 1. firing 인지 확인
-        List<AlertManagerWebhookRequest.Alert> firing = request.alerts().stream()
-                .filter(alert -> alert.status().equals("firing"))
-                .toList();
-
-        for (AlertManagerWebhookRequest.Alert alert : firing) {
-            // 2. 서비스 필터
-            String application = alert.labels().get("application");
-            if (application == null) {
-                log.warn("application 라벨이 없는 알람 - 진단 스킵. alertname={}", alert.labels().get("alertname"));
-                continue;
-            }
-
-            // 3. prometheus 요청
-            AppDiagnosticsSnapshot snapshot = diagnosticsService.collect(application, alert.startsAt());
-
-            // 4. 프롬프트 구성
-            String userPrompt = createUserPrompt(alert, snapshot);
-
-            // 5. llm 호출
-            try {
-                String analysis = chatClient.prompt()
-                        .system(SYSTEM_PROMPT)
-                        .user(userPrompt)
-                        .call()
-                        .content();
-
-                // 6. 결과 출력 (일단 로그로만 남기고, 추후 슬랙 알림 가도록 수정)
-                log.info("알람 분석 결과. alertname={}, application={}\n{}",
-                        alert.labels().get("alertname"), application, analysis);
-            } catch (Exception e) {
-                log.error("LLM 분석 실패. alertname={}, application={}", alert.labels().get("alertname"), application, e);
-            }
+    public String analyze(AlertManagerWebhookRequest.Alert alert) {
+        String application = alert.labels().get("application");
+        if (application == null) {
+            throw new IllegalArgumentException(
+                    "application 라벨이 없는 알람. alertname=" + alert.labels().get("alertname"));
         }
+
+        AppDiagnosticsSnapshot snapshot = diagnosticsService.collect(application, alert.startsAt());
+        String userPrompt = createUserPrompt(alert, snapshot);
+
+        return chatClient.prompt()
+                .system(SYSTEM_PROMPT)
+                .user(userPrompt)
+                .call()
+                .content();
     }
 
     private String createUserPrompt(AlertManagerWebhookRequest.Alert alert, AppDiagnosticsSnapshot snapshot) {

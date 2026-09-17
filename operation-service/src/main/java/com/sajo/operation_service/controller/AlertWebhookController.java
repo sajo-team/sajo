@@ -4,7 +4,7 @@ import com.sajo.common.code.GeneralResponseCode;
 import com.sajo.common.response.GeneralResponse;
 import com.sajo.operation_service.controller.dto.request.AlertManagerWebhookRequest;
 import com.sajo.operation_service.controller.dto.response.AlertWebhookAcceptedResponse;
-import com.sajo.operation_service.service.AlertAnalyzer;
+import com.sajo.operation_service.service.AlertAnalysisAsyncProcessor;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -17,15 +17,14 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class AlertWebhookController {
 
-    private final AlertAnalyzer alertAnalyzer;
+    private final AlertAnalysisAsyncProcessor alertAnalysisAsyncProcessor;
 
     @PostMapping("/webhook")
     public ResponseEntity<GeneralResponse<AlertWebhookAcceptedResponse>> receive(
             @RequestBody AlertManagerWebhookRequest request
     ) {
-        // TODO: 실제 진단 조회 + LLM 분석은 비동기로 위임 (AlertAnalyzer 등, 아직 미구현)
 
-        alertAnalyzer.process(request);
+        alertAnalysisAsyncProcessor.process(request);
 
         return GeneralResponse.toResponseEntity(
                 GeneralResponseCode.ACCEPTED,
