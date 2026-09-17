@@ -16,7 +16,7 @@ public class AlertAnalysisAsyncProcessor {
     @Async("alertAnalysisExecutor")
     public void process(AlertManagerWebhookRequest request) {
         request.alerts().stream()
-                .filter(alert -> alert.status().equals("firing"))
+                .filter(AlertManagerWebhookRequest.Alert::isFiring)
                 .forEach(this::analyzeOne);
     }
     private void analyzeOne(AlertManagerWebhookRequest.Alert alert) {

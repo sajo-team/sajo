@@ -5,6 +5,7 @@ import com.sajo.common.response.GeneralResponse;
 import com.sajo.operation_service.controller.dto.request.AlertManagerWebhookRequest;
 import com.sajo.operation_service.controller.dto.response.AlertWebhookAcceptedResponse;
 import com.sajo.operation_service.service.AlertAnalysisAsyncProcessor;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -21,14 +22,14 @@ public class AlertWebhookController {
 
     @PostMapping("/webhook")
     public ResponseEntity<GeneralResponse<AlertWebhookAcceptedResponse>> receive(
-            @RequestBody AlertManagerWebhookRequest request
+            @Valid @RequestBody AlertManagerWebhookRequest request
     ) {
 
         alertAnalysisAsyncProcessor.process(request);
 
         return GeneralResponse.toResponseEntity(
                 GeneralResponseCode.ACCEPTED,
-                new AlertWebhookAcceptedResponse(request.alerts().size())
+                new AlertWebhookAcceptedResponse(request.firingCount())
         );
     }
 }
