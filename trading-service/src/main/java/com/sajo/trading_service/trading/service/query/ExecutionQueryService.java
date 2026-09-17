@@ -1,7 +1,9 @@
 package com.sajo.trading_service.trading.service.query;
 
 import com.sajo.common.exception.BusinessException;
+import com.sajo.trading_service.trading.controller.dto.request.ExecutionAdminSearchCondition;
 import com.sajo.trading_service.trading.controller.dto.request.ExecutionSearchCondition;
+import com.sajo.trading_service.trading.controller.dto.response.ExecutionAdminResponse;
 import com.sajo.trading_service.trading.controller.dto.response.ExecutionResponse;
 import com.sajo.trading_service.trading.exception.TradingErrorCode;
 import com.sajo.trading_service.trading.repository.query.ExecutionQueryRepository;
@@ -52,5 +54,22 @@ public class ExecutionQueryService {
                         );
 
         return ExecutionResponse.from(projection);
+    }
+
+    public Page<ExecutionAdminResponse> findAllExecutionsForAdmin(
+            ExecutionAdminSearchCondition condition,
+            Pageable pageable
+    ) {
+        return executionQueryRepository
+                .findAllForAdmin(
+                        condition.userId(),
+                        condition.orderId(),
+                        condition.autoTradingId(),
+                        condition.strategyId(),
+                        condition.stockCode(),
+                        condition.orderType(),
+                        pageable
+                )
+                .map(ExecutionAdminResponse::from);
     }
 }
