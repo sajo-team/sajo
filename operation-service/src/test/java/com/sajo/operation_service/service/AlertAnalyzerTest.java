@@ -59,6 +59,20 @@ class AlertAnalyzerTest {
     }
 
     @Test
+    @DisplayName("application 라벨에 PromQL 인젝션에 쓰일 수 있는 문자가 섞이면 IllegalArgumentException을 던진다")
+    void analyze_applicationLabelWithInvalidCharacters_throws() {
+        AlertManagerWebhookRequest.Alert alert = createAlert(Map.of(
+                "alertname", "HighCpuUsage",
+                "application", "trading-service\"} or process_cpu_usage{application=\"a"
+        ));
+
+        assertThatThrownBy(() -> alertAnalyzer.analyze(alert))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        verifyNoInteractions(diagnosticsService, chatClient);
+    }
+
+    @Test
     @DisplayName("정상 케이스: 진단 지표를 조회하고 LLM 응답을 그대로 반환한다")
     void analyze_success_returnsLlmResponse() {
         AlertManagerWebhookRequest.Alert alert = createAlert(Map.of(

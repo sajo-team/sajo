@@ -7,11 +7,17 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
 
 import java.util.Map;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class AlertAnalyzer {
+
+    // application 라벨은 서비스명(예: trading-service)이라 영문자/숫자/하이픈만 허용 -
+    // PromQL 템플릿에 그대로 꽂혀 들어가므로("{application=\"%s\"}") 이 값에 ", {, } 등이
+    // 섞이면 PromQL 인젝션이 될 수 있음
+    private static final Pattern APPLICATION_LABEL_PATTERN = Pattern.compile("^[a-zA-Z0-9-]+$");
 
     private final DiagnosticsService diagnosticsService;
     private final ChatClient chatClient;
@@ -31,6 +37,11 @@ public class AlertAnalyzer {
         if (application == null) {
             throw new IllegalArgumentException(
                     "application 라벨이 없는 알람. alertname=" + alert.labels().get("alertname"));
+        }
+
+        if (!APPLICATION_LABEL_PATTERN.matcher(application).matches()) {
+            throw new IllegalArgumentException(
+                    "application 라벨 형식이 올바르지 않은 알람. application=" + application);
         }
 
         Map<String, PrometheusQueryResult> metrics = diagnosticsService.collect(application, alert.startsAt());

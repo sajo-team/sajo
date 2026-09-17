@@ -36,9 +36,6 @@ public class PrometheusClient {
                 .build();
     }
 
-    // PromQL을 지정한 시점(time) 기준으로 평가한다. 연결 자체가 안 되는 경우(타임아웃 등)는
-    // RestClientException을 그대로 던지고, Prometheus가 응답은 했지만 실패인 경우만
-    // PrometheusQueryResult.failure로 값으로 표현한다 (0.0으로 뭉개지 않기 위함)
     public PrometheusQueryResult query(String promql, Instant time) {
         URI uri = UriComponentsBuilder.fromUriString(baseUrl)
                 .path("/api/v1/query")
