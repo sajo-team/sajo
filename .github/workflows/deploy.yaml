@@ -58,7 +58,11 @@ jobs:
 
   deploy:
     needs: build-and-push
-    if: github.event.workflow_run.event == 'push'
+    # build-and-push가 skip/실패하면 deploy는 절대 돌면 안 된다 (존재하지 않는
+    # 이미지 태그로 pull을 시도하게 됨) - 코드 리뷰 반영.
+    if: >
+      github.event.workflow_run.event == 'push' &&
+      needs.build-and-push.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 15
 

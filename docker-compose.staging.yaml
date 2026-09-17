@@ -320,6 +320,14 @@ services:
       MONGO_PASSWORD: ${MONGO_PASSWORD}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?INTERNAL_API_SECRET must be set}
+      # KisOrderClient(실제 주문 체결 호출부)가 쓰는 값. GitHub Secrets가 아니라
+      # 여기 하드코딩해서, 나중에 누가 실수로 실전 투자 도메인을 STAGING_ 계열
+      # Secret으로 잘못 채워 넣어도 staging은 절대 실전 주문으로 못 나가게 강제로
+      # 막아둔다. 이 값을 실전 도메인으로 바꾸려면 반드시 이 파일을 직접 고쳐서
+      # PR 리뷰를 거치게 한다 (코드 리뷰의 "staging에서 실주문 나갈 수 있는지"
+      # 지적 반영 - 확인해보니 KIS_BASE_URL이 prod에도 지금 설정 안 되어 있어서
+      # 현재는 prod/staging 둘 다 이 모의투자 엔드포인트를 기본값으로 쓰고 있음).
+      KIS_BASE_URL: https://openapivts.koreainvestment.com:29443
     networks:
       - sajo-net
     depends_on:
