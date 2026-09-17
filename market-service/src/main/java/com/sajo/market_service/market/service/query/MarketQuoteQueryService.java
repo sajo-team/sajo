@@ -19,8 +19,10 @@ import org.springframework.stereotype.Service;
 import java.time.Duration;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 
 @Service
@@ -40,13 +42,25 @@ public class MarketQuoteQueryService {
     private final ConcurrentHashMap<String, CompletableFuture<QuoteResponse>> inFlightRequests = new ConcurrentHashMap<>();
 
     public QuoteResponse getQuote(UUID userId, String stockCode) {
+        long deadline = System.nanoTime() + cacheProperties.lockWaitTimeout().toNanos();
+        return getQuoteWithDeadline(userId, stockCode, deadline);
+    }
+
+    /**
+     * 캐시를 확인하고, MISS면 in-flight 병합 경로로 넘어간다. 팔로워가 대표의 실패/타임아웃 이후 재시도할 때도 이 메서드를 다시 타므로,
+     * 그사이 다른 스레드가 이미 캐시를 채웠다면 KIS를 다시 호출하지 않고 그 값을 바로 재사용한다.
+     */
+    private QuoteResponse getQuoteWithDeadline(UUID userId, String stockCode, long deadline) {
         String cacheKey = createCacheKey(stockCode);
-        CacheLookup initialLookup = findCachedQuote(cacheKey);
-        if (isReusableCachedQuote(initialLookup.quote(), stockCode)) {
-            return initialLookup.quote();
+        CacheLookup lookup = findCachedQuote(cacheKey);
+        if (isReusableCachedQuote(lookup.quote(), stockCode)) {
+            return lookup.quote();
+        }
+        if (System.nanoTime() >= deadline) {
+            throw new BusinessException(MarketErrorCode.QUOTE_CACHE_LOCK_TIMEOUT);
         }
 
-        return getQuoteWithInFlightDedup(userId, stockCode, cacheKey, initialLookup.redisAvailable());
+        return getQuoteWithInFlightDedup(userId, stockCode, cacheKey, lookup.redisAvailable(), deadline);
     }
 
     /**
@@ -55,23 +69,33 @@ public class MarketQuoteQueryService {
      * 인스턴스가 여러 대인 경우의 중복 호출 방지는 기존 Redis 분산 락이 계속 담당하므로, 이 in-flight 병합은 그 위에 한 겹 더 얹는 것이다.
      */
     private QuoteResponse getQuoteWithInFlightDedup(
-            UUID userId, String stockCode, String cacheKey, boolean redisAvailable) {
+            UUID userId, String stockCode, String cacheKey, boolean redisAvailable, long deadline) {
         CompletableFuture<QuoteResponse> myFuture = new CompletableFuture<>();
         CompletableFuture<QuoteResponse> existingFuture = inFlightRequests.putIfAbsent(stockCode, myFuture);
         if (existingFuture != null) {
-            return joinInFlightFuture(existingFuture, userId, stockCode);
+            return joinInFlightFuture(existingFuture, userId, stockCode, deadline);
         }
 
         try {
             QuoteResponse result = redisAvailable
                     ? getQuoteWithCacheLock(userId, stockCode, cacheKey)
                     : fetchAndCacheQuote(userId, stockCode, cacheKey);
-            myFuture.complete(result);
+            if (isValidQuote(result)) {
+                myFuture.complete(result);
+            } else {
+                // 대표 자신은 기존 동작(fetchAndCacheQuote)대로 예외 없이 이 값을 그대로 반환하지만,
+                // currentPrice가 없는 "무효 응답"을 팔로워에게 성공으로 그대로 나눠주지는 않는다.
+                // 코드 리뷰 반영: 팔로워도 이 경우엔 재시도해서 스스로 유효한 응답을 받도록 한다.
+                myFuture.completeExceptionally(
+                        new BusinessException(
+                                MarketErrorCode.KIS_QUOTE_RESPONSE_INVALID,
+                                "KIS 현재가 응답에 currentPrice가 없습니다. stockCode=" + stockCode));
+            }
             return result;
         } catch (RuntimeException exception) {
             // 대표 스레드의 실패를 대기 중인 팔로워 전원에게 그대로 퍼뜨리지 않는다.
             // KIS 호출 1건의 일시적 실패(타임아웃 등)가 그 순간 함께 기다리던 요청 수만큼(수십 건) 그대로 증폭되는 것을 막기 위함.
-            // 대표 자신은 이 예외를 그대로 던지되, 팔로워는 completeExceptionally로 통보만 받고 각자 getQuote()를 통해 새로 도전한다(joinInFlightFuture 참고).
+            // 대표 자신은 이 예외를 그대로 던지되, 팔로워는 completeExceptionally로 통보만 받고 각자 재시도한다(joinInFlightFuture 참고).
             myFuture.completeExceptionally(exception);
             throw exception;
         } finally {
@@ -79,19 +103,37 @@ public class MarketQuoteQueryService {
         }
     }
 
+    private boolean isValidQuote(QuoteResponse quote) {
+        return quote != null && quote.currentPrice() != null;
+    }
+
     /**
-     * 팔로워는 대표 스레드의 성공은 그대로 공유받지만, 실패는 공유받지 않는다.
-     * 대표가 실패하면(팔로워 입장에서 {@link CompletionException}) 이미 in-flight 항목이 제거된 뒤이므로,
-     * {@link #getQuote(UUID, String)}를 다시 호출해 스스로 새 대표가 되거나 다른 대표에게 다시 합류할 기회를 얻는다.
-     * 이렇게 해야 락 기반 방식이 원래 갖고 있던 "한 스레드의 실패가 다른 대기 스레드의 실패로 이어지지 않는다"는 장애 격리 특성을 유지한다.
+     * 팔로워는 대표 스레드의 성공(유효한 응답)만 공유받고, 실패나 무효 응답은 공유받지 않는다.
+     * 코드 리뷰 반영: 대표의 {@link CompletableFuture}를 무제한 대기(join)하지 않는다 — 대표가
+     * user-service/KIS 호출에서 오래 지연되면 팔로워의 서버 스레드까지 그 시간만큼 묶여, 이번 개선이
+     * 해결하려던 문제(다수 스레드의 장시간 대기)가 오히려 그대로 재현될 수 있기 때문이다. 남은 시간
+     * (deadline, 기존 lockWaitTimeout과 동일한 예산)만큼만 기다리고, 그 안에 끝나지 않거나 대표가
+     * 실패/무효 응답을 받으면 {@link #getQuoteWithDeadline}으로 스스로 다시 도전한다. 이렇게 해야
+     * 락 기반 방식이 원래 갖고 있던 "한 스레드의 실패/지연이 다른 대기 스레드로 전파되지 않는다"는
+     * 장애 격리 특성을 유지한다.
      */
     private QuoteResponse joinInFlightFuture(
-            CompletableFuture<QuoteResponse> future, UUID userId, String stockCode) {
+            CompletableFuture<QuoteResponse> future, UUID userId, String stockCode, long deadline) {
+        long remainingNanos = deadline - System.nanoTime();
+        if (remainingNanos <= 0) {
+            throw new BusinessException(MarketErrorCode.QUOTE_CACHE_LOCK_TIMEOUT);
+        }
         try {
-            return future.join();
-        } catch (CompletionException exception) {
-            log.debug("in-flight 대표 스레드 조회가 실패해 이 요청은 새로 재시도합니다. stockCode={}", stockCode);
-            return getQuote(userId, stockCode);
+            return future.get(remainingNanos, TimeUnit.NANOSECONDS);
+        } catch (TimeoutException exception) {
+            log.debug("in-flight 대표 스레드 조회가 남은 시간 안에 끝나지 않아 이 요청은 새로 재시도합니다. stockCode={}", stockCode);
+            return getQuoteWithDeadline(userId, stockCode, deadline);
+        } catch (ExecutionException exception) {
+            log.debug("in-flight 대표 스레드 조회가 실패(또는 무효 응답)해 이 요청은 새로 재시도합니다. stockCode={}", stockCode);
+            return getQuoteWithDeadline(userId, stockCode, deadline);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new BusinessException(MarketErrorCode.QUOTE_CACHE_LOCK_TIMEOUT);
         }
     }
 

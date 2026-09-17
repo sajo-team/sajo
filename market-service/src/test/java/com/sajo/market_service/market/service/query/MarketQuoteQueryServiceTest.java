@@ -586,6 +586,110 @@ class MarketQuoteQueryServiceTest {
     }
 
     @Test
+    @DisplayName("대표 스레드가 lockWaitTimeout 안에 끝나지 않으면, 팔로워는 무한 대기하지 않고 타임아웃 후 예외를 받는다")
+    void followerDoesNotBlockForeverWhenLeaderIsSlow() throws Exception {
+        Duration shortTimeout = Duration.ofMillis(150);
+        MarketQuoteQueryService shortTimeoutService = new MarketQuoteQueryService(
+                quoteRedisTemplate,
+                stringRedisTemplate,
+                marketQuoteCacheLock,
+                userAccountFeignClient,
+                kisApiClient,
+                new MarketQuoteCacheProperties(CACHE_TTL, LOCK_TTL, shortTimeout, PREVIOUS_CLOSE_PRICE_MISSING_TTL)
+        );
+        UUID firstUserId = UUID.randomUUID();
+        UUID secondUserId = UUID.randomUUID();
+        UserKisTokenResponse credentials = new UserKisTokenResponse("token", "app-key", "secret-key");
+        CountDownLatch leaderCalledKis = new CountDownLatch(1);
+        CountDownLatch neverReleased = new CountDownLatch(1); // 절대 countDown하지 않아 대표가 제시간에 끝나지 못하는 상황을 모사
+
+        given(valueOperations.get(CACHE_KEY)).willReturn(null);
+        given(marketQuoteCacheLock.tryLock(eq(STOCK_CODE), anyString(), any(Duration.class))).willReturn(true);
+        given(userAccountFeignClient.getKisToken(any(UUID.class))).willReturn(credentials);
+        given(kisApiClient.getQuote(credentials, STOCK_CODE)).willAnswer(invocation -> {
+            leaderCalledKis.countDown();
+            neverReleased.await(2, TimeUnit.SECONDS);
+            return quoteResponse(70_000L); // 이 테스트에서는 도달하지 않음
+        });
+
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            executor.submit(() -> shortTimeoutService.getQuote(firstUserId, STOCK_CODE));
+            assertThat(leaderCalledKis.await(1, TimeUnit.SECONDS)).isTrue();
+
+            Future<QuoteResponse> follower =
+                    executor.submit(() -> shortTimeoutService.getQuote(secondUserId, STOCK_CODE));
+
+            // 대표는 아직 KIS 응답을 기다리는 중이지만, 팔로워는 shortTimeout(150ms)이 지나면
+            // 대표의 future를 계속 기다리지 않고 스스로 재시도하다 결국 타임아웃 예외를 받아야 한다.
+            assertThatThrownBy(() -> follower.get(2, TimeUnit.SECONDS))
+                    .hasCauseInstanceOf(BusinessException.class);
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    @DisplayName("대표가 예외 없이 currentPrice가 없는 무효 응답을 반환해도, 팔로워는 그 값을 공유받지 않고 스스로 재시도한다")
+    void followerRetriesWhenLeaderReturnsInvalidQuoteWithoutException() throws Exception {
+        Map<String, QuoteResponse> cache = new ConcurrentHashMap<>();
+        Map<String, String> locks = new ConcurrentHashMap<>();
+        UUID firstUserId = UUID.randomUUID();
+        UUID secondUserId = UUID.randomUUID();
+        UserKisTokenResponse credentials = new UserKisTokenResponse("token", "app-key", "secret-key");
+        QuoteResponse invalidQuote = new QuoteResponse(
+                STOCK_CODE, null, null, null, null, null, null, null, null, null, null, null, null, null, null);
+        QuoteResponse validQuote = quoteResponse(70_000L);
+        CountDownLatch leaderCalledKis = new CountDownLatch(1);
+        CountDownLatch allowLeaderToReturn = new CountDownLatch(1);
+        AtomicInteger kisCallCount = new AtomicInteger();
+
+        given(valueOperations.get(anyString())).willAnswer(invocation -> cache.get(invocation.getArgument(0)));
+        doAnswer(invocation -> {
+            cache.put(invocation.getArgument(0), invocation.getArgument(1));
+            return null;
+        }).when(valueOperations).set(anyString(), any(QuoteResponse.class), any(Duration.class));
+        given(marketQuoteCacheLock.tryLock(anyString(), anyString(), any(Duration.class)))
+                .willAnswer(invocation -> locks.putIfAbsent(
+                        invocation.getArgument(0), invocation.getArgument(1)
+                ) == null);
+        doAnswer(invocation -> {
+            locks.remove(invocation.getArgument(0), invocation.getArgument(1));
+            return null;
+        }).when(marketQuoteCacheLock).unlock(anyString(), anyString());
+        given(userAccountFeignClient.getKisToken(any(UUID.class))).willReturn(credentials);
+        given(kisApiClient.getQuote(credentials, STOCK_CODE)).willAnswer(invocation -> {
+            int callNumber = kisCallCount.incrementAndGet();
+            if (callNumber == 1) {
+                leaderCalledKis.countDown();
+                assertThat(allowLeaderToReturn.await(1, TimeUnit.SECONDS)).isTrue();
+                return invalidQuote;
+            }
+            return validQuote;
+        });
+
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<QuoteResponse> leader =
+                    executor.submit(() -> marketQuoteQueryService.getQuote(firstUserId, STOCK_CODE));
+            assertThat(leaderCalledKis.await(1, TimeUnit.SECONDS)).isTrue();
+            Future<QuoteResponse> follower =
+                    executor.submit(() -> marketQuoteQueryService.getQuote(secondUserId, STOCK_CODE));
+            Thread.sleep(200); // 팔로워가 대표의 in-flight future에 join할 시간을 확보한다.
+
+            allowLeaderToReturn.countDown();
+
+            // 대표 자신은 기존 동작대로 무효 응답을 그대로 돌려받는다(예외 아님).
+            assertThat(leader.get(2, TimeUnit.SECONDS)).isEqualTo(invalidQuote);
+            // 팔로워는 그 무효 응답을 공유받지 않고 재시도해 유효한 응답을 받는다.
+            assertThat(follower.get(2, TimeUnit.SECONDS)).isEqualTo(validQuote);
+            assertThat(kisCallCount).hasValue(2);
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
     @DisplayName("서로 다른 종목의 동시 캐시 MISS는 서로 블로킹하지 않는다")
     void doesNotBlockDifferentStockCodes() throws Exception {
         String otherStockCode = "000660";
