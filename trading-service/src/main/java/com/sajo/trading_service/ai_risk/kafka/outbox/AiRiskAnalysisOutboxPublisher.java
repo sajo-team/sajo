@@ -6,11 +6,11 @@ import com.sajo.trading_service.ai_risk.kafka.producer.AiRiskAnalysisEventProduc
 import com.sajo.trading_service.outbox.domain.OutboxEvent;
 import com.sajo.trading_service.outbox.domain.OutboxStatus;
 import com.sajo.trading_service.outbox.repository.OutboxEventRepository;
+import com.sajo.trading_service.outbox.service.OutboxEventStatusService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -24,8 +24,8 @@ public class AiRiskAnalysisOutboxPublisher {
     private final OutboxEventRepository outboxEventRepository;
     private final AiRiskAnalysisEventProducer eventProducer;
     private final ObjectMapper objectMapper;
+    private final OutboxEventStatusService outboxEventStatusService;
 
-    @Transactional
     public void publishPendingEvents(){
         List<OutboxEvent> events = outboxEventRepository.findByStatusAndEventTypeOrderByCreatedAtAsc(
                 OutboxStatus.PENDING,
@@ -47,14 +47,14 @@ public class AiRiskAnalysisOutboxPublisher {
 
             eventProducer.publish(event);
 
-            outboxEvent.markPublished();
+            outboxEventStatusService.markPublished(outboxEvent.getId());
 
             log.info(
                     "AI 위험 분석 Outbox 이벤트 발행 완료. eventId={}",
                     outboxEvent.getId()
             );
         } catch (Exception exception){
-            outboxEvent.increaseRetryCount();
+            outboxEventStatusService.increaseRetryCount(outboxEvent.getId());
 
             log.error(
                     "AI 위험 분석 Outbox 이벤트 발행 실패, eventId={}, retryCount={}",
