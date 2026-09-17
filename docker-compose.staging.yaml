@@ -190,6 +190,15 @@ services:
 
   # ---------------------------------------------------------------------
   # 애플리케이션 서비스 (dev 브랜치 커밋 SHA로 태그된 이미지를 사용)
+  #
+  # SPRING_PROFILES_ACTIVE는 아래 전 서비스에서 staging이 아닌 prod로 의도적으로
+  # 맞춰뒀다. 스테이징의 목적이 "실제 배포 환경과 최대한 동일한 조건에서 미리
+  # 검증"하는 것이므로, 별도 staging 프로필을 만들어 설정을 다르게 가져가면
+  # 오히려 "prod에서는 안 터지던 문제가 staging enum에서만 재현/미재현"되는
+  # 식으로 검증 의미가 퇴색될 수 있다고 판단했다. 진짜 staging 전용 프로필이
+  # 필요해지면(예: 로그 레벨, 외부 연동 mock 여부 등을 prod와 다르게 가져가야
+  # 하는 상황) config-server가 참조하는 별도 저장소인 sajo-config-repo 쪽에도
+  # staging 프로필 설정을 추가해야 하므로, 이번 PR 범위에서는 다루지 않았다.
   # ---------------------------------------------------------------------
   discovery-service:
     image: ghcr.io/sajo-team/sajo-discovery-service:${IMAGE_TAG:?IMAGE_TAG must be set}
@@ -215,7 +224,7 @@ services:
       SPRING_PROFILES_ACTIVE: prod
       GITHUB_USERNAME: ${GITHUB_USERNAME}
       GITHUB_TOKEN: ${GITHUB_TOKEN}
-      ENCRYPT_KEY: ${ENCRYPT_KEY}
+      ENCRYPT_KEY: ${ENCRYPT_KEY:?ENCRYPT_KEY must be set}
     ports:
       - "127.0.0.1:8888:8888"
     networks:

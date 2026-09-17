@@ -68,11 +68,16 @@ jobs:
 
     steps:
       # prod와 동일한 이유로, 배포 전 .env를 GitHub Secrets 기준으로 항상 새로 생성한다.
-      # 앱 설정값(DB_PASSWORD, OPENAI_API_KEY 등)은 일단 prod와 동일한 Secrets를
-      # 그대로 재사용한다 - 스테이징 DB/Redis는 prod와 완전히 분리된 별도
-      # 인스턴스라 값 자체를 공유해도 데이터가 섞이진 않는다. 나중에 스테이징을
-      # prod와 더 엄격히 분리하고 싶으면 이 값들도 STAGING_ 접두사 Secrets로
-      # 바꾸면 된다(EC2 접속 정보는 이미 STAGING_EC2_* 로 분리돼 있음).
+      # DB_PASSWORD/MONGO_PASSWORD/REDIS_PASSWORD/GRAFANA_*/OPENAI_API_KEY는 prod와
+      # 동일한 Secrets를 재사용한다 - 스테이징 DB/Redis/Mongo는 prod와 완전히 분리된
+      # 별도 인스턴스라 값 자체를 공유해도 데이터가 섞이진 않는다.
+      #
+      # 반면 ENCRYPT_KEY(Config Server가 Config Repo의 암호화된 prod 설정을 복호화하는
+      # 키)와 INTERNAL_API_SECRET(서비스 간 /internal/v1/** 호출 인증 키)은 prod와
+      # 별도 값(STAGING_ENCRYPT_KEY, STAGING_INTERNAL_API_SECRET)을 쓴다 - 이 둘은
+      # 유출 시 "스테이징이 뚫리면 prod까지 위조 요청을 보내거나 prod 설정을 복호화할
+      # 수 있는" 경로가 되므로 접근 권한이 더 느슨한 스테이징과 공유하지 않는다
+      # (코드 리뷰 반영, EC2 접속 정보를 STAGING_EC2_*로 분리한 것과 같은 패턴).
       - name: Generate .env on Staging EC2 from GitHub Secrets
         uses: appleboy/ssh-action@v1.0.3
         env:
@@ -83,9 +88,9 @@ jobs:
           GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
           CONFIG_REPO_GITHUB_USERNAME: ${{ secrets.CONFIG_REPO_GITHUB_USERNAME }}
           CONFIG_REPO_GITHUB_TOKEN: ${{ secrets.CONFIG_REPO_GITHUB_TOKEN }}
-          ENCRYPT_KEY: ${{ secrets.ENCRYPT_KEY }}
+          ENCRYPT_KEY: ${{ secrets.STAGING_ENCRYPT_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          INTERNAL_API_SECRET: ${{ secrets.INTERNAL_API_SECRET }}
+          INTERNAL_API_SECRET: ${{ secrets.STAGING_INTERNAL_API_SECRET }}
           MARKET_SCHEDULER_ENABLED: ${{ secrets.MARKET_SCHEDULER_ENABLED }}
           MARKET_SCHEDULER_SYSTEM_USER_ID: ${{ secrets.MARKET_SCHEDULER_SYSTEM_USER_ID }}
           MARKET_STOCK_MASTER_SYNC_ENABLED: ${{ secrets.MARKET_STOCK_MASTER_SYNC_ENABLED }}
