@@ -470,6 +470,122 @@ class MarketQuoteQueryServiceTest {
     }
 
     @Test
+    @DisplayName("동시 캐시 MISS는 대표 스레드만 Redis 락을 시도하고 나머지는 in-flight 결과를 공유받는다")
+    void onlyLeaderThreadAttemptsRedisLockOnConcurrentCacheMiss() throws Exception {
+        Map<String, QuoteResponse> cache = new ConcurrentHashMap<>();
+        Map<String, String> locks = new ConcurrentHashMap<>();
+        UUID firstUserId = UUID.randomUUID();
+        UUID secondUserId = UUID.randomUUID();
+        UserKisTokenResponse credentials = new UserKisTokenResponse("token", "app-key", "secret-key");
+        QuoteResponse fetchedQuote = quoteResponse(70_000L);
+        CountDownLatch kisStarted = new CountDownLatch(1);
+        CountDownLatch allowKisResponse = new CountDownLatch(1);
+        AtomicInteger tryLockCallCount = new AtomicInteger();
+
+        given(valueOperations.get(anyString())).willAnswer(invocation -> cache.get(invocation.getArgument(0)));
+        doAnswer(invocation -> {
+            cache.put(invocation.getArgument(0), invocation.getArgument(1));
+            return null;
+        }).when(valueOperations).set(anyString(), any(QuoteResponse.class), any(Duration.class));
+        given(marketQuoteCacheLock.tryLock(anyString(), anyString(), any(Duration.class)))
+                .willAnswer(invocation -> {
+                    tryLockCallCount.incrementAndGet();
+                    return locks.putIfAbsent(
+                            invocation.getArgument(0), invocation.getArgument(1)
+                    ) == null;
+                });
+        doAnswer(invocation -> {
+            locks.remove(invocation.getArgument(0), invocation.getArgument(1));
+            return null;
+        }).when(marketQuoteCacheLock).unlock(anyString(), anyString());
+        given(userAccountFeignClient.getKisToken(any(UUID.class))).willReturn(credentials);
+        given(kisApiClient.getQuote(credentials, STOCK_CODE)).willAnswer(invocation -> {
+            kisStarted.countDown();
+            assertThat(allowKisResponse.await(1, TimeUnit.SECONDS)).isTrue();
+            return fetchedQuote;
+        });
+
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<QuoteResponse> first =
+                    executor.submit(() -> marketQuoteQueryService.getQuote(firstUserId, STOCK_CODE));
+            assertThat(kisStarted.await(1, TimeUnit.SECONDS)).isTrue();
+            Future<QuoteResponse> second =
+                    executor.submit(() -> marketQuoteQueryService.getQuote(secondUserId, STOCK_CODE));
+
+            allowKisResponse.countDown();
+
+            assertThat(first.get(2, TimeUnit.SECONDS)).isEqualTo(fetchedQuote);
+            assertThat(second.get(2, TimeUnit.SECONDS)).isEqualTo(fetchedQuote);
+            // 대표 스레드 1개만 Redis 락을 시도해야 한다. 이게 2 이상이면 두 번째 스레드가
+            // in-flight future를 공유받지 못하고 자기도 락 경쟁에 뛰어들었다는 뜻이다.
+            assertThat(tryLockCallCount).hasValue(1);
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    @DisplayName("대표 스레드의 KIS 조회가 실패해도, 대기 중이던 팔로워는 실패를 공유받지 않고 스스로 재시도해 성공한다")
+    void followerRetriesIndependentlyWhenLeaderFails() throws Exception {
+        Map<String, QuoteResponse> cache = new ConcurrentHashMap<>();
+        Map<String, String> locks = new ConcurrentHashMap<>();
+        UUID firstUserId = UUID.randomUUID();
+        UUID secondUserId = UUID.randomUUID();
+        UserKisTokenResponse credentials = new UserKisTokenResponse("token", "app-key", "secret-key");
+        QuoteResponse fetchedQuote = quoteResponse(70_000L);
+        BusinessException kisFailure = new BusinessException(
+                MarketErrorCode.KIS_QUOTE_RESPONSE_INVALID, "KIS 일시 오류");
+        CountDownLatch leaderCalledKis = new CountDownLatch(1);
+        CountDownLatch allowLeaderToFail = new CountDownLatch(1);
+        AtomicInteger kisCallCount = new AtomicInteger();
+
+        given(valueOperations.get(anyString())).willAnswer(invocation -> cache.get(invocation.getArgument(0)));
+        doAnswer(invocation -> {
+            cache.put(invocation.getArgument(0), invocation.getArgument(1));
+            return null;
+        }).when(valueOperations).set(anyString(), any(QuoteResponse.class), any(Duration.class));
+        given(marketQuoteCacheLock.tryLock(anyString(), anyString(), any(Duration.class)))
+                .willAnswer(invocation -> locks.putIfAbsent(
+                        invocation.getArgument(0), invocation.getArgument(1)
+                ) == null);
+        doAnswer(invocation -> {
+            locks.remove(invocation.getArgument(0), invocation.getArgument(1));
+            return null;
+        }).when(marketQuoteCacheLock).unlock(anyString(), anyString());
+        given(userAccountFeignClient.getKisToken(any(UUID.class))).willReturn(credentials);
+        given(kisApiClient.getQuote(credentials, STOCK_CODE)).willAnswer(invocation -> {
+            int callNumber = kisCallCount.incrementAndGet();
+            if (callNumber == 1) {
+                leaderCalledKis.countDown();
+                assertThat(allowLeaderToFail.await(1, TimeUnit.SECONDS)).isTrue();
+                throw kisFailure;
+            }
+            return fetchedQuote;
+        });
+
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<QuoteResponse> leader =
+                    executor.submit(() -> marketQuoteQueryService.getQuote(firstUserId, STOCK_CODE));
+            assertThat(leaderCalledKis.await(1, TimeUnit.SECONDS)).isTrue();
+            Future<QuoteResponse> follower =
+                    executor.submit(() -> marketQuoteQueryService.getQuote(secondUserId, STOCK_CODE));
+            Thread.sleep(200); // 팔로워가 대표의 in-flight future에 join할 시간을 확보한다.
+
+            allowLeaderToFail.countDown();
+
+            assertThatThrownBy(leader::get).hasCause(kisFailure);
+            assertThat(follower.get(2, TimeUnit.SECONDS)).isEqualTo(fetchedQuote);
+            // 대표 1번 실패 + 팔로워의 재시도 1번 = 총 2번 호출. 대표가 실패했다고 팔로워까지
+            // 실패한 채로 끝났다면(수정 전 버그) follower.get()에서 예외가 터졌을 것이다.
+            assertThat(kisCallCount).hasValue(2);
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
     @DisplayName("서로 다른 종목의 동시 캐시 MISS는 서로 블로킹하지 않는다")
     void doesNotBlockDifferentStockCodes() throws Exception {
         String otherStockCode = "000660";

@@ -18,6 +18,9 @@ import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.ConcurrentHashMap;
 
 
 @Service
@@ -34,6 +37,7 @@ public class MarketQuoteQueryService {
     private final UserAccountFeignClient userAccountFeignClient;
     private final KisApiClient kisApiClient;
     private final MarketQuoteCacheProperties cacheProperties;
+    private final ConcurrentHashMap<String, CompletableFuture<QuoteResponse>> inFlightRequests = new ConcurrentHashMap<>();
 
     public QuoteResponse getQuote(UUID userId, String stockCode) {
         String cacheKey = createCacheKey(stockCode);
@@ -41,11 +45,54 @@ public class MarketQuoteQueryService {
         if (isReusableCachedQuote(initialLookup.quote(), stockCode)) {
             return initialLookup.quote();
         }
-        if (!initialLookup.redisAvailable()) {
-            return fetchAndCacheQuote(userId, stockCode, cacheKey);
+
+        return getQuoteWithInFlightDedup(userId, stockCode, cacheKey, initialLookup.redisAvailable());
+    }
+
+    /**
+     * 같은 종목코드에 대한 캐시 MISS가 동시에 여러 건 들어와도, 이 서버 인스턴스 안에서는 실제 조회(Redis 락 획득 + KIS 호출)를 단 하나의 스레드(대표 스레드)만 수행하도록 한다 (single-flight).
+     * 나머지 요청은 그 대표 스레드가 만든 {@link CompletableFuture}의 결과를 그대로 공유받아, Redis 락 재시도 폴링({@link #getQuoteWithCacheLock})을 타지 않는다.
+     * 인스턴스가 여러 대인 경우의 중복 호출 방지는 기존 Redis 분산 락이 계속 담당하므로, 이 in-flight 병합은 그 위에 한 겹 더 얹는 것이다.
+     */
+    private QuoteResponse getQuoteWithInFlightDedup(
+            UUID userId, String stockCode, String cacheKey, boolean redisAvailable) {
+        CompletableFuture<QuoteResponse> myFuture = new CompletableFuture<>();
+        CompletableFuture<QuoteResponse> existingFuture = inFlightRequests.putIfAbsent(stockCode, myFuture);
+        if (existingFuture != null) {
+            return joinInFlightFuture(existingFuture, userId, stockCode);
         }
 
-        return getQuoteWithCacheLock(userId, stockCode, cacheKey);
+        try {
+            QuoteResponse result = redisAvailable
+                    ? getQuoteWithCacheLock(userId, stockCode, cacheKey)
+                    : fetchAndCacheQuote(userId, stockCode, cacheKey);
+            myFuture.complete(result);
+            return result;
+        } catch (RuntimeException exception) {
+            // 대표 스레드의 실패를 대기 중인 팔로워 전원에게 그대로 퍼뜨리지 않는다.
+            // KIS 호출 1건의 일시적 실패(타임아웃 등)가 그 순간 함께 기다리던 요청 수만큼(수십 건) 그대로 증폭되는 것을 막기 위함.
+            // 대표 자신은 이 예외를 그대로 던지되, 팔로워는 completeExceptionally로 통보만 받고 각자 getQuote()를 통해 새로 도전한다(joinInFlightFuture 참고).
+            myFuture.completeExceptionally(exception);
+            throw exception;
+        } finally {
+            inFlightRequests.remove(stockCode, myFuture);
+        }
+    }
+
+    /**
+     * 팔로워는 대표 스레드의 성공은 그대로 공유받지만, 실패는 공유받지 않는다.
+     * 대표가 실패하면(팔로워 입장에서 {@link CompletionException}) 이미 in-flight 항목이 제거된 뒤이므로,
+     * {@link #getQuote(UUID, String)}를 다시 호출해 스스로 새 대표가 되거나 다른 대표에게 다시 합류할 기회를 얻는다.
+     * 이렇게 해야 락 기반 방식이 원래 갖고 있던 "한 스레드의 실패가 다른 대기 스레드의 실패로 이어지지 않는다"는 장애 격리 특성을 유지한다.
+     */
+    private QuoteResponse joinInFlightFuture(
+            CompletableFuture<QuoteResponse> future, UUID userId, String stockCode) {
+        try {
+            return future.join();
+        } catch (CompletionException exception) {
+            log.debug("in-flight 대표 스레드 조회가 실패해 이 요청은 새로 재시도합니다. stockCode={}", stockCode);
+            return getQuote(userId, stockCode);
+        }
     }
 
     private QuoteResponse getQuoteWithCacheLock(UUID userId, String stockCode, String cacheKey) {
