@@ -58,7 +58,11 @@ jobs:
 
   deploy:
     needs: build-and-push
-    if: github.event.workflow_run.event == 'push'
+    # build-and-push가 skip/실패하면 deploy는 절대 돌면 안 된다 (존재하지 않는
+    # 이미지 태그로 pull을 시도하게 됨) - 코드 리뷰 반영.
+    if: >
+      github.event.workflow_run.event == 'push' &&
+      needs.build-and-push.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -75,9 +79,16 @@ jobs:
       # prod보다 접근 권한이 느슨하므로 자격증명 분리를 별도 방어선으로 둔다
       # (코드 리뷰 반영, EC2 접속 정보를 STAGING_EC2_*로 분리한 것과 같은 패턴).
       #
-      # CONFIG_REPO_GITHUB_USERNAME/TOKEN, MARKET_* 값들은 prod와 동일한 Secrets를
-      # 계속 재사용한다 - 이 값들은 민감한 자격증명이 아니라 Config Repo 읽기 전용
-      # 접근 정보/스케줄러 동작 플래그이므로 분리 필요성이 낮다고 판단했다.
+      # CONFIG_REPO_GITHUB_USERNAME/TOKEN은 prod와 동일한 Secrets를 계속
+      # 재사용한다 - Config Repo 읽기 전용 접근 정보라 분리 필요성이 낮다.
+      #
+      # MARKET_SCHEDULER_*/MARKET_WEBSOCKET_*는 자격증명은 아니지만, prod와
+      # 값을 공유하면 스케줄러/웹소켓이 켜져 있는 동안 dev 배포 시점에 staging도
+      # 동시에 동일 종목으로 KIS API를 호출하게 되어 레이트리밋 경합이 생길 수
+      # 있다는 리뷰 지적을 반영해 STAGING_ 전용 값으로 분리했다. 운영 중에는
+      # STAGING_MARKET_SCHEDULER_ENABLED/STAGING_MARKET_WEBSOCKET_ENABLED을
+      # false로 꺼두거나, 켜더라도 종목 코드를 겹치지 않게 구성해서 prod와
+      # 동시에 같은 종목을 호출하지 않도록 운영해야 한다.
       - name: Generate .env on Staging EC2 from GitHub Secrets
         uses: appleboy/ssh-action@v1.0.3
         env:
@@ -91,17 +102,17 @@ jobs:
           ENCRYPT_KEY: ${{ secrets.STAGING_ENCRYPT_KEY }}
           OPENAI_API_KEY: ${{ secrets.STAGING_OPENAI_API_KEY }}
           INTERNAL_API_SECRET: ${{ secrets.STAGING_INTERNAL_API_SECRET }}
-          MARKET_SCHEDULER_ENABLED: ${{ secrets.MARKET_SCHEDULER_ENABLED }}
-          MARKET_SCHEDULER_SYSTEM_USER_ID: ${{ secrets.MARKET_SCHEDULER_SYSTEM_USER_ID }}
-          MARKET_STOCK_MASTER_SYNC_ENABLED: ${{ secrets.MARKET_STOCK_MASTER_SYNC_ENABLED }}
-          MARKET_INDICATOR_SCHEDULER_ENABLED: ${{ secrets.MARKET_INDICATOR_SCHEDULER_ENABLED }}
-          MARKET_SCHEDULER_DAILY_PRICE_CRON: ${{ secrets.MARKET_SCHEDULER_DAILY_PRICE_CRON }}
-          MARKET_INDICATOR_SCHEDULER_CRON: ${{ secrets.MARKET_INDICATOR_SCHEDULER_CRON }}
-          MARKET_SCHEDULER_KIS_REQUEST_INTERVAL: ${{ secrets.MARKET_SCHEDULER_KIS_REQUEST_INTERVAL }}
-          MARKET_SCHEDULER_TARGET_STOCK_CODES: ${{ secrets.MARKET_SCHEDULER_TARGET_STOCK_CODES }}
-          MARKET_WEBSOCKET_ENABLED: ${{ secrets.MARKET_WEBSOCKET_ENABLED }}
-          MARKET_WEBSOCKET_SYSTEM_USER_ID: ${{ secrets.MARKET_WEBSOCKET_SYSTEM_USER_ID }}
-          MARKET_WEBSOCKET_TARGET_STOCK_CODES: ${{ secrets.MARKET_WEBSOCKET_TARGET_STOCK_CODES }}
+          MARKET_SCHEDULER_ENABLED: ${{ secrets.STAGING_MARKET_SCHEDULER_ENABLED }}
+          MARKET_SCHEDULER_SYSTEM_USER_ID: ${{ secrets.STAGING_MARKET_SCHEDULER_SYSTEM_USER_ID }}
+          MARKET_STOCK_MASTER_SYNC_ENABLED: ${{ secrets.STAGING_MARKET_STOCK_MASTER_SYNC_ENABLED }}
+          MARKET_INDICATOR_SCHEDULER_ENABLED: ${{ secrets.STAGING_MARKET_INDICATOR_SCHEDULER_ENABLED }}
+          MARKET_SCHEDULER_DAILY_PRICE_CRON: ${{ secrets.STAGING_MARKET_SCHEDULER_DAILY_PRICE_CRON }}
+          MARKET_INDICATOR_SCHEDULER_CRON: ${{ secrets.STAGING_MARKET_INDICATOR_SCHEDULER_CRON }}
+          MARKET_SCHEDULER_KIS_REQUEST_INTERVAL: ${{ secrets.STAGING_MARKET_SCHEDULER_KIS_REQUEST_INTERVAL }}
+          MARKET_SCHEDULER_TARGET_STOCK_CODES: ${{ secrets.STAGING_MARKET_SCHEDULER_TARGET_STOCK_CODES }}
+          MARKET_WEBSOCKET_ENABLED: ${{ secrets.STAGING_MARKET_WEBSOCKET_ENABLED }}
+          MARKET_WEBSOCKET_SYSTEM_USER_ID: ${{ secrets.STAGING_MARKET_WEBSOCKET_SYSTEM_USER_ID }}
+          MARKET_WEBSOCKET_TARGET_STOCK_CODES: ${{ secrets.STAGING_MARKET_WEBSOCKET_TARGET_STOCK_CODES }}
         with:
           host: ${{ secrets.STAGING_EC2_HOST }}
           username: ${{ secrets.STAGING_EC2_USER }}
