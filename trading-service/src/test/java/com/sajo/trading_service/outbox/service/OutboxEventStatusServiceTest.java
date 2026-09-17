@@ -42,13 +42,39 @@ class OutboxEventStatusServiceTest {
 
         outboxEventStatusService =
                 new OutboxEventStatusService(outboxEventRepository);
+    }
 
-        when(outboxEventRepository.findById(eventId))
-                .thenReturn(Optional.of(outboxEvent));
+    @Test
+    void Outbox_이벤트_선점에_성공하면_true를_반환한다() {
+        when(outboxEventRepository.claimForPublish(
+                eventId,
+                OutboxStatus.PENDING,
+                OutboxStatus.PROCESSING
+        )).thenReturn(1);
+
+        boolean claimed = outboxEventStatusService.claimForPublish(eventId);
+
+        assertThat(claimed).isTrue();
+    }
+
+    @Test
+    void 이미_선점된_Outbox_이벤트이면_false를_반환한다() {
+        when(outboxEventRepository.claimForPublish(
+                eventId,
+                OutboxStatus.PENDING,
+                OutboxStatus.PROCESSING
+        )).thenReturn(0);
+
+        boolean claimed = outboxEventStatusService.claimForPublish(eventId);
+
+        assertThat(claimed).isFalse();
     }
 
     @Test
     void 발행_성공_시_PUBLISHED_상태로_변경된다() {
+        when(outboxEventRepository.findById(eventId))
+                .thenReturn(Optional.of(outboxEvent));
+
         outboxEventStatusService.markPublished(eventId);
 
         assertThat(outboxEvent.getStatus())
@@ -58,6 +84,9 @@ class OutboxEventStatusServiceTest {
 
     @Test
     void 발행_실패가_최대_재시도_미만이면_PENDING을_유지한다() {
+        when(outboxEventRepository.findById(eventId))
+                .thenReturn(Optional.of(outboxEvent));
+
         outboxEventStatusService.handlePublishFailure(eventId);
         outboxEventStatusService.handlePublishFailure(eventId);
 
@@ -68,6 +97,9 @@ class OutboxEventStatusServiceTest {
 
     @Test
     void 발행_실패가_최대_재시도에_도달하면_FAILED로_변경된다() {
+        when(outboxEventRepository.findById(eventId))
+                .thenReturn(Optional.of(outboxEvent));
+
         outboxEventStatusService.handlePublishFailure(eventId);
         outboxEventStatusService.handlePublishFailure(eventId);
         outboxEventStatusService.handlePublishFailure(eventId);

@@ -74,4 +74,8 @@ public class OutboxEvent {
     public void markFailed(){
         this.status = OutboxStatus.FAILED;
     }
+
+    public void markPending(){
+        this.status = OutboxStatus.PENDING;
+    }
 }

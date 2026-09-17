@@ -1,6 +1,7 @@
 package com.sajo.trading_service.outbox.service;
 
 import com.sajo.trading_service.outbox.domain.OutboxEvent;
+import com.sajo.trading_service.outbox.domain.OutboxStatus;
 import com.sajo.trading_service.outbox.repository.OutboxEventRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -17,18 +18,31 @@ public class OutboxEventStatusService {
     private final OutboxEventRepository outboxEventRepository;
 
     @Transactional
+    public boolean claimForPublish(UUID eventId){
+        return outboxEventRepository.claimForPublish(
+                eventId,
+                OutboxStatus.PENDING,
+                OutboxStatus.PROCESSING
+        ) == 1;
+    }
+
+    @Transactional
     public void markPublished(UUID eventId){
         OutboxEvent event = outboxEventRepository.findById(eventId).orElseThrow();
         event.markPublished();
     }
 
     @Transactional
-    public void handlePublishFailure(UUID eventId){
+    public OutboxEvent handlePublishFailure(UUID eventId){
         OutboxEvent event = outboxEventRepository.findById(eventId).orElseThrow();
         event.increaseRetryCount();
 
         if(event.getRetryCount() >= MAX_RETRY_COUNT){
             event.markFailed();
+        } else {
+            event.markPending();
         }
+
+        return event;
     }
 }

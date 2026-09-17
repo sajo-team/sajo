@@ -13,6 +13,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
+import java.util.UUID;
 
 @Slf4j
 @Component
@@ -34,30 +35,70 @@ public class AiRiskAnalysisOutboxPublisher {
         );
 
         for(OutboxEvent outboxEvent : events){
+            if (!outboxEventStatusService.claimForPublish(outboxEvent.getId())) {
+                log.debug(
+                        "다른 인스턴스가 이미 Outbox 이벤트를 선점했습니다. eventId={}",
+                        outboxEvent.getId()
+                );
+                continue;
+            }
+
             publish(outboxEvent);
         }
     }
 
-    private void publish(OutboxEvent outboxEvent){
-        try{
-            AiRiskAnalysisRequestedEvent event = objectMapper.treeToValue(
+    private void handlePublishFailure(UUID eventId, Exception exception) {
+        OutboxEvent event =
+                outboxEventStatusService.handlePublishFailure(eventId);
+
+        if (event.getStatus() == OutboxStatus.FAILED) {
+            log.error(
+                    "AI 위험 분석 Outbox 이벤트 최종 발행 실패. eventId={}, retryCount={}",
+                    eventId,
+                    event.getRetryCount(),
+                    exception
+            );
+            return;
+        }
+
+        log.warn(
+                "AI 위험 분석 Outbox 이벤트 발행 실패. eventId={}, retryCount={}",
+                eventId,
+                event.getRetryCount(),
+                exception
+        );
+    }
+
+    private void publish(OutboxEvent outboxEvent) {
+        AiRiskAnalysisRequestedEvent event;
+
+        try {
+            event = objectMapper.treeToValue(
                     outboxEvent.getEventBody(),
                     AiRiskAnalysisRequestedEvent.class
             );
+        } catch (Exception exception) {
+            handlePublishFailure(outboxEvent.getId(), exception);
+            return;
+        }
 
+        try {
             eventProducer.publish(event);
+        } catch (Exception exception) {
+            handlePublishFailure(outboxEvent.getId(), exception);
+            return;
+        }
 
+        try {
             outboxEventStatusService.markPublished(outboxEvent.getId());
 
             log.info(
                     "AI 위험 분석 Outbox 이벤트 발행 완료. eventId={}",
                     outboxEvent.getId()
             );
-        } catch (Exception exception){
-            outboxEventStatusService.handlePublishFailure(outboxEvent.getId());
-
+        } catch (Exception exception) {
             log.error(
-                    "AI 위험 분석 Outbox 이벤트 발행 실패, eventId={}, retryCount={}",
+                    "Kafka 발행 성공 후 Outbox 상태 갱신 실패. eventId={}",
                     outboxEvent.getId(),
                     exception
             );

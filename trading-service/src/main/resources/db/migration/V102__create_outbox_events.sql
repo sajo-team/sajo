@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS trading.p_outbox_events (
     published_at TIMESTAMPTZ,
 
     CONSTRAINT p_outbox_events_status_check
-        CHECK (status IN ('PENDING', 'PUBLISHED', 'FAILED')),
+        CHECK (status IN ('PENDING', 'PROCESSING', 'PUBLISHED', 'FAILED')),
 
     CONSTRAINT p_outbox_events_retry_count_check
         CHECK (retry_count >= 0)
