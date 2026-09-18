@@ -1,12 +1,17 @@
 package com.sajo.trading_service.trading.service.query;
 
 import com.sajo.common.exception.BusinessException;
+import com.sajo.trading_service.trading.controller.dto.request.AutoTradingAdminSearchCondition;
+import com.sajo.trading_service.trading.controller.dto.response.AutoTradingAdminResponse;
+import com.sajo.trading_service.trading.controller.dto.response.AutoTradingGlobalSuspensionResponse;
 import com.sajo.trading_service.trading.controller.dto.response.AutoTradingQueryResponse;
 import com.sajo.trading_service.trading.domain.AutoTrading;
+import com.sajo.trading_service.trading.domain.AutoTradingOperationControl;
 import com.sajo.trading_service.trading.domain.Order;
 import com.sajo.trading_service.trading.domain.enums.AutoTradingDirection;
 import com.sajo.trading_service.trading.domain.enums.OrderStatus;
 import com.sajo.trading_service.trading.exception.TradingErrorCode;
+import com.sajo.trading_service.trading.repository.query.AutoTradingOperationControlQueryRepository;
 import com.sajo.trading_service.trading.repository.query.AutoTradingQueryRepository;
 import com.sajo.trading_service.trading.repository.query.OrderQueryRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -39,6 +44,10 @@ class AutoTradingQueryServiceTest {
 
     @Mock
     private OrderQueryRepository orderQueryRepository;
+
+    @Mock
+    private AutoTradingOperationControlQueryRepository
+            autoTradingOperationControlQueryRepository;
 
     @InjectMocks
     private AutoTradingQueryService autoTradingQueryService;
@@ -529,5 +538,141 @@ class AutoTradingQueryServiceTest {
 
         verify(orderQueryRepository, never())
                 .findLatestOrdersByAutoTradingIds(anyList());
+    }
+
+    @Test
+    @DisplayName("관리자는 전체 AutoTrading 긴급 중지 상태를 조회할 수 있다")
+    void getGlobalSuspension_success() {
+        // given
+        AutoTradingOperationControl control =
+                mock(AutoTradingOperationControl.class);
+
+        given(autoTradingOperationControlQueryRepository
+                .findByIdAndDeletedAtIsNull(
+                        AutoTradingOperationControl.GLOBAL_CONTROL_ID
+                ))
+                .willReturn(Optional.of(control));
+
+        given(control.isSuspended())
+                .willReturn(true);
+
+        // when
+        AutoTradingGlobalSuspensionResponse response =
+                autoTradingQueryService.getGlobalSuspension();
+
+        // then
+        assertThat(response.suspended())
+                .isTrue();
+
+        verify(autoTradingOperationControlQueryRepository)
+                .findByIdAndDeletedAtIsNull(
+                        AutoTradingOperationControl.GLOBAL_CONTROL_ID
+                );
+    }
+
+    @Test
+    @DisplayName("전체 AutoTrading 운영 제어 정보가 없으면 조회에 실패한다")
+    void getGlobalSuspension_notFound() {
+        // given
+        given(autoTradingOperationControlQueryRepository
+                .findByIdAndDeletedAtIsNull(
+                        AutoTradingOperationControl.GLOBAL_CONTROL_ID
+                ))
+                .willReturn(Optional.empty());
+
+        // when & then
+        assertThatThrownBy(() ->
+                autoTradingQueryService.getGlobalSuspension()
+        )
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException =
+                            (BusinessException) exception;
+
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(
+                                    TradingErrorCode.AUTO_TRADING_OPERATION_CONTROL_NOT_FOUND
+                            );
+                });
+    }
+
+    @Test
+    @DisplayName("관리자 AutoTrading 조회 시 관리자 중지 상태를 함께 반환한다")
+    void findAllAutoTradingForAdmin_withAdminSuspended() {
+        // given
+        UUID userId = UUID.randomUUID();
+        UUID autoTradingId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+
+        AutoTrading autoTrading =
+                mock(AutoTrading.class);
+
+        Pageable pageable =
+                PageRequest.of(0, 10);
+
+        AutoTradingAdminSearchCondition condition =
+                new AutoTradingAdminSearchCondition(
+                        userId,
+                        strategyId,
+                        null,
+                        null
+                );
+
+        Page<AutoTrading> page =
+                new PageImpl<>(
+                        List.of(autoTrading),
+                        pageable,
+                        1
+                );
+
+        given(autoTradingQueryRepository.findAllForAdmin(
+                userId,
+                strategyId,
+                null,
+                null,
+                pageable
+        )).willReturn(page);
+
+        given(autoTrading.getId())
+                .willReturn(autoTradingId);
+
+        given(autoTrading.getUserId())
+                .willReturn(userId);
+
+        given(autoTrading.getStrategyId())
+                .willReturn(strategyId);
+
+        given(autoTrading.getDirection())
+                .willReturn(AutoTradingDirection.BOTH);
+
+        given(autoTrading.getEnabled())
+                .willReturn(true);
+
+        given(autoTrading.getAdminSuspended())
+                .willReturn(true);
+
+        given(orderQueryRepository
+                .findLatestOrdersByAutoTradingIds(anyList()))
+                .willReturn(List.of());
+
+        // when
+        Page<AutoTradingAdminResponse> response =
+                autoTradingQueryService.findAllAutoTradingForAdmin(
+                        condition,
+                        pageable
+                );
+
+        // then
+        AutoTradingAdminResponse result =
+                response.getContent().get(0);
+
+        assertThat(result.autoTradingId())
+                .isEqualTo(autoTradingId);
+
+        assertThat(result.enabled())
+                .isTrue();
+
+        assertThat(result.adminSuspended())
+                .isTrue();
     }
 }

@@ -10,6 +10,7 @@ spring:
     schemas: trading
     default-schema: trading
     locations: classpath:db/migration
+    out-of-order: true
     baseline-on-migrate: true
     baseline-version: 0
     validate-migration-naming: true
@@ -36,6 +37,10 @@ management:
         "[http.server.requests]": 1s
       percentiles-histogram:
         "[http.server.requests]": true
+
+outbox:
+  ai-risk:
+    publish-delay-ms: 1000
 
 ---
 spring:
@@ -96,6 +101,7 @@ sajo:
   kafka:
     type-mappings:
       trading.signal.generated: com.sajo.trading_service.trading.kafka.dto.TradingSignalGeneratedEvent
+      airiskanalysis.requested: com.sajo.trading_service.ai_risk.kafka.dto.AiRiskAnalysisRequestedEvent
   internal:
     api-secret: ${INTERNAL_API_SECRET}
 

@@ -2,6 +2,7 @@ package com.sajo.trading_service.trading.service.command;
 
 import com.sajo.common.exception.BusinessException;
 import com.sajo.trading_service.trading.domain.AutoTrading;
+import com.sajo.trading_service.trading.domain.AutoTradingOperationControl;
 import com.sajo.trading_service.trading.domain.Order;
 import com.sajo.trading_service.trading.domain.TradingLimit;
 import com.sajo.trading_service.trading.domain.enums.OrderStatus;
@@ -10,6 +11,7 @@ import com.sajo.trading_service.trading.exception.TradingErrorCode;
 import com.sajo.trading_service.trading.kafka.dto.TradingSignalGeneratedEvent;
 import com.sajo.trading_service.trading.kafka.dto.TradingSignalPayload;
 import com.sajo.trading_service.trading.repository.command.AutoTradingCommandRepository;
+import com.sajo.trading_service.trading.repository.command.AutoTradingOperationControlCommandRepository;
 import com.sajo.trading_service.trading.repository.command.OrderCommandRepository;
 import com.sajo.trading_service.trading.repository.command.TradingLimitCommandRepository;
 import com.sajo.trading_service.trading.repository.query.OrderQueryRepository;
@@ -32,6 +34,8 @@ public class TradingSignalCommandService {
     private final TradingLimitCommandRepository tradingLimitCommandRepository;
     private final ApplicationEventPublisher applicationEventPublisher;
     private final OrderQueryRepository orderQueryRepository;
+    private final AutoTradingOperationControlCommandRepository
+            autoTradingOperationControlCommandRepository;
 
 
     @Transactional
@@ -41,6 +45,27 @@ public class TradingSignalCommandService {
 
         if(orderCommandRepository.existsBySignalId(payload.signalId())){
             log.info("이미 처리된 Signal입니다. signalId={}", payload.signalId());
+            return;
+        }
+
+        AutoTradingOperationControl operationControl =
+                autoTradingOperationControlCommandRepository
+                        .findByIdAndDeletedAtIsNull(
+                                AutoTradingOperationControl.GLOBAL_CONTROL_ID
+                        )
+                        .orElseThrow(()->
+                                new BusinessException(
+                                        TradingErrorCode.AUTO_TRADING_OPERATION_CONTROL_NOT_FOUND
+                                )
+                        );
+
+        if (operationControl.isSuspended()) {
+            log.warn(
+                    "전체 자동매매 긴급 중지 상태로 Signal을 건너뜁니다. signalId={}, userId={}, strategyId={}",
+                    payload.signalId(),
+                    payload.userId(),
+                    payload.strategyId()
+            );
             return;
         }
 
@@ -55,7 +80,7 @@ public class TradingSignalCommandService {
                                         TradingErrorCode.AUTO_TRADING_NOT_FOUND
                                 )
                         );
-        if(!autoTrading.getEnabled()){
+        if (!autoTrading.isTradable()) {
             throw new BusinessException(
                     TradingErrorCode.AUTO_TRADING_DISABLED
             );

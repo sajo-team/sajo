@@ -41,7 +41,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class MarketRealtimePriceUpdateService {
 
-    // REST 경로의 lock-ttl(KIS API 호출 시간까지 포함해 기본 30s)과 달리, 이 서비스는 Redis
+    // REST 경로의 lock-ttl(KIS API 호출 시간까지 포함해 기본 40s)과 달리, 이 서비스는 Redis
     // get/set만 수행하므로 훨씬 짧게 잡아도 충분하다. 프로세스가 락을 쥔 채 죽어도 최대 이 시간만
     // 지나면 자동 해제된다.
     private static final Duration LOCK_TTL = Duration.ofSeconds(2);

@@ -14,6 +14,14 @@ import org.springframework.stereotype.Component;
 
 import java.util.Set;
 
+/**
+ * {@code trading.signal.generated} 이벤트를 받아 자동매매 주문 생성을 처리한다.
+ *
+ * <p>{@code concurrency = "3"}은 market-service의 {@code KafkaTopicConfig}가 이 토픽에
+ * 선언한 파티션 수(3)와 맞춘 값이다(#263). 프로듀서({@code TradingSignalProducer})가
+ * strategyId를 메시지 키로 사용해 같은 전략의 시그널은 항상 같은 파티션·같은 컨슈머 스레드로
+ * 순서대로 들어오므로, 동시 처리 스레드를 늘려도 전략 단위 처리 순서는 그대로 보장된다.</p>
+ */
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -31,7 +39,7 @@ public class TradingSignalConsumer {
     private final TradingSignalCommandService tradingSignalCommandService;
     private final Validator validator;
 
-    @KafkaListener(topics = "trading.signal.generated")
+    @KafkaListener(topics = "trading.signal.generated", concurrency = "3")
     public void consume(TradingSignalGeneratedEvent event) {
 
         Set<ConstraintViolation<TradingSignalGeneratedEvent>> violations =

@@ -36,6 +36,8 @@ public enum TradingErrorCode implements ErrorCode {
     AUTO_TRADING_DIRECTION_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "AUTO_TRADING_0025", "자동매매 설정에서 허용하지 않은 주문 방향입니다."),
     STRATEGY_NOT_ACTIVE(HttpStatus.CONFLICT, "AUTO_TRADING_0026", "활성 상태의 전략만 자동매매를 활성화할 수 있습니다."),
     ORDER_MANUAL_RESOLUTION_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "AUTO_TRADING_0027", "수동 확정이 가능한 주문 상태가 아닙니다."),
+    AUTO_TRADING_OPERATION_CONTROL_NOT_FOUND(HttpStatus.NOT_FOUND, "AUTO_TRADING_0028", "자동매매 운영 제어 정보를 찾을 수 없습니다."),
+
 
     ;
 
