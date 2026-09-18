@@ -62,7 +62,7 @@ management:
 market:
   quote-cache:
     ttl: 60s
-    lock-ttl: 30s
+    lock-ttl: 40s
     lock-wait-timeout: 5s
     previous-close-price-missing-ttl: 5m
   stock-master-sync:
