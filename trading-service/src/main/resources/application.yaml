@@ -10,6 +10,7 @@ spring:
     schemas: trading
     default-schema: trading
     locations: classpath:db/migration
+    out-of-order: true
     baseline-on-migrate: true
     baseline-version: 0
     validate-migration-naming: true
