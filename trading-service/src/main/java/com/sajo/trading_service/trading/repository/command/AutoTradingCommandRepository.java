@@ -40,4 +40,15 @@ public interface AutoTradingCommandRepository extends JpaRepository<AutoTrading,
             @Param("userId") UUID userId,
             @Param("strategyId") UUID strategyId
     );
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("""
+    select a
+    from AutoTrading a
+    where a.id = :autoTradingId
+      and a.deletedAt is null
+    """)
+    Optional<AutoTrading> findByIdForUpdate(
+            @Param("autoTradingId") UUID autoTradingId
+    );
 }
