@@ -7,6 +7,7 @@ import com.sajo.trading_service.ai_risk.domain.AiAnalysisStatus;
 import com.sajo.trading_service.ai_risk.domain.AiRiskAnalysis;
 import com.sajo.trading_service.ai_risk.repository.command.AiRiskAnalysisCommandRepository;
 import com.sajo.trading_service.ai_risk.service.command.AiRiskAnalysisPersistenceService;
+import com.sajo.trading_service.outbox.service.OutboxEventService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -17,6 +18,7 @@ import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.testcontainers.junit.jupiter.Container;
@@ -64,6 +66,9 @@ class AiRiskAnalysisConcurrencyTest {
 
     @Autowired
     private AiRiskAnalysisCommandRepository repository;
+
+    @MockitoBean
+    private OutboxEventService outboxEventService;
 
     @Test
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
