@@ -19,4 +19,6 @@ public final class AlertNames {
     public static final String HIGH_NODE_MEMORY_USAGE = "HighNodeMemoryUsage";
     public static final String NODE_DISK_LOW = "NodeDiskLow";
     public static final String NODE_DISK_WILL_FILL_IN_24H = "NodeDiskWillFillIn24h";
+
+    public static final String REDIS_MEMORY_HIGH = "RedisMemoryHigh";
 }
