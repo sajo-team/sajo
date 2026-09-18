@@ -4,10 +4,11 @@ import com.sajo.trading_service.ai_risk.client.backtest.dto.BacktestInternalResp
 import com.sajo.trading_service.ai_risk.client.strategy.dto.StrategyInternalResponse;
 import com.sajo.trading_service.ai_risk.domain.AiAnalysisStatus;
 import com.sajo.trading_service.ai_risk.domain.AiRiskAnalysis;
-import com.sajo.trading_service.ai_risk.event.AiRiskAnalysisRequestedEvent;
+import com.sajo.trading_service.ai_risk.kafka.dto.AiRiskAnalysisRequestedEvent;
 import com.sajo.trading_service.ai_risk.repository.command.AiRiskAnalysisCommandRepository;
+import com.sajo.trading_service.outbox.domain.OutboxMessage;
+import com.sajo.trading_service.outbox.service.OutboxEventService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,7 +20,7 @@ import java.util.UUID;
 public class AiRiskAnalysisPersistenceService {
 
     private final AiRiskAnalysisCommandRepository aiRiskAnalysisCommandRepository;
-    private final ApplicationEventPublisher eventPublisher;
+    private final OutboxEventService outboxEventService;
 
     @Transactional
     public AiRiskAnalysis create(
@@ -48,13 +49,21 @@ public class AiRiskAnalysisPersistenceService {
 
         AiRiskAnalysis savedAnalysis = aiRiskAnalysisCommandRepository.save(analysis);
 
-        eventPublisher.publishEvent(
-                new AiRiskAnalysisRequestedEvent(
-                        savedAnalysis.getId(),
-                        strategy,
-                        backtest
-                )
+        AiRiskAnalysisRequestedEvent event = AiRiskAnalysisRequestedEvent.of(
+                userId,
+                savedAnalysis.getId(),
+                strategy,
+                backtest
         );
+
+        OutboxMessage outboxMessage = new OutboxMessage(
+                event.eventId(),
+                event.eventType(),
+                event.eventVersion(),
+                event
+        );
+
+        outboxEventService.save(outboxMessage);
 
         return savedAnalysis;
     }

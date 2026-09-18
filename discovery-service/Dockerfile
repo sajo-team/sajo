@@ -8,7 +8,11 @@ COPY gateway/build.gradle gateway/build.gradle
 COPY user-service/build.gradle user-service/build.gradle
 COPY market-service/build.gradle market-service/build.gradle
 COPY trading-service/build.gradle trading-service/build.gradle
+COPY operation-service/build.gradle operation-service/build.gradle
 COPY libs/common/build.gradle libs/common/build.gradle
+COPY libs/common-kafka/build.gradle libs/common-kafka/build.gradle
+COPY libs/common-redis/build.gradle libs/common-redis/build.gradle
+COPY libs/common-jwt/build.gradle libs/common-jwt/build.gradle
 COPY config-server/build.gradle config-server/build.gradle
 RUN gradle :discovery-service:dependencies --no-daemon || true
 

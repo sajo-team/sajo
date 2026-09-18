@@ -32,6 +32,7 @@ jobs:
           - user-service
           - market-service
           - trading-service
+          - operation-service
 
     steps:
       - name: Checkout code at the commit that CI validated
@@ -57,7 +58,11 @@ jobs:
 
   deploy:
     needs: build-and-push
-    if: github.event.workflow_run.event == 'push'
+    # build-and-push가 skip/실패하면 deploy는 절대 돌면 안 된다 (존재하지 않는
+    # 이미지 태그로 pull을 시도하게 됨) - 코드 리뷰 반영.
+    if: >
+      github.event.workflow_run.event == 'push' &&
+      needs.build-and-push.result == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -66,6 +71,70 @@ jobs:
       packages: read
 
     steps:
+      # 배포 전에 .env를 GitHub Secrets 기준으로 항상 새로 생성한다.
+      # -> EC2에 수동으로 심어둔 .env가 유일한 소스가 되는 상황(값 드리프트,
+      #    누가 언제 뭘 바꿨는지 알 수 없는 상태)을 없애고, 저장소 Secrets를
+      #    유일한 source of truth로 만든다.
+      - name: Generate .env on EC2 from GitHub Secrets
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          MONGO_PASSWORD: ${{ secrets.MONGO_PASSWORD }}
+          REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+          GRAFANA_ADMIN_USER: ${{ secrets.GRAFANA_ADMIN_USER }}
+          GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
+          CONFIG_REPO_GITHUB_USERNAME: ${{ secrets.CONFIG_REPO_GITHUB_USERNAME }}
+          CONFIG_REPO_GITHUB_TOKEN: ${{ secrets.CONFIG_REPO_GITHUB_TOKEN }}
+          ENCRYPT_KEY: ${{ secrets.ENCRYPT_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          INTERNAL_API_SECRET: ${{ secrets.INTERNAL_API_SECRET }}
+          MARKET_SCHEDULER_ENABLED: ${{ secrets.MARKET_SCHEDULER_ENABLED }}
+          MARKET_SCHEDULER_SYSTEM_USER_ID: ${{ secrets.MARKET_SCHEDULER_SYSTEM_USER_ID }}
+          MARKET_STOCK_MASTER_SYNC_ENABLED: ${{ secrets.MARKET_STOCK_MASTER_SYNC_ENABLED }}
+          MARKET_INDICATOR_SCHEDULER_ENABLED: ${{ secrets.MARKET_INDICATOR_SCHEDULER_ENABLED }}
+          MARKET_SCHEDULER_DAILY_PRICE_CRON: ${{ secrets.MARKET_SCHEDULER_DAILY_PRICE_CRON }}
+          MARKET_INDICATOR_SCHEDULER_CRON: ${{ secrets.MARKET_INDICATOR_SCHEDULER_CRON }}
+          MARKET_SCHEDULER_KIS_REQUEST_INTERVAL: ${{ secrets.MARKET_SCHEDULER_KIS_REQUEST_INTERVAL }}
+          MARKET_SCHEDULER_TARGET_STOCK_CODES: ${{ secrets.MARKET_SCHEDULER_TARGET_STOCK_CODES }}
+          MARKET_WEBSOCKET_ENABLED: ${{ secrets.MARKET_WEBSOCKET_ENABLED }}
+          MARKET_WEBSOCKET_SYSTEM_USER_ID: ${{ secrets.MARKET_WEBSOCKET_SYSTEM_USER_ID }}
+          MARKET_WEBSOCKET_TARGET_STOCK_CODES: ${{ secrets.MARKET_WEBSOCKET_TARGET_STOCK_CODES }}
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          envs: DB_PASSWORD,MONGO_PASSWORD,REDIS_PASSWORD,GRAFANA_ADMIN_USER,GRAFANA_ADMIN_PASSWORD,CONFIG_REPO_GITHUB_USERNAME,CONFIG_REPO_GITHUB_TOKEN,ENCRYPT_KEY,OPENAI_API_KEY,INTERNAL_API_SECRET,MARKET_SCHEDULER_ENABLED,MARKET_SCHEDULER_SYSTEM_USER_ID,MARKET_STOCK_MASTER_SYNC_ENABLED,MARKET_INDICATOR_SCHEDULER_ENABLED,MARKET_SCHEDULER_DAILY_PRICE_CRON,MARKET_INDICATOR_SCHEDULER_CRON,MARKET_SCHEDULER_KIS_REQUEST_INTERVAL,MARKET_SCHEDULER_TARGET_STOCK_CODES,MARKET_WEBSOCKET_ENABLED,MARKET_WEBSOCKET_SYSTEM_USER_ID,MARKET_WEBSOCKET_TARGET_STOCK_CODES
+          script_stop: true
+          script: |
+            set -euo pipefail
+            mkdir -p ~/sajo
+            umask 077
+            {
+              printf 'DB_PASSWORD=%s\n' "$DB_PASSWORD"
+              printf 'MONGO_PASSWORD=%s\n' "$MONGO_PASSWORD"
+              printf 'REDIS_PASSWORD=%s\n' "$REDIS_PASSWORD"
+              printf 'GRAFANA_ADMIN_USER=%s\n' "$GRAFANA_ADMIN_USER"
+              printf 'GRAFANA_ADMIN_PASSWORD=%s\n' "$GRAFANA_ADMIN_PASSWORD"
+              printf 'GITHUB_USERNAME=%s\n' "$CONFIG_REPO_GITHUB_USERNAME"
+              printf 'GITHUB_TOKEN=%s\n' "$CONFIG_REPO_GITHUB_TOKEN"
+              printf 'ENCRYPT_KEY=%s\n' "$ENCRYPT_KEY"
+              printf 'OPENAI_API_KEY=%s\n' "$OPENAI_API_KEY"
+              printf 'INTERNAL_API_SECRET=%s\n' "$INTERNAL_API_SECRET"
+              printf 'MARKET_SCHEDULER_ENABLED=%s\n' "$MARKET_SCHEDULER_ENABLED"
+              printf 'MARKET_SCHEDULER_SYSTEM_USER_ID=%s\n' "$MARKET_SCHEDULER_SYSTEM_USER_ID"
+              printf 'MARKET_STOCK_MASTER_SYNC_ENABLED=%s\n' "$MARKET_STOCK_MASTER_SYNC_ENABLED"
+              printf 'MARKET_INDICATOR_SCHEDULER_ENABLED=%s\n' "$MARKET_INDICATOR_SCHEDULER_ENABLED"
+              printf 'MARKET_SCHEDULER_DAILY_PRICE_CRON=%s\n' "$MARKET_SCHEDULER_DAILY_PRICE_CRON"
+              printf 'MARKET_INDICATOR_SCHEDULER_CRON=%s\n' "$MARKET_INDICATOR_SCHEDULER_CRON"
+              printf 'MARKET_SCHEDULER_KIS_REQUEST_INTERVAL=%s\n' "$MARKET_SCHEDULER_KIS_REQUEST_INTERVAL"
+              printf 'MARKET_SCHEDULER_TARGET_STOCK_CODES=%s\n' "$MARKET_SCHEDULER_TARGET_STOCK_CODES"
+              printf 'MARKET_WEBSOCKET_ENABLED=%s\n' "$MARKET_WEBSOCKET_ENABLED"
+              printf 'MARKET_WEBSOCKET_SYSTEM_USER_ID=%s\n' "$MARKET_WEBSOCKET_SYSTEM_USER_ID"
+              printf 'MARKET_WEBSOCKET_TARGET_STOCK_CODES=%s\n' "$MARKET_WEBSOCKET_TARGET_STOCK_CODES"
+            } > ~/sajo/.env
+            chmod 600 ~/sajo/.env
+            echo ".env generated on EC2 from GitHub Secrets (contents not printed)."
+
       - name: Deploy to EC2 via SSH
         uses: appleboy/ssh-action@v1.0.3
         env:
@@ -102,7 +171,7 @@ jobs:
               # 제거했으므로(#100), 컨테이너 내부에서 자기 자신의 localhost로
               # 체크한다 - discovery-service의 기존 docker-compose healthcheck와
               # 동일한 방식(wget, eclipse-temurin:21-jre 이미지에 포함되어 있음).
-              local container_ports="user-service:8081 market-service:8082 trading-service:8083"
+              local container_ports="user-service:8081 market-service:8082 trading-service:8083 operation-service:8084"
               for i in $(seq 1 30); do
                 all_up=true
                 for port in $host_ports; do
@@ -132,7 +201,7 @@ jobs:
 
             export IMAGE_TAG=${{ github.event.workflow_run.head_sha }}
             if docker compose -f docker-compose.prod.yaml pull && docker compose -f docker-compose.prod.yaml up -d; then
-              echo "Waiting for health checks (discovery-service, config-server, gateway, user-service, market-service, trading-service)..."
+              echo "Waiting for health checks (discovery-service, config-server, gateway, user-service, market-service, trading-service, operation-service)..."
               if check_health; then
                 echo "$IMAGE_TAG" > ~/sajo/.last_healthy_sha
                 echo "Deploy succeeded, all core services are healthy."
@@ -160,3 +229,23 @@ jobs:
               echo "No previous known-good image recorded — cannot roll back automatically."
             fi
             exit 1
+
+      # 배포가 "성공"으로 끝났을 때만 실행된다(rollback 경로를 탄 경우는
+      # 위 스텝이 exit 1로 끝나서 실패 처리되므로 여기까지 오지 않는다).
+      # 직전 healthy 이미지도 이 시점에 로컬에서 지워지므로, 그 다음 배포가
+      # 실패해서 롤백이 필요해지면 GHCR에서 다시 pull하게 된다(약간의 지연 발생,
+      # 대신 EC2 디스크는 항상 최소로 유지됨).
+      # sajo 이미지(ghcr.io/sajo-team/*)만 대상으로 한다 - docker image prune은
+      # reference 필터를 지원하지 않아서 docker images로 먼저 골라낸 뒤 rmi한다.
+      # 사용 중인 이미지는 docker rmi가 에러 없이 건너뛴다.
+      - name: Prune old sajo images on EC2
+        if: success()
+        continue-on-error: true
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script_stop: false
+          script: |
+            docker images 'ghcr.io/sajo-team/*' -q | xargs -r docker rmi

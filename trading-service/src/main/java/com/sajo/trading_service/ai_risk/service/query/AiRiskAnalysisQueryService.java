@@ -52,4 +52,10 @@ public class AiRiskAnalysisQueryService {
 
         return analyses.map(AiRiskAnalysisFailureHistoryItemResponse :: from);
     }
+
+    public boolean isPending(UUID analysisId){
+        return queryRepository.findById(analysisId)
+                .map(analysis -> analysis.getStatus() == AiAnalysisStatus.PENDING)
+                .orElse(false);
+    }
 }

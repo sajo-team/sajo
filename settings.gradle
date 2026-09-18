@@ -6,6 +6,7 @@ include 'user-service'
 include 'market-service'
 include 'trading-service'
 include 'config-server'
+include 'operation-service'
 
 include 'libs:common'
 include 'libs:common-redis'

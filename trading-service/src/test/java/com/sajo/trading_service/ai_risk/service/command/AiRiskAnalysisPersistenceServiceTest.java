@@ -4,17 +4,18 @@ import com.sajo.trading_service.ai_risk.client.backtest.dto.BacktestInternalResp
 import com.sajo.trading_service.ai_risk.client.strategy.dto.StrategyInternalResponse;
 import com.sajo.trading_service.ai_risk.domain.AiAnalysisStatus;
 import com.sajo.trading_service.ai_risk.domain.AiRiskAnalysis;
-import com.sajo.trading_service.ai_risk.event.AiRiskAnalysisRequestedEvent;
 import com.sajo.trading_service.ai_risk.repository.command.AiRiskAnalysisCommandRepository;
+import com.sajo.trading_service.outbox.domain.OutboxMessage;
+import com.sajo.trading_service.outbox.service.OutboxEventService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.ApplicationEventPublisher;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -22,7 +23,6 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -35,7 +35,7 @@ class AiRiskAnalysisPersistenceServiceTest {
     private AiRiskAnalysisCommandRepository repository;
 
     @Mock
-    private ApplicationEventPublisher eventPublisher;
+    private OutboxEventService outboxEventService;
 
     @InjectMocks
     private AiRiskAnalysisPersistenceService persistenceService;
@@ -85,7 +85,7 @@ class AiRiskAnalysisPersistenceServiceTest {
     }
 
     @BeforeEach
-    void setup(){
+    void setup() {
         userId = UUID.randomUUID();
         strategyId = UUID.randomUUID();
         backtestId = UUID.randomUUID();
@@ -95,8 +95,8 @@ class AiRiskAnalysisPersistenceServiceTest {
     }
 
     @Test
-    @DisplayName("PENDING 분석이 없으면 새로운 분석을 저장하고 이벤트를 발행한다.")
-    void create_noPendingAnalysis_createAndPublishEvent(){
+    @DisplayName("PENDING 분석이 없으면 새로운 분석과 Outbox 이벤트를 저장한다")
+    void create_noPendingAnalysis_createAnalysisAndOutboxEvent() {
         when(repository.findByUserIdAndStrategyIdAndBacktestIdAndStatus(
                 userId,
                 strategyId,
@@ -122,11 +122,23 @@ class AiRiskAnalysisPersistenceServiceTest {
         assertThat(result.getStatus()).isEqualTo(AiAnalysisStatus.PENDING);
 
         verify(repository).save(any(AiRiskAnalysis.class));
-        verify(eventPublisher).publishEvent(any(AiRiskAnalysisRequestedEvent.class));
+
+        ArgumentCaptor<OutboxMessage> captor =
+                ArgumentCaptor.forClass(OutboxMessage.class);
+
+        verify(outboxEventService).save(captor.capture());
+
+        OutboxMessage message = captor.getValue();
+
+        assertThat(message.eventId()).isNotNull();
+        assertThat(message.eventType())
+                .isEqualTo("AI_RISK_ANALYSIS_REQUESTED");
+        assertThat(message.eventVersion()).isEqualTo(1);
+        assertThat(message.eventBody()).isNotNull();
     }
 
     @Test
-    @DisplayName("PENDING 분석이 이미 있으면 기존 분석을 반환하고 새 분석을 저장하지 않는다")
+    @DisplayName("PENDING 분석이 이미 있으면 기존 분석을 반환하고 새 분석과 Outbox 이벤트를 저장하지 않는다")
     void create_pendingAnalysisExists_returnsExistingAnalysis() {
         AiRiskAnalysis existingAnalysis = AiRiskAnalysis.create(
                 userId,
@@ -154,7 +166,7 @@ class AiRiskAnalysisPersistenceServiceTest {
         verify(repository, never())
                 .save(any(AiRiskAnalysis.class));
 
-        verify(eventPublisher, never())
-                .publishEvent(any());
+        verify(outboxEventService, never())
+                .save(any(OutboxMessage.class));
     }
 }

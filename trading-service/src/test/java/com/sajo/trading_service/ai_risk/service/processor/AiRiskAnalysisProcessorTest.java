@@ -5,17 +5,18 @@ import com.sajo.trading_service.ai_risk.client.backtest.dto.BacktestInternalResp
 import com.sajo.trading_service.ai_risk.client.strategy.dto.StrategyInternalResponse;
 import com.sajo.trading_service.ai_risk.document.AiAnalysisHistory;
 import com.sajo.trading_service.ai_risk.domain.*;
-import com.sajo.trading_service.ai_risk.event.AiRiskAnalysisRequestedEvent;
 import com.sajo.trading_service.ai_risk.exception.AiAnalysisException;
 import com.sajo.trading_service.ai_risk.exception.AiResponseParseException;
 import com.sajo.trading_service.ai_risk.exception.AiResponseValidationException;
 import com.sajo.trading_service.ai_risk.exception.AiRiskErrorCode;
+import com.sajo.trading_service.ai_risk.kafka.dto.AiRiskAnalysisRequestedEvent;
 import com.sajo.trading_service.ai_risk.repository.command.AiAnalysisHistoryCommandRepository;
 import com.sajo.trading_service.ai_risk.service.analysis.AiRiskAnalyzer;
 import com.sajo.trading_service.ai_risk.service.analysis.AiRiskResponseValidator;
 import com.sajo.trading_service.ai_risk.service.analysis.dto.AiRiskAnalysisOutput;
 import com.sajo.trading_service.ai_risk.service.analysis.dto.AiRiskAnalysisResult;
 import com.sajo.trading_service.ai_risk.service.command.AiRiskAnalysisResultService;
+import com.sajo.trading_service.ai_risk.service.query.AiRiskAnalysisQueryService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Tag;
@@ -53,6 +54,9 @@ class AiRiskAnalysisProcessorTest {
     @Mock
     private AiAnalysisHistoryCommandRepository historyRepository;
 
+    @Mock
+    private AiRiskAnalysisQueryService queryService;
+
     @InjectMocks
     private AiRiskAnalysisProcessor processor;
 
@@ -75,11 +79,15 @@ class AiRiskAnalysisProcessorTest {
         strategy = createStrategy();
         backtest = createBacktest();
 
-        event = new AiRiskAnalysisRequestedEvent(
+        event = AiRiskAnalysisRequestedEvent.of(
+                userId,
                 analysisId,
                 strategy,
                 backtest
         );
+
+        when(queryService.isPending(analysisId))
+                .thenReturn(true);
     }
 
     @Test
@@ -121,6 +129,9 @@ class AiRiskAnalysisProcessorTest {
         assertThat(history.getUserId()).isEqualTo(userId);
         assertThat(history.getStrategyId()).isEqualTo(strategyId);
         assertThat(history.getBacktestId()).isEqualTo(backtestId);
+
+        assertThat(history.getPrompt().promptKey())
+                .isEqualTo(AiPromptKey.STRATEGY_RISK_ANALYSIS);
 
         assertThat(history.getPrompt().version())
                 .isEqualTo("v3");
@@ -262,6 +273,7 @@ class AiRiskAnalysisProcessorTest {
                 new AiResponseParseException(
                         "AI 응답 변환에 실패했습니다.",
                         rawResponse,
+                        AiPromptKey.STRATEGY_RISK_ANALYSIS,
                         "v3",
                         "테스트 시스템 프롬프트",
                         "gpt-5-mini",
@@ -314,6 +326,14 @@ class AiRiskAnalysisProcessorTest {
         assertThat(history.getMetadata().latencyMs())
                 .isEqualTo(100L);
 
+        assertThat(history.getPrompt()).isNotNull();
+
+        assertThat(history.getPrompt().promptKey())
+                .isEqualTo(AiPromptKey.STRATEGY_RISK_ANALYSIS);
+
+        assertThat(history.getPrompt().version())
+                .isEqualTo("v3");
+
         assertThat(history.getResult()).isNotNull();
         assertThat(history.getResult().status())
                 .isEqualTo(AiAnalysisStatus.FAILED);
@@ -329,6 +349,7 @@ class AiRiskAnalysisProcessorTest {
                 new AiAnalysisException(
                         AiAnalysisFailureType.LLM_API_ERROR,
                         "LLM API 호출에 실패했습니다.",
+                        AiPromptKey.STRATEGY_RISK_ANALYSIS,
                         "v3",
                         "테스트 시스템 프롬프트",
                         "gpt-5-mini",
@@ -376,6 +397,13 @@ class AiRiskAnalysisProcessorTest {
 
         assertThat(history.getMetadata().latencyMs())
                 .isEqualTo(150L);
+        assertThat(history.getPrompt()).isNotNull();
+
+        assertThat(history.getPrompt().promptKey())
+                .isEqualTo(AiPromptKey.STRATEGY_RISK_ANALYSIS);
+
+        assertThat(history.getPrompt().version())
+                .isEqualTo("v3");
 
         assertThat(history.getValidation().structureValid())
                 .isFalse();
@@ -472,6 +500,14 @@ class AiRiskAnalysisProcessorTest {
         assertThat(history.getMetadata().latencyMs())
                 .isEqualTo(100L);
 
+        assertThat(history.getPrompt()).isNotNull();
+
+        assertThat(history.getPrompt().promptKey())
+                .isEqualTo(AiPromptKey.STRATEGY_RISK_ANALYSIS);
+
+        assertThat(history.getPrompt().version())
+                .isEqualTo("v3");
+
         assertThat(history.getResult()).isNotNull();
         assertThat(history.getResult().status())
                 .isEqualTo(AiAnalysisStatus.FAILED);
@@ -487,6 +523,7 @@ class AiRiskAnalysisProcessorTest {
                 new AiAnalysisException(
                         AiAnalysisFailureType.PROMPT_NOT_FOUND,
                         "활성화된 AI 프롬프트를 찾을 수 없습니다.",
+                        AiPromptKey.STRATEGY_RISK_ANALYSIS,
                         null,
                         null,
                         "gpt-5-mini",
@@ -567,6 +604,7 @@ class AiRiskAnalysisProcessorTest {
         return new AiRiskAnalysisOutput(
                 result,
                 "{\"riskLevel\":\"HIGH\"}",
+                AiPromptKey.STRATEGY_RISK_ANALYSIS,
                 "테스트 시스템 프롬프트",
                 "v3",
                 "gpt-5-mini",
@@ -623,7 +661,7 @@ class AiRiskAnalysisProcessorTest {
 
         // then
         verify(resultService).fail(
-                event.analysisId(),
+                event.payload().analysisId(),
                 AiAnalysisFailureType.INTERNAL_ERROR,
                 null
         );
@@ -645,8 +683,24 @@ class AiRiskAnalysisProcessorTest {
         assertThat(savedHistory.getValidation().structureValid()).isFalse();
         assertThat(savedHistory.getValidation().contentValid()).isFalse();
 
-        // 이번 리뷰의 핵심 검증
         assertThat(savedHistory.getValidation().errors())
                 .containsExactly("RuntimeException");
+    }
+
+    @Test
+    @DisplayName("이미 처리된 분석 이벤트는 다시 처리하지 않는다")
+    void process_alreadyProcessed_skip() {
+
+        when(queryService.isPending(analysisId))
+                .thenReturn(false);
+
+        // when
+        processor.process(event);
+
+        // then
+        verifyNoInteractions(aiRiskAnalyzer);
+        verifyNoInteractions(responseValidator);
+        verifyNoInteractions(resultService);
+        verifyNoInteractions(historyRepository);
     }
 }

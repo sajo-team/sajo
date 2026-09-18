@@ -43,6 +43,8 @@ spring:
             read-timeout: ${KIS_WEBSOCKET_USER_SERVICE_READ_TIMEOUT:3000}
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      group-id: market-consumer-group
 
 management:
   endpoints:
@@ -96,6 +98,7 @@ sajo:
     type-mappings:
       trading.signal.generated: com.sajo.market_service.strategy.kafka.dto.TradingSignalGeneratedEvent
       market.price.updated: com.sajo.market_service.market.kafka.dto.MarketPriceUpdatedEvent
+      market.quote.requested: com.sajo.market_service.market.kafka.dto.MarketQuoteRequestedEvent
 
 
 ---

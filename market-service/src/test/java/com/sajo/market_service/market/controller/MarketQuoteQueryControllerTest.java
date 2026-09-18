@@ -2,6 +2,7 @@ package com.sajo.market_service.market.controller;
 
 import com.sajo.common.exception.GlobalExceptionHandler;
 import com.sajo.market_service.market.dto.response.QuoteResponse;
+import com.sajo.market_service.market.service.command.MarketQuoteRequestLogCommandService;
 import com.sajo.market_service.market.service.query.MarketQuoteQueryService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -28,6 +29,9 @@ class MarketQuoteQueryControllerTest {
 
     @MockitoBean
     private MarketQuoteQueryService marketQuoteQueryService;
+
+    @MockitoBean
+    private MarketQuoteRequestLogCommandService marketQuoteRequestLogCommandService;
 
     @Test
     @DisplayName("KIS 기준 시각이 없어도 Public 현재가를 기존 필드로 반환한다")
@@ -64,6 +68,7 @@ class MarketQuoteQueryControllerTest {
                 .andExpect(jsonPath("$.data.baseTime").doesNotExist());
 
         verify(marketQuoteQueryService).getQuote(userId, "005930");
+        verify(marketQuoteRequestLogCommandService).recordQuoteRequest(userId, "005930");
     }
 
     @Test

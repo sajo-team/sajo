@@ -1,10 +1,15 @@
 package com.sajo.trading_service.trading.service.query;
 
 import com.sajo.common.exception.BusinessException;
+import com.sajo.trading_service.trading.controller.dto.request.AutoTradingAdminSearchCondition;
+import com.sajo.trading_service.trading.controller.dto.response.AutoTradingAdminResponse;
+import com.sajo.trading_service.trading.controller.dto.response.AutoTradingGlobalSuspensionResponse;
 import com.sajo.trading_service.trading.controller.dto.response.AutoTradingQueryResponse;
 import com.sajo.trading_service.trading.domain.AutoTrading;
+import com.sajo.trading_service.trading.domain.AutoTradingOperationControl;
 import com.sajo.trading_service.trading.domain.Order;
 import com.sajo.trading_service.trading.exception.TradingErrorCode;
+import com.sajo.trading_service.trading.repository.query.AutoTradingOperationControlQueryRepository;
 import com.sajo.trading_service.trading.repository.query.AutoTradingQueryRepository;
 import com.sajo.trading_service.trading.repository.query.OrderQueryRepository;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +29,8 @@ import java.util.stream.Collectors;
 public class AutoTradingQueryService {
     private final AutoTradingQueryRepository autoTradingQueryRepository;
     private final OrderQueryRepository orderQueryRepository;
+    private final AutoTradingOperationControlQueryRepository
+            autoTradingOperationControlQueryRepository;
 
     public Page<AutoTradingQueryResponse> findAllByUserId(
             UUID userId,
@@ -89,5 +96,62 @@ public class AutoTradingQueryService {
                 autoTrading,
                 lastOrder
                 );
+    }
+
+    public Page<AutoTradingAdminResponse> findAllAutoTradingForAdmin(
+            AutoTradingAdminSearchCondition condition,
+            Pageable pageable
+    ) {
+        Page<AutoTrading> autoTradingPage =
+                autoTradingQueryRepository.findAllForAdmin(
+                        condition.userId(),
+                        condition.strategyId(),
+                        condition.direction(),
+                        condition.enabled(),
+                        pageable
+                );
+
+        if (autoTradingPage.isEmpty()) {
+            return Page.empty(pageable);
+        }
+
+        List<UUID> autoTradingIds =
+                autoTradingPage.getContent()
+                        .stream()
+                        .map(AutoTrading::getId)
+                        .toList();
+
+        Map<UUID, Order> latestOrderMap =
+                orderQueryRepository
+                        .findLatestOrdersByAutoTradingIds(autoTradingIds)
+                        .stream()
+                        .collect(Collectors.toMap(
+                                Order::getAutoTradingId,
+                                order -> order
+                        ));
+
+        return autoTradingPage.map(autoTrading ->
+                AutoTradingAdminResponse.from(
+                        autoTrading,
+                        latestOrderMap.get(autoTrading.getId())
+                )
+        );
+    }
+
+    public AutoTradingGlobalSuspensionResponse getGlobalSuspension() {
+        AutoTradingOperationControl control =
+                autoTradingOperationControlQueryRepository
+                        .findByIdAndDeletedAtIsNull(
+                                AutoTradingOperationControl.GLOBAL_CONTROL_ID
+                        )
+                        .orElseThrow(() ->
+                                new BusinessException(
+                                        TradingErrorCode.AUTO_TRADING_OPERATION_CONTROL_NOT_FOUND
+                                )
+                        );
+
+        return new AutoTradingGlobalSuspensionResponse(
+                control.isSuspended()
+        );
     }
 }

@@ -46,6 +46,7 @@ class AiPromptVersionQueryServiceTest {
 
     private AiAnalysisHistory createHistory(
             UUID analysisId,
+            AiPromptKey promptKey,
             String version,
             AiAnalysisStatus status,
             AiAnalysisFailureType failureType
@@ -56,6 +57,7 @@ class AiPromptVersionQueryServiceTest {
                 .strategyId(UUID.randomUUID())
                 .backtestId(UUID.randomUUID())
                 .prompt(new AiAnalysisHistory.PromptSnapshot(
+                        promptKey,
                         version,
                         "테스트 프롬프트"
                 ))
@@ -71,21 +73,21 @@ class AiPromptVersionQueryServiceTest {
     void getActivePrompt() {
         // given
         AiPromptVersion promptVersion = AiPromptVersion.create(
-                AiPromptKey.RISK_ANALYSIS,
+                AiPromptKey.STRATEGY_RISK_ANALYSIS,
                 "v1",
                 "위험 분석 프롬프트",
                 "최초 등록"
         );
 
         given(promptVersionQueryRepository.findByPromptKeyAndStatus(
-                AiPromptKey.RISK_ANALYSIS,
+                AiPromptKey.STRATEGY_RISK_ANALYSIS,
                 AiPromptStatus.ACTIVE
         )).willReturn(Optional.of(promptVersion));
 
         // when
         AiPromptVersion result =
                 promptVersionQueryService.getActivePrompt(
-                        AiPromptKey.RISK_ANALYSIS
+                        AiPromptKey.STRATEGY_RISK_ANALYSIS
                 );
 
         // then
@@ -97,7 +99,7 @@ class AiPromptVersionQueryServiceTest {
     void getActivePromptNotFound() {
         // given
         given(promptVersionQueryRepository.findByPromptKeyAndStatus(
-                AiPromptKey.RISK_ANALYSIS,
+                AiPromptKey.STRATEGY_RISK_ANALYSIS,
                 AiPromptStatus.ACTIVE
         )).willReturn(Optional.empty());
 
@@ -105,7 +107,7 @@ class AiPromptVersionQueryServiceTest {
         BusinessException exception = assertThrows(
                 BusinessException.class,
                 () -> promptVersionQueryService.getActivePrompt(
-                        AiPromptKey.RISK_ANALYSIS
+                        AiPromptKey.STRATEGY_RISK_ANALYSIS
                 )
         );
 
@@ -119,7 +121,7 @@ class AiPromptVersionQueryServiceTest {
     void getPromptVersionHistories() {
         // given
         AiPromptVersion promptVersion = AiPromptVersion.create(
-                AiPromptKey.RISK_ANALYSIS,
+                AiPromptKey.STRATEGY_RISK_ANALYSIS,
                 "v1",
                 "위험 분석 프롬프트",
                 "최초 등록"
@@ -136,6 +138,7 @@ class AiPromptVersionQueryServiceTest {
 
         AiAnalysisHistory completedHistory1 = createHistory(
                 UUID.randomUUID(),
+                AiPromptKey.STRATEGY_RISK_ANALYSIS,
                 "v1",
                 AiAnalysisStatus.COMPLETED,
                 null
@@ -143,6 +146,7 @@ class AiPromptVersionQueryServiceTest {
 
         AiAnalysisHistory completedHistory2 = createHistory(
                 UUID.randomUUID(),
+                AiPromptKey.STRATEGY_RISK_ANALYSIS,
                 "v1",
                 AiAnalysisStatus.COMPLETED,
                 null
@@ -150,6 +154,7 @@ class AiPromptVersionQueryServiceTest {
 
         AiAnalysisHistory validationFailureHistory = createHistory(
                 UUID.randomUUID(),
+                AiPromptKey.STRATEGY_RISK_ANALYSIS,
                 "v1",
                 AiAnalysisStatus.FAILED,
                 AiAnalysisFailureType.VALIDATION_ERROR
@@ -157,13 +162,17 @@ class AiPromptVersionQueryServiceTest {
 
         AiAnalysisHistory parseFailureHistory = createHistory(
                 UUID.randomUUID(),
+                AiPromptKey.STRATEGY_RISK_ANALYSIS,
                 "v1",
                 AiAnalysisStatus.FAILED,
                 AiAnalysisFailureType.RESPONSE_PARSE_ERROR
         );
 
         given(aiAnalysisHistoryQueryRepository
-                .findAllByPrompt_VersionIn(List.of("v1")))
+                .findAllByPrompt_PromptKeyAndPrompt_VersionIn(
+                        AiPromptKey.STRATEGY_RISK_ANALYSIS,
+                        List.of("v1")
+                ))
                 .willReturn(List.of(
                         completedHistory1,
                         completedHistory2,
@@ -195,5 +204,133 @@ class AiPromptVersionQueryServiceTest {
                         AiAnalysisFailureType.RESPONSE_PARSE_ERROR,
                         1L
                 );
+    }
+
+    @Test
+    @DisplayName("동일한 버전이라도 Prompt Key가 다르면 분석 통계를 독립적으로 집계한다")
+    void getPromptVersionHistories_shouldSeparateStatisticsByPromptKey() {
+        // given
+        AiPromptVersion strategyPrompt = AiPromptVersion.create(
+                AiPromptKey.STRATEGY_RISK_ANALYSIS,
+                "v1",
+                "전략 위험 분석 프롬프트",
+                "최초 등록"
+        );
+
+        AiPromptVersion backtestPrompt = AiPromptVersion.create(
+                AiPromptKey.BACKTEST_ANALYSIS,
+                "v1",
+                "백테스트 분석 프롬프트",
+                "최초 등록"
+        );
+
+        PageRequest pageable = PageRequest.of(0, 10);
+
+        given(promptVersionQueryRepository.findAll(pageable))
+                .willReturn(new PageImpl<>(
+                        List.of(strategyPrompt, backtestPrompt),
+                        pageable,
+                        2
+                ));
+
+        AiAnalysisHistory strategyCompleted = createHistory(
+                UUID.randomUUID(),
+                AiPromptKey.STRATEGY_RISK_ANALYSIS,
+                "v1",
+                AiAnalysisStatus.COMPLETED,
+                null
+        );
+
+        AiAnalysisHistory strategyFailed = createHistory(
+                UUID.randomUUID(),
+                AiPromptKey.STRATEGY_RISK_ANALYSIS,
+                "v1",
+                AiAnalysisStatus.FAILED,
+                AiAnalysisFailureType.VALIDATION_ERROR
+        );
+
+        AiAnalysisHistory backtestCompleted1 = createHistory(
+                UUID.randomUUID(),
+                AiPromptKey.BACKTEST_ANALYSIS,
+                "v1",
+                AiAnalysisStatus.COMPLETED,
+                null
+        );
+
+        AiAnalysisHistory backtestCompleted2 = createHistory(
+                UUID.randomUUID(),
+                AiPromptKey.BACKTEST_ANALYSIS,
+                "v1",
+                AiAnalysisStatus.COMPLETED,
+                null
+        );
+
+        AiAnalysisHistory backtestCompleted3 = createHistory(
+                UUID.randomUUID(),
+                AiPromptKey.BACKTEST_ANALYSIS,
+                "v1",
+                AiAnalysisStatus.COMPLETED,
+                null
+        );
+
+        given(aiAnalysisHistoryQueryRepository
+                .findAllByPrompt_PromptKeyAndPrompt_VersionIn(
+                        AiPromptKey.STRATEGY_RISK_ANALYSIS,
+                        List.of("v1")
+                ))
+                .willReturn(List.of(
+                        strategyCompleted,
+                        strategyFailed
+                ));
+
+        given(aiAnalysisHistoryQueryRepository
+                .findAllByPrompt_PromptKeyAndPrompt_VersionIn(
+                        AiPromptKey.BACKTEST_ANALYSIS,
+                        List.of("v1")
+                ))
+                .willReturn(List.of(
+                        backtestCompleted1,
+                        backtestCompleted2,
+                        backtestCompleted3
+                ));
+
+        // when
+        Page<AiPromptVersionHistoryResponse> result =
+                promptVersionQueryService.getPromptVersionHistories(pageable);
+
+        // then
+        assertThat(result.getTotalElements()).isEqualTo(2);
+
+        AiPromptVersionHistoryResponse strategyResponse =
+                result.getContent().stream()
+                        .filter(response ->
+                                response.promptKey()
+                                        == AiPromptKey.STRATEGY_RISK_ANALYSIS)
+                        .findFirst()
+                        .orElseThrow();
+
+        AiPromptVersionHistoryResponse backtestResponse =
+                result.getContent().stream()
+                        .filter(response ->
+                                response.promptKey()
+                                        == AiPromptKey.BACKTEST_ANALYSIS)
+                        .findFirst()
+                        .orElseThrow();
+
+        assertThat(strategyResponse.version()).isEqualTo("v1");
+        assertThat(strategyResponse.totalCount()).isEqualTo(2);
+        assertThat(strategyResponse.failedCount()).isEqualTo(1);
+        assertThat(strategyResponse.failureRate()).isEqualTo(50.0);
+        assertThat(strategyResponse.failureTypeCounts())
+                .containsEntry(
+                        AiAnalysisFailureType.VALIDATION_ERROR,
+                        1L
+                );
+
+        assertThat(backtestResponse.version()).isEqualTo("v1");
+        assertThat(backtestResponse.totalCount()).isEqualTo(3);
+        assertThat(backtestResponse.failedCount()).isZero();
+        assertThat(backtestResponse.failureRate()).isEqualTo(0.0);
+        assertThat(backtestResponse.failureTypeCounts()).isEmpty();
     }
 }

@@ -1,0 +1,264 @@
+name: CD Deploy (Staging)
+
+on:
+  workflow_run:
+    workflows: ["CI Build"]
+    types:
+      - completed
+    branches:
+      - dev
+
+concurrency:
+  group: cd-deploy-staging
+  cancel-in-progress: false
+
+jobs:
+  build-and-push:
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      matrix:
+        service:
+          - gateway
+          - discovery-service
+          - config-server
+          - user-service
+          - market-service
+          - trading-service
+          - operation-service
+
+    steps:
+      - name: Checkout code at the commit that CI validated
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push ${{ matrix.service }} image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.service }}/Dockerfile
+          push: true
+          tags: |
+            ghcr.io/sajo-team/sajo-${{ matrix.service }}:${{ github.event.workflow_run.head_sha }}
+
+  deploy:
+    needs: build-and-push
+    # build-and-push가 skip/실패하면 deploy는 절대 돌면 안 된다 (존재하지 않는
+    # 이미지 태그로 pull을 시도하게 됨) - 코드 리뷰 반영.
+    if: >
+      github.event.workflow_run.event == 'push' &&
+      needs.build-and-push.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      # 배포 전 .env를 GitHub Secrets 기준으로 항상 새로 생성한다.
+      # DB_PASSWORD/MONGO_PASSWORD/GRAFANA_*/OPENAI_API_KEY/INTERNAL_API_SECRET은
+      # prod와 별도의 STAGING_ 전용 값을 쓴다 - 인스턴스가 분리되어 있어도 "값
+      # 자체"가 유출되면 prod 자격증명으로 그대로 악용될 수 있고(예: 향후 네트워크
+      # 경로가 생기는 경우), 스테이징은 prod보다 접근 권한이 느슨하므로 자격증명
+      # 분리를 별도 방어선으로 둔다 (코드 리뷰 반영, EC2 접속 정보를 STAGING_EC2_*
+      # 로 분리한 것과 같은 패턴).
+      #
+      # 반면 ENCRYPT_KEY와 REDIS_PASSWORD는 예외적으로 prod와 동일한 Secrets를
+      # 그대로 재사용한다 - sajo-config-repo의 application.yml(모든 서비스 공용,
+      # profile 구분 없음)에 JWT_SECRET/ACCOUNT_ENCRYPTION_KEY/ACCOUNT_ENCRYPTION_SALT/
+      # ACCOUNT_HASH_KEY/REDIS_PASSWORD가 전부 prod의 ENCRYPT_KEY로 {cipher} 암호화
+      # 되어 저장되어 있어서, staging config-server가 다른 ENCRYPT_KEY를 쓰면 이
+      # 값들을 복호화하지 못해 config 수신 자체가 실패한다. REDIS_PASSWORD도 이
+      # 공용 파일 안의 평문 값이 실제 서비스에 쓰이므로 staging Redis 컨테이너
+      # 비밀번호와 어긋나면 안 된다. 진짜 분리를 하려면 config-repo에 staging
+      # 전용 profile을 새로 만들고 값을 재암호화해야 하는데, 이건 이번 PR 범위를
+      # 넘어서는 별도 작업으로 남겨둔다 (TODO).
+      #
+      # CONFIG_REPO_GITHUB_USERNAME/TOKEN은 prod와 동일한 Secrets를 계속
+      # 재사용한다 - Config Repo 읽기 전용 접근 정보라 분리 필요성이 낮다.
+      #
+      # MARKET_SCHEDULER_*/MARKET_WEBSOCKET_*는 자격증명은 아니지만, prod와
+      # 값을 공유하면 스케줄러/웹소켓이 켜져 있는 동안 dev 배포 시점에 staging도
+      # 동시에 동일 종목으로 KIS API를 호출하게 되어 레이트리밋 경합이 생길 수
+      # 있다는 리뷰 지적을 반영해 STAGING_ 전용 값으로 분리했다. 운영 중에는
+      # STAGING_MARKET_SCHEDULER_ENABLED/STAGING_MARKET_WEBSOCKET_ENABLED을
+      # false로 꺼두거나, 켜더라도 종목 코드를 겹치지 않게 구성해서 prod와
+      # 동시에 같은 종목을 호출하지 않도록 운영해야 한다.
+      - name: Generate .env on Staging EC2 from GitHub Secrets
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          DB_PASSWORD: ${{ secrets.STAGING_DB_PASSWORD }}
+          MONGO_PASSWORD: ${{ secrets.STAGING_MONGO_PASSWORD }}
+          REDIS_PASSWORD: ${{ secrets.REDIS_PASSWORD }}
+          GRAFANA_ADMIN_USER: ${{ secrets.STAGING_GRAFANA_ADMIN_USER }}
+          GRAFANA_ADMIN_PASSWORD: ${{ secrets.STAGING_GRAFANA_ADMIN_PASSWORD }}
+          CONFIG_REPO_GITHUB_USERNAME: ${{ secrets.CONFIG_REPO_GITHUB_USERNAME }}
+          CONFIG_REPO_GITHUB_TOKEN: ${{ secrets.CONFIG_REPO_GITHUB_TOKEN }}
+          ENCRYPT_KEY: ${{ secrets.ENCRYPT_KEY }}
+          OPENAI_API_KEY: ${{ secrets.STAGING_OPENAI_API_KEY }}
+          INTERNAL_API_SECRET: ${{ secrets.STAGING_INTERNAL_API_SECRET }}
+          MARKET_SCHEDULER_ENABLED: ${{ secrets.STAGING_MARKET_SCHEDULER_ENABLED }}
+          MARKET_SCHEDULER_SYSTEM_USER_ID: ${{ secrets.STAGING_MARKET_SCHEDULER_SYSTEM_USER_ID }}
+          MARKET_STOCK_MASTER_SYNC_ENABLED: ${{ secrets.STAGING_MARKET_STOCK_MASTER_SYNC_ENABLED }}
+          MARKET_INDICATOR_SCHEDULER_ENABLED: ${{ secrets.STAGING_MARKET_INDICATOR_SCHEDULER_ENABLED }}
+          MARKET_SCHEDULER_DAILY_PRICE_CRON: ${{ secrets.STAGING_MARKET_SCHEDULER_DAILY_PRICE_CRON }}
+          MARKET_INDICATOR_SCHEDULER_CRON: ${{ secrets.STAGING_MARKET_INDICATOR_SCHEDULER_CRON }}
+          MARKET_SCHEDULER_KIS_REQUEST_INTERVAL: ${{ secrets.STAGING_MARKET_SCHEDULER_KIS_REQUEST_INTERVAL }}
+          MARKET_SCHEDULER_TARGET_STOCK_CODES: ${{ secrets.STAGING_MARKET_SCHEDULER_TARGET_STOCK_CODES }}
+          MARKET_WEBSOCKET_ENABLED: ${{ secrets.STAGING_MARKET_WEBSOCKET_ENABLED }}
+          MARKET_WEBSOCKET_SYSTEM_USER_ID: ${{ secrets.STAGING_MARKET_WEBSOCKET_SYSTEM_USER_ID }}
+          MARKET_WEBSOCKET_TARGET_STOCK_CODES: ${{ secrets.STAGING_MARKET_WEBSOCKET_TARGET_STOCK_CODES }}
+        with:
+          host: ${{ secrets.STAGING_EC2_HOST }}
+          username: ${{ secrets.STAGING_EC2_USER }}
+          key: ${{ secrets.STAGING_EC2_SSH_KEY }}
+          envs: DB_PASSWORD,MONGO_PASSWORD,REDIS_PASSWORD,GRAFANA_ADMIN_USER,GRAFANA_ADMIN_PASSWORD,CONFIG_REPO_GITHUB_USERNAME,CONFIG_REPO_GITHUB_TOKEN,ENCRYPT_KEY,OPENAI_API_KEY,INTERNAL_API_SECRET,MARKET_SCHEDULER_ENABLED,MARKET_SCHEDULER_SYSTEM_USER_ID,MARKET_STOCK_MASTER_SYNC_ENABLED,MARKET_INDICATOR_SCHEDULER_ENABLED,MARKET_SCHEDULER_DAILY_PRICE_CRON,MARKET_INDICATOR_SCHEDULER_CRON,MARKET_SCHEDULER_KIS_REQUEST_INTERVAL,MARKET_SCHEDULER_TARGET_STOCK_CODES,MARKET_WEBSOCKET_ENABLED,MARKET_WEBSOCKET_SYSTEM_USER_ID,MARKET_WEBSOCKET_TARGET_STOCK_CODES
+          script_stop: true
+          script: |
+            set -euo pipefail
+            mkdir -p ~/sajo
+            umask 077
+            {
+              printf 'DB_PASSWORD=%s\n' "$DB_PASSWORD"
+              printf 'MONGO_PASSWORD=%s\n' "$MONGO_PASSWORD"
+              printf 'REDIS_PASSWORD=%s\n' "$REDIS_PASSWORD"
+              printf 'GRAFANA_ADMIN_USER=%s\n' "$GRAFANA_ADMIN_USER"
+              printf 'GRAFANA_ADMIN_PASSWORD=%s\n' "$GRAFANA_ADMIN_PASSWORD"
+              printf 'GITHUB_USERNAME=%s\n' "$CONFIG_REPO_GITHUB_USERNAME"
+              printf 'GITHUB_TOKEN=%s\n' "$CONFIG_REPO_GITHUB_TOKEN"
+              printf 'ENCRYPT_KEY=%s\n' "$ENCRYPT_KEY"
+              printf 'OPENAI_API_KEY=%s\n' "$OPENAI_API_KEY"
+              printf 'INTERNAL_API_SECRET=%s\n' "$INTERNAL_API_SECRET"
+              printf 'MARKET_SCHEDULER_ENABLED=%s\n' "$MARKET_SCHEDULER_ENABLED"
+              printf 'MARKET_SCHEDULER_SYSTEM_USER_ID=%s\n' "$MARKET_SCHEDULER_SYSTEM_USER_ID"
+              printf 'MARKET_STOCK_MASTER_SYNC_ENABLED=%s\n' "$MARKET_STOCK_MASTER_SYNC_ENABLED"
+              printf 'MARKET_INDICATOR_SCHEDULER_ENABLED=%s\n' "$MARKET_INDICATOR_SCHEDULER_ENABLED"
+              printf 'MARKET_SCHEDULER_DAILY_PRICE_CRON=%s\n' "$MARKET_SCHEDULER_DAILY_PRICE_CRON"
+              printf 'MARKET_INDICATOR_SCHEDULER_CRON=%s\n' "$MARKET_INDICATOR_SCHEDULER_CRON"
+              printf 'MARKET_SCHEDULER_KIS_REQUEST_INTERVAL=%s\n' "$MARKET_SCHEDULER_KIS_REQUEST_INTERVAL"
+              printf 'MARKET_SCHEDULER_TARGET_STOCK_CODES=%s\n' "$MARKET_SCHEDULER_TARGET_STOCK_CODES"
+              printf 'MARKET_WEBSOCKET_ENABLED=%s\n' "$MARKET_WEBSOCKET_ENABLED"
+              printf 'MARKET_WEBSOCKET_SYSTEM_USER_ID=%s\n' "$MARKET_WEBSOCKET_SYSTEM_USER_ID"
+              printf 'MARKET_WEBSOCKET_TARGET_STOCK_CODES=%s\n' "$MARKET_WEBSOCKET_TARGET_STOCK_CODES"
+            } > ~/sajo/.env
+            chmod 600 ~/sajo/.env
+            echo ".env generated on Staging EC2 from GitHub Secrets (contents not printed)."
+
+      - name: Deploy to Staging EC2 via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_ACTOR: ${{ github.actor }}
+        with:
+          host: ${{ secrets.STAGING_EC2_HOST }}
+          username: ${{ secrets.STAGING_EC2_USER }}
+          key: ${{ secrets.STAGING_EC2_SSH_KEY }}
+          envs: GHCR_TOKEN,GHCR_ACTOR
+          script_stop: true
+          script: |
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_ACTOR" --password-stdin
+
+            cd ~/sajo
+            git fetch origin dev
+            git reset --hard origin/dev
+            git checkout ${{ github.event.workflow_run.head_sha }}
+
+            LATEST_DEV_SHA=$(git ls-remote origin dev | awk '{print $1}')
+            if [ "$LATEST_DEV_SHA" != "${{ github.event.workflow_run.head_sha }}" ]; then
+              echo "This deploy targets ${{ github.event.workflow_run.head_sha }}, but origin/dev has since moved to $LATEST_DEV_SHA."
+              echo "A newer commit's deploy will handle this (or already has). Skipping to avoid deploying stale code."
+              exit 0
+            fi
+
+            PREV_TAG=$(cat ~/sajo/.last_healthy_sha 2>/dev/null || echo "")
+
+            check_health() {
+              local host_ports="8080 8761 8888"
+              local container_ports="user-service:8081 market-service:8082 trading-service:8083 operation-service:8084"
+              for i in $(seq 1 30); do
+                all_up=true
+                for port in $host_ports; do
+                  if ! curl -sf --max-time 5 http://localhost:$port/actuator/health | grep -q '"status":"UP"'; then
+                    all_up=false
+                    break
+                  fi
+                done
+                if [ "$all_up" = true ]; then
+                  for entry in $container_ports; do
+                    container="${entry%%:*}"
+                    port="${entry##*:}"
+                    if ! docker exec "$container" wget -qO- --timeout=5 "http://localhost:$port/actuator/health" 2>/dev/null | grep -q '"status":"UP"'; then
+                      all_up=false
+                      break
+                    fi
+                  done
+                fi
+                if [ "$all_up" = true ]; then
+                  return 0
+                fi
+                echo "Not all services healthy yet, retrying ($i/30)..."
+                sleep 5
+              done
+              return 1
+            }
+
+            export IMAGE_TAG=${{ github.event.workflow_run.head_sha }}
+            if docker compose -f docker-compose.staging.yaml pull && docker compose -f docker-compose.staging.yaml up -d; then
+              echo "Waiting for health checks (discovery-service, config-server, gateway, user-service, market-service, trading-service, operation-service)..."
+              if check_health; then
+                echo "$IMAGE_TAG" > ~/sajo/.last_healthy_sha
+                echo "Staging deploy succeeded, all core services are healthy."
+                exit 0
+              fi
+              echo "Services did not become healthy within timeout."
+            else
+              echo "docker compose pull/up failed — the deploy command itself did not succeed."
+            fi
+
+            if [ -n "$PREV_TAG" ]; then
+              echo "Rolling back to previous known-good commit: $PREV_TAG"
+              git checkout $PREV_TAG
+              export IMAGE_TAG=$PREV_TAG
+              docker compose -f docker-compose.staging.yaml pull
+              docker compose -f docker-compose.staging.yaml up -d
+
+              echo "Verifying rollback health..."
+              if check_health; then
+                echo "Rollback succeeded, staging restored to previous version. Marking this deploy as failed for visibility."
+              else
+                echo "Rollback ALSO failed health check. Staging may still be down. Manual intervention required."
+              fi
+            else
+              echo "No previous known-good image recorded — cannot roll back automatically."
+            fi
+            exit 1
+
+      # prod와 동일한 이유(디스크 공간 관리) - dev는 main보다 push가 잦을 수
+      # 있어서 오래된 이미지가 더 빠르게 쌓이므로 staging에도 동일하게 둔다.
+      - name: Prune old sajo images on Staging EC2
+        if: success()
+        continue-on-error: true
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.STAGING_EC2_HOST }}
+          username: ${{ secrets.STAGING_EC2_USER }}
+          key: ${{ secrets.STAGING_EC2_SSH_KEY }}
+          script_stop: false
+          script: |
+            docker images 'ghcr.io/sajo-team/*' -q | xargs -r docker rmi

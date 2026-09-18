@@ -1,10 +1,12 @@
 package com.sajo.trading_service.ai_risk.service.processor;
 
+import com.sajo.trading_service.ai_risk.client.backtest.dto.BacktestInternalResponse;
+import com.sajo.trading_service.ai_risk.client.strategy.dto.StrategyInternalResponse;
 import com.sajo.trading_service.ai_risk.document.AiAnalysisHistory;
 import com.sajo.trading_service.ai_risk.domain.AiAnalysisFailureType;
 import com.sajo.trading_service.ai_risk.domain.AiAnalysisStatus;
 import com.sajo.trading_service.ai_risk.domain.AiValidationType;
-import com.sajo.trading_service.ai_risk.event.AiRiskAnalysisRequestedEvent;
+import com.sajo.trading_service.ai_risk.kafka.dto.AiRiskAnalysisRequestedEvent;
 import com.sajo.trading_service.ai_risk.exception.AiAnalysisException;
 import com.sajo.trading_service.ai_risk.exception.AiResponseParseException;
 import com.sajo.trading_service.ai_risk.exception.AiResponseValidationException;
@@ -14,12 +16,14 @@ import com.sajo.trading_service.ai_risk.service.analysis.AiRiskResponseValidator
 import com.sajo.trading_service.ai_risk.service.analysis.dto.AiRiskAnalysisOutput;
 import com.sajo.trading_service.ai_risk.service.analysis.dto.AiRiskAnalysisResult;
 import com.sajo.trading_service.ai_risk.service.command.AiRiskAnalysisResultService;
+import com.sajo.trading_service.ai_risk.service.query.AiRiskAnalysisQueryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @Slf4j
 @Service
@@ -28,23 +32,37 @@ public class AiRiskAnalysisProcessor {
 
     private final AiRiskAnalyzer aiRiskAnalyzer;
     private final AiRiskAnalysisResultService aiRiskAnalysisResultService;
+    private final AiRiskAnalysisQueryService aiRiskAnalysisQueryService;
     private final AiRiskResponseValidator responseValidator;
     private final AiAnalysisHistoryCommandRepository historyCommandRepository;
+
+    private UUID analysisId(AiRiskAnalysisRequestedEvent event){
+        return event.payload().analysisId();
+    }
+
+    private StrategyInternalResponse strategy(AiRiskAnalysisRequestedEvent event){
+        return event.payload().strategy();
+    }
+
+    private BacktestInternalResponse backtest(AiRiskAnalysisRequestedEvent event){
+        return event.payload().backtest();
+    }
 
     private void saveSuccessHistory(
             AiRiskAnalysisRequestedEvent event,
             AiRiskAnalysisOutput output
     ){
         AiAnalysisHistory history = AiAnalysisHistory.builder()
-                .analysisId(event.analysisId())
-                .userId(event.strategy().userId())
-                .strategyId(event.strategy().strategyId())
-                .backtestId(event.backtest().backtestId())
+                .analysisId(analysisId(event))
+                .userId(strategy(event).userId())
+                .strategyId(strategy(event).strategyId())
+                .backtestId(backtest(event).backtestId())
                 .requestSnapshot(Map.of(
-                        "strategy", event.strategy(),
-                        "backtest", event.backtest()
+                        "strategy", strategy(event),
+                        "backtest", backtest(event)
                 ))
                 .prompt(new AiAnalysisHistory.PromptSnapshot(
+                        output.promptKey(),
                         output.promptVersion(),
                         output.promptContent()
                 ))
@@ -82,15 +100,16 @@ public class AiRiskAnalysisProcessor {
         boolean contentValid = structureValid && exception.getValidationType() != AiValidationType.CONTENT;
 
         AiAnalysisHistory history = AiAnalysisHistory.builder()
-                .analysisId(event.analysisId())
-                .userId(event.strategy().userId())
-                .strategyId(event.strategy().strategyId())
-                .backtestId(event.backtest().backtestId())
+                .analysisId(analysisId(event))
+                .userId(strategy(event).userId())
+                .strategyId(strategy(event).strategyId())
+                .backtestId(backtest(event).backtestId())
                 .requestSnapshot(Map.of(
-                        "strategy", event.strategy(),
-                        "backtest", event.backtest()
+                        "strategy", strategy(event),
+                        "backtest", backtest(event)
                 ))
                 .prompt(new AiAnalysisHistory.PromptSnapshot(
+                        output.promptKey(),
                         output.promptVersion(),
                         output.promptContent()
                 ))
@@ -120,15 +139,16 @@ public class AiRiskAnalysisProcessor {
             AiResponseParseException exception
     ){
         AiAnalysisHistory history = AiAnalysisHistory.builder()
-                .analysisId(event.analysisId())
-                .userId(event.strategy().userId())
-                .strategyId(event.strategy().strategyId())
-                .backtestId(event.backtest().backtestId())
+                .analysisId(analysisId(event))
+                .userId(strategy(event).userId())
+                .strategyId(strategy(event).strategyId())
+                .backtestId(backtest(event).backtestId())
                 .requestSnapshot(Map.of(
-                        "strategy", event.strategy(),
-                        "backtest", event.backtest()
+                        "strategy", strategy(event),
+                        "backtest", backtest(event)
                 ))
                 .prompt(new AiAnalysisHistory.PromptSnapshot(
+                        exception.getPromptKey(),
                         exception.getPromptVersion(),
                         exception.getPromptContent()
                 ))
@@ -171,15 +191,16 @@ public class AiRiskAnalysisProcessor {
             AiAnalysisException exception
     ){
         AiAnalysisHistory history = AiAnalysisHistory.builder()
-                .analysisId(event.analysisId())
-                .userId(event.strategy().userId())
-                .strategyId(event.strategy().strategyId())
-                .backtestId(event.backtest().backtestId())
+                .analysisId(analysisId(event))
+                .userId(strategy(event).userId())
+                .strategyId(strategy(event).strategyId())
+                .backtestId(backtest(event).backtestId())
                 .requestSnapshot(Map.of(
-                        "strategy", event.strategy(),
-                        "backtest", event.backtest()
+                        "strategy", strategy(event),
+                        "backtest", backtest(event)
                 ))
                 .prompt(new AiAnalysisHistory.PromptSnapshot(
+                        exception.getPromptKey(),
                         exception.getPromptVersion(),
                         exception.getPromptContent()
                 ))
@@ -214,13 +235,13 @@ public class AiRiskAnalysisProcessor {
             AiAnalysisException exception
     ){
         AiAnalysisHistory history = AiAnalysisHistory.builder()
-                .analysisId(event.analysisId())
-                .userId(event.strategy().userId())
-                .strategyId(event.strategy().strategyId())
-                .backtestId(event.backtest().backtestId())
+                .analysisId(analysisId(event))
+                .userId(strategy(event).userId())
+                .strategyId(strategy(event).strategyId())
+                .backtestId(backtest(event).backtestId())
                 .requestSnapshot(Map.of(
-                        "strategy", event.strategy(),
-                        "backtest", event.backtest()
+                        "strategy", strategy(event),
+                        "backtest", backtest(event)
                 ))
                 .validation(new AiAnalysisHistory.ValidationSnapshot(
                         false,
@@ -241,16 +262,14 @@ public class AiRiskAnalysisProcessor {
             AiRiskAnalysisOutput output,
             Exception exception
     ) {
-        String errorMessage = exception.getMessage() != null ? exception.getMessage() : exception.getClass().getSimpleName();
-
         AiAnalysisHistory.AiAnalysisHistoryBuilder builder = AiAnalysisHistory.builder()
-                .analysisId(event.analysisId())
-                .userId(event.strategy().userId())
-                .strategyId(event.strategy().strategyId())
-                .backtestId(event.backtest().backtestId())
+                .analysisId(analysisId(event))
+                .userId(strategy(event).userId())
+                .strategyId(strategy(event).strategyId())
+                .backtestId(backtest(event).backtestId())
                 .requestSnapshot(Map.of(
-                        "strategy", event.strategy(),
-                        "backtest", event.backtest()
+                        "strategy", strategy(event),
+                        "backtest", backtest(event)
                 ))
                 .validation(new AiAnalysisHistory.ValidationSnapshot(
                         false,
@@ -265,6 +284,7 @@ public class AiRiskAnalysisProcessor {
         if(output != null){
             builder
                     .prompt(new AiAnalysisHistory.PromptSnapshot(
+                            output.promptKey(),
                             output.promptVersion(),
                             output.promptContent()
                     ))
@@ -282,12 +302,23 @@ public class AiRiskAnalysisProcessor {
 
     public void process(AiRiskAnalysisRequestedEvent event){
 
+        UUID analysisId = analysisId(event);
+
+        if (!aiRiskAnalysisQueryService.isPending(analysisId)) {
+            log.info(
+                    "이미 처리된 AI 위험 분석 이벤트를 건너뜁니다. eventId={}, analysisId={}",
+                    event.eventId(),
+                    analysisId
+            );
+            return;
+        }
+
         AiRiskAnalysisOutput output = null;
 
         try{
             output = aiRiskAnalyzer.analyze(
-                    event.strategy(),
-                    event.backtest()
+                    strategy(event),
+                    backtest(event)
             );
 
             AiRiskAnalysisResult result = output.result();
@@ -295,7 +326,7 @@ public class AiRiskAnalysisProcessor {
             responseValidator.validate(result);
 
             aiRiskAnalysisResultService.complete(
-                    event.analysisId(),
+                    analysisId(event),
                     result.riskLevel(),
                     result.summary(),
                     result.riskFactors(),
@@ -308,7 +339,7 @@ public class AiRiskAnalysisProcessor {
         } catch (AiResponseValidationException e){
 
             aiRiskAnalysisResultService.fail(
-                    event.analysisId(),
+                    analysisId(event),
                     AiAnalysisFailureType.VALIDATION_ERROR,
                     e.getMessage()
             );
@@ -317,7 +348,7 @@ public class AiRiskAnalysisProcessor {
 
         } catch (AiResponseParseException e){
             aiRiskAnalysisResultService.fail(
-                    event.analysisId(),
+                    analysisId(event),
                     AiAnalysisFailureType.RESPONSE_PARSE_ERROR,
                     e.getMessage()
             );
@@ -326,7 +357,7 @@ public class AiRiskAnalysisProcessor {
 
         } catch (AiAnalysisException e){
             aiRiskAnalysisResultService.fail(
-                    event.analysisId(),
+                    analysisId(event),
                     e.getFailureType(),
                     e.getMessage()
             );
@@ -340,12 +371,12 @@ public class AiRiskAnalysisProcessor {
         } catch (Exception e){
             log.error(
                     "AI 위험 분석 처리 중 예상하지 못한 오류 발생. analysisId={}",
-                    event.analysisId(),
+                    analysisId(event),
                     e
             );
 
             aiRiskAnalysisResultService.fail(
-                    event.analysisId(),
+                    analysisId(event),
                     AiAnalysisFailureType.INTERNAL_ERROR,
                     e.getMessage()
             );

@@ -176,6 +176,7 @@ services:
     volumes:
       - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
       - ./monitoring/secrets/slack_webhook_url:/etc/alertmanager/secrets/slack_webhook_url:ro
+      - ./monitoring/secrets/operation_webhook_secret:/etc/alertmanager/secrets/operation_webhook_secret:ro
     ports:
       - "127.0.0.1:9093:9093"
     networks:
@@ -309,8 +310,11 @@ services:
       MARKET_INDICATOR_SCHEDULER_ENABLED: ${MARKET_INDICATOR_SCHEDULER_ENABLED:-false}
       MARKET_SCHEDULER_DAILY_PRICE_CRON: ${MARKET_SCHEDULER_DAILY_PRICE_CRON:-0 10 16 * * MON-FRI}
       MARKET_INDICATOR_SCHEDULER_CRON: ${MARKET_INDICATOR_SCHEDULER_CRON:-0 20 16 * * MON-FRI}
-      MARKET_SCHEDULER_KIS_REQUEST_INTERVAL: ${MARKET_SCHEDULER_KIS_REQUEST_INTERVAL:-500ms}
+      MARKET_SCHEDULER_KIS_REQUEST_INTERVAL: ${MARKET_SCHEDULER_KIS_REQUEST_INTERVAL:-1100ms}
       MARKET_SCHEDULER_TARGET_STOCK_CODES: ${MARKET_SCHEDULER_TARGET_STOCK_CODES:-}
+      MARKET_WEBSOCKET_ENABLED: ${MARKET_WEBSOCKET_ENABLED:-false}
+      MARKET_WEBSOCKET_SYSTEM_USER_ID: ${MARKET_WEBSOCKET_SYSTEM_USER_ID:-}
+      MARKET_WEBSOCKET_TARGET_STOCK_CODES: ${MARKET_WEBSOCKET_TARGET_STOCK_CODES:-}
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: health,prometheus,scheduledtasks
     # ports 없음 - user-service와 동일한 이유 (Gateway만 내부 DNS로 접근하면 됨)
     networks:
@@ -349,5 +353,24 @@ services:
       mongo-ai-risk:
         condition: service_healthy
       kafka:
+        condition: service_healthy
+    restart: unless-stopped
+
+  operation-service:
+    image: ghcr.io/sajo-team/sajo-operation-service:${IMAGE_TAG:?IMAGE_TAG must be set}
+    container_name: operation-service
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      CONFIG_SERVER_URL: http://config-server:8888
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+    volumes:
+      - ./monitoring/secrets/operation_webhook_secret:/etc/operation-service/secrets/webhook_secret:ro
+    # ports 없음 - user-service와 동일한 이유 (Gateway만 내부 DNS로 접근하면 됨)
+    networks:
+      - sajo-net
+    depends_on:
+      discovery-service:
+        condition: service_healthy
+      config-server:
         condition: service_healthy
     restart: unless-stopped

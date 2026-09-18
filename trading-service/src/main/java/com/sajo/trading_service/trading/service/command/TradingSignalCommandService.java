@@ -2,6 +2,7 @@ package com.sajo.trading_service.trading.service.command;
 
 import com.sajo.common.exception.BusinessException;
 import com.sajo.trading_service.trading.domain.AutoTrading;
+import com.sajo.trading_service.trading.domain.AutoTradingOperationControl;
 import com.sajo.trading_service.trading.domain.Order;
 import com.sajo.trading_service.trading.domain.TradingLimit;
 import com.sajo.trading_service.trading.domain.enums.OrderStatus;
@@ -10,8 +11,10 @@ import com.sajo.trading_service.trading.exception.TradingErrorCode;
 import com.sajo.trading_service.trading.kafka.dto.TradingSignalGeneratedEvent;
 import com.sajo.trading_service.trading.kafka.dto.TradingSignalPayload;
 import com.sajo.trading_service.trading.repository.command.AutoTradingCommandRepository;
+import com.sajo.trading_service.trading.repository.command.AutoTradingOperationControlCommandRepository;
 import com.sajo.trading_service.trading.repository.command.OrderCommandRepository;
 import com.sajo.trading_service.trading.repository.command.TradingLimitCommandRepository;
+import com.sajo.trading_service.trading.repository.query.OrderQueryRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -30,6 +33,9 @@ public class TradingSignalCommandService {
     private final AutoTradingCommandRepository autoTradingCommandRepository;
     private final TradingLimitCommandRepository tradingLimitCommandRepository;
     private final ApplicationEventPublisher applicationEventPublisher;
+    private final OrderQueryRepository orderQueryRepository;
+    private final AutoTradingOperationControlCommandRepository
+            autoTradingOperationControlCommandRepository;
 
 
     @Transactional
@@ -39,6 +45,27 @@ public class TradingSignalCommandService {
 
         if(orderCommandRepository.existsBySignalId(payload.signalId())){
             log.info("이미 처리된 Signal입니다. signalId={}", payload.signalId());
+            return;
+        }
+
+        AutoTradingOperationControl operationControl =
+                autoTradingOperationControlCommandRepository
+                        .findByIdAndDeletedAtIsNull(
+                                AutoTradingOperationControl.GLOBAL_CONTROL_ID
+                        )
+                        .orElseThrow(()->
+                                new BusinessException(
+                                        TradingErrorCode.AUTO_TRADING_OPERATION_CONTROL_NOT_FOUND
+                                )
+                        );
+
+        if (operationControl.isSuspended()) {
+            log.warn(
+                    "전체 자동매매 긴급 중지 상태로 Signal을 건너뜁니다. signalId={}, userId={}, strategyId={}",
+                    payload.signalId(),
+                    payload.userId(),
+                    payload.strategyId()
+            );
             return;
         }
 
@@ -53,7 +80,7 @@ public class TradingSignalCommandService {
                                         TradingErrorCode.AUTO_TRADING_NOT_FOUND
                                 )
                         );
-        if(!autoTrading.getEnabled()){
+        if (!autoTrading.isTradable()) {
             throw new BusinessException(
                     TradingErrorCode.AUTO_TRADING_DISABLED
             );
@@ -62,6 +89,20 @@ public class TradingSignalCommandService {
         autoTrading.validateDirection(
                 payload.signalType()
         );
+
+        if (orderQueryRepository.existsActiveOrderByAutoTradingIdAndOrderType(
+                autoTrading.getId(),
+                payload.signalType()
+        )) {
+            log.info(
+                    "동일 방향의 진행 중 주문이 존재하여 Signal을 건너뜁니다. "
+                            + "autoTradingId={}, orderType={}, signalId={}",
+                    autoTrading.getId(),
+                    payload.signalType(),
+                    payload.signalId()
+            );
+            return;
+        }
 
         TradingLimit tradingLimit =
                 tradingLimitCommandRepository.findByUserIdForUpdate(
@@ -139,6 +180,12 @@ public class TradingSignalCommandService {
                 .atStartOfDay(zoneId)
                 .toInstant();
 
+        /*
+         * 재조정 횟수를 소진한 TIMEOUT 주문도 실제 KIS 주문이 존재할 수 있으므로
+         * 일일 주문 횟수/금액 한도에 계속 포함한다.
+         * 최종 상태는 운영자 확인 후 확정한다.
+         * FAILED만 제외하며, TIMEOUT은 위험 한도 계산에 포함한다.
+         */
         long todayOrderCount =
                 orderCommandRepository.countOrdersByUserIdAndCreatedAtBetween(
                         payload.userId(),

@@ -3,6 +3,7 @@ package com.sajo.trading_service.ai_risk.integration;
 import com.sajo.trading_service.ai_risk.document.AiAnalysisHistory;
 import com.sajo.trading_service.ai_risk.domain.AiAnalysisFailureType;
 import com.sajo.trading_service.ai_risk.domain.AiAnalysisStatus;
+import com.sajo.trading_service.ai_risk.domain.AiPromptKey;
 import com.sajo.trading_service.ai_risk.repository.query.AiAnalysisHistoryQueryRepository;
 import org.bson.UuidRepresentation;
 import org.junit.jupiter.api.BeforeEach;
@@ -88,6 +89,7 @@ public class AiAnalysisAuditDetailIntegrationTest {
                 )
                 .prompt(
                         new AiAnalysisHistory.PromptSnapshot(
+                                AiPromptKey.STRATEGY_RISK_ANALYSIS,
                                 "v1",
                                 "AI 위험 분석 프롬프트"
                         )
@@ -224,6 +226,7 @@ public class AiAnalysisAuditDetailIntegrationTest {
                 )
                 .prompt(
                         new AiAnalysisHistory.PromptSnapshot(
+                                AiPromptKey.STRATEGY_RISK_ANALYSIS,
                                 "v1",
                                 "AI 위험 분석 프롬프트"
                         )

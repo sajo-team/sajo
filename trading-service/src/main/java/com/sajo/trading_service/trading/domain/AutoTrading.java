@@ -34,6 +34,9 @@ public class AutoTrading extends BaseUpdatableEntity {
     @Column(name = "enabled", nullable = false)
     private Boolean enabled;
 
+    @Column(name = "admin_suspended", nullable = false)
+    private Boolean adminSuspended;
+
     private AutoTrading(
             UUID userId,
             UUID strategyId,
@@ -42,7 +45,8 @@ public class AutoTrading extends BaseUpdatableEntity {
         this.userId = userId;
         this.strategyId = strategyId;
         this.direction = direction;
-        enabled = false;
+        this.enabled = false;
+        this.adminSuspended = false;
     }
 
     public static AutoTrading create(
@@ -91,5 +95,18 @@ public class AutoTrading extends BaseUpdatableEntity {
                     TradingErrorCode.AUTO_TRADING_DIRECTION_NOT_ALLOWED
             );
         }
+    }
+
+    public void suspendByAdmin() {
+        this.adminSuspended = true;
+    }
+
+    public void resumeByAdmin() {
+        this.adminSuspended = false;
+    }
+
+    public boolean isTradable() {
+        return Boolean.TRUE.equals(this.enabled)
+                && !Boolean.TRUE.equals(this.adminSuspended);
     }
 }

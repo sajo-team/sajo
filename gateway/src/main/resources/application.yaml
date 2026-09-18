@@ -60,6 +60,10 @@ spring:
             uri: lb://trading-service
             predicates:
               - Path=/api/v1/executions/**
+          - id: trading-service-admin-trading
+            uri: lb://trading-service
+            predicates:
+              - Path=/api/v1/admin/trading/**
           - id: trading-service-ai
             uri: lb://trading-service
             predicates:

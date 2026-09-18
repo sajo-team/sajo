@@ -18,6 +18,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.UUID;
@@ -39,6 +40,7 @@ public class KisOrderReconciliationService {
     private final KisOrderClient kisOrderClient;
     private final OrderStatusCommandService orderStatusCommandService;
     private final KisOrderMatcher kisOrderMatcher;
+    private final OrderExecutionCommandService orderExecutionCommandService;
 
     public void reconcile(UUID orderId){
         Order order =
@@ -86,6 +88,7 @@ public class KisOrderReconciliationService {
                     orderId,
                     e
             );
+
             return;
         }
 
@@ -186,7 +189,7 @@ public class KisOrderReconciliationService {
                             item.orderNo()
                     );
 
-                    orderStatusCommandService.recordReconciliationFailure(orderId);
+                    recordReconciliationFailureSafely(orderId);
                     return;
                 }
 
@@ -202,7 +205,7 @@ public class KisOrderReconciliationService {
                         orderId
                 );
 
-                orderStatusCommandService.recordReconciliationFailure(orderId);
+                recordReconciliationFailureSafely(orderId);
             }
 
             case AMBIGUOUS -> {
@@ -211,7 +214,7 @@ public class KisOrderReconciliationService {
                         orderId
                 );
 
-                orderStatusCommandService.recordReconciliationFailure(orderId);
+                recordReconciliationFailureSafely(orderId);
             }
         }
 
@@ -230,15 +233,91 @@ public class KisOrderReconciliationService {
 
             rejectedQuantity =
                     Integer.parseInt(item.rejectedQuantity());
-        }
-        catch (NumberFormatException | NullPointerException e) {
+
+        } catch (NumberFormatException | NullPointerException e) {
             log.warn(
-                    "KIS 주문 수량 파싱 실패로 상태를 확정할 수 없습니다. orderId={}, orderNo={}",
+                    "KIS 주문 수량 파싱 실패로 상태를 확정할 수 없습니다. "
+                            + "orderId={}, orderNo={}",
                     orderId,
                     item.orderNo()
             );
 
-            orderStatusCommandService.recordReconciliationFailure(orderId);
+            recordReconciliationFailureSafely(orderId);
+            return;
+        }
+
+        /*
+         * KIS에서 취소가 확인된 주문은 단순 보정 실패로 처리하지 않고
+         * 실제 체결 수량을 반영하여 CANCELED 상태로 보정한다.
+         */
+        if ("Y".equalsIgnoreCase(item.canceled())) {
+
+            int totalFilledQuantity;
+            BigDecimal averageExecutionPrice;
+            long totalExecutionAmount;
+
+            try {
+                totalFilledQuantity =
+                        Integer.parseInt(item.totalFilledQuantity());
+
+                averageExecutionPrice =
+                        new BigDecimal(item.averageExecutionPrice());
+
+                totalExecutionAmount =
+                        Long.parseLong(item.totalExecutionAmount());
+
+            } catch (NumberFormatException | NullPointerException e) {
+                log.warn(
+                        "KIS 취소 주문 체결 정보 파싱 실패로 상태를 확정할 수 없습니다. "
+                                + "orderId={}, orderNo={}",
+                        orderId,
+                        item.orderNo()
+                );
+
+                recordReconciliationFailureSafely(orderId);
+                return;
+            }
+
+            try {
+                orderExecutionCommandService.applyReconciledCancellation(
+                        orderId,
+                        item.orderNo(),
+                        totalFilledQuantity,
+                        averageExecutionPrice,
+                        totalExecutionAmount
+                );
+
+            } catch (BusinessException e) {
+
+                if (e.getErrorCode()
+                        == TradingErrorCode.ORDER_STATUS_CHANGE_NOT_ALLOWED) {
+
+                    log.info(
+                            "KIS 취소 주문 보정 중 이미 다른 흐름에서 상태가 변경되었습니다. "
+                                    + "orderId={}",
+                            orderId
+                    );
+
+                    return;
+                }
+
+                if (e.getErrorCode()
+                        == TradingErrorCode.INVALID_ORDER) {
+
+                    log.warn(
+                            "KIS 취소 주문과 내부 주문 정보가 일치하지 않아 "
+                                    + "상태를 확정할 수 없습니다. orderId={}, orderNo={}",
+                            orderId,
+                            item.orderNo()
+                    );
+
+                    recordReconciliationFailureSafely(orderId);
+                    return;
+                }
+
+                throw e;
+            }
+
             return;
         }
 
@@ -254,23 +333,6 @@ public class KisOrderReconciliationService {
                     "KIS_ORDER_REJECTED",
                     "KIS에서 주문이 거절되었습니다."
             );
-            return;
-        }
-
-        /*
-         * KIS에서 취소된 주문으로 확인된 경우
-         * 주문번호가 존재한다는 이유만으로 ACCEPTED 처리하지 않는다.
-         *
-         * 체결이 일부 발생한 뒤 잔여 주문이 취소되는 경우도 있을 수 있으므로
-         * 이번 이슈에서는 임의로 FAILED 처리하지 않고 상태 보정을 보류한다.
-         */
-        if ("Y".equalsIgnoreCase(item.canceled())) {
-            log.warn(
-                    "KIS에서 취소된 주문으로 확인되어 현재 이슈 범위에서는 상태를 확정하지 않습니다. orderId={}, orderNo={}",
-                    orderId,
-                    item.orderNo()
-            );
-
             return;
         }
 
@@ -300,7 +362,7 @@ public class KisOrderReconciliationService {
                 orderId
         );
 
-        orderStatusCommandService.recordReconciliationFailure(orderId);
+        recordReconciliationFailureSafely(orderId);
     }
 
     private boolean isBrokerOrderNoAlreadyUsed(
@@ -316,5 +378,30 @@ public class KisOrderReconciliationService {
                         brokerOrderNo,
                         orderId
                 );
+    }
+
+    private void recordReconciliationFailureSafely(
+            UUID orderId
+    ) {
+        try {
+            orderStatusCommandService
+                    .recordReconciliationFailure(orderId);
+
+        } catch (BusinessException e) {
+
+            if (e.getErrorCode()
+                    == TradingErrorCode.ORDER_STATUS_CHANGE_NOT_ALLOWED) {
+
+                log.info(
+                        "재조정 실패 기록 전에 주문 상태가 변경되었습니다. "
+                                + "orderId={}",
+                        orderId
+                );
+
+                return;
+            }
+
+            throw e;
+        }
     }
 }

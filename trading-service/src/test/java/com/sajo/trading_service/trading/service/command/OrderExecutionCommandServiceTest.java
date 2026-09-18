@@ -470,6 +470,81 @@ class OrderExecutionCommandServiceTest {
                 .save(any(Execution.class));
     }
 
+    @Test
+    @DisplayName("보정된 취소 주문의 상태를 CANCELED로 변경한다")
+    void applyReconciledCancellation_withoutFill() {
+        // given
+        UUID orderId = UUID.randomUUID();
+        Order order = mock(Order.class);
+
+        when(orderCommandRepository.findByIdForUpdate(orderId))
+                .thenReturn(Optional.of(order));
+
+        // when
+        orderExecutionCommandService.applyReconciledCancellation(
+                orderId,
+                "0001234567",
+                0,
+                BigDecimal.ZERO,
+                0L
+        );
+
+        // then
+        verify(orderCommandRepository)
+                .findByIdForUpdate(orderId);
+
+        verify(order)
+                .reconcileCanceled(
+                        "0001234567",
+                        0
+                );
+
+        verify(executionCommandRepository, never())
+                .findByOrderId(any());
+
+        verify(executionCommandRepository, never())
+                .save(any());
+    }
+
+    @Test
+    @DisplayName("부분 체결 후 취소 주문은 Execution을 생성한다")
+    void applyReconciledCancellation_withPartialFill() {
+        // given
+        UUID orderId = UUID.randomUUID();
+        Order order = mock(Order.class);
+
+        when(orderCommandRepository.findByIdForUpdate(orderId))
+                .thenReturn(Optional.of(order));
+
+        when(order.getId())
+                .thenReturn(orderId);
+
+        when(executionCommandRepository.findByOrderId(orderId))
+                .thenReturn(Optional.empty());
+
+        // when
+        orderExecutionCommandService.applyReconciledCancellation(
+                orderId,
+                "0001234567",
+                3,
+                new BigDecimal("70000"),
+                210000L
+        );
+
+        // then
+        verify(order)
+                .reconcileCanceled(
+                        "0001234567",
+                        3
+                );
+
+        verify(executionCommandRepository)
+                .findByOrderId(orderId);
+
+        verify(executionCommandRepository)
+                .save(any(Execution.class));
+    }
+
     private Order createAcceptedOrder() {
         Order order =
                 Order.create(

@@ -24,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @Tag("unit")
 @Tag("ai-risk")
@@ -41,18 +42,18 @@ class AiPromptVersionCommandServiceTest {
     void createFirstPromptVersion() {
         AiPromptVersionCreateRequest request =
                 new AiPromptVersionCreateRequest(
-                        AiPromptKey.RISK_ANALYSIS,
+                        AiPromptKey.STRATEGY_RISK_ANALYSIS,
                         "위험 분석 프롬프트",
                         "최초 등록"
                 );
 
         given(promptVersionCommandRepository
-                .findTopByPromptKeyOrderByCreatedAtDesc(AiPromptKey.RISK_ANALYSIS))
+                .findTopByPromptKeyOrderByCreatedAtDesc(AiPromptKey.STRATEGY_RISK_ANALYSIS))
                 .willReturn(Optional.empty());
 
         given(promptVersionCommandRepository
                 .findByPromptKeyAndStatus(
-                        AiPromptKey.RISK_ANALYSIS,
+                        AiPromptKey.STRATEGY_RISK_ANALYSIS,
                         AiPromptStatus.ACTIVE))
                 .willReturn(Optional.empty());
 
@@ -65,7 +66,7 @@ class AiPromptVersionCommandServiceTest {
 
         // then
         assertThat(response.version()).isEqualTo("v1");
-        assertThat(response.promptKey()).isEqualTo(AiPromptKey.RISK_ANALYSIS);
+        assertThat(response.promptKey()).isEqualTo(AiPromptKey.STRATEGY_RISK_ANALYSIS);
         assertThat(response.status()).isEqualTo(AiPromptStatus.ACTIVE);
 
         verify(promptVersionCommandRepository)
@@ -77,7 +78,7 @@ class AiPromptVersionCommandServiceTest {
     @DisplayName("기존 ACTIVE 프롬프트가 있으면 RETIRED 처리하고 다음 버전을 생성한다")
     void createNextPromptVersion() {
         AiPromptVersion existing = AiPromptVersion.create(
-                AiPromptKey.RISK_ANALYSIS,
+                AiPromptKey.STRATEGY_RISK_ANALYSIS,
                 "v1",
                 "기존 프롬프트",
                 "최초 등록"
@@ -85,18 +86,18 @@ class AiPromptVersionCommandServiceTest {
 
         AiPromptVersionCreateRequest request =
                 new AiPromptVersionCreateRequest(
-                        AiPromptKey.RISK_ANALYSIS,
+                        AiPromptKey.STRATEGY_RISK_ANALYSIS,
                         "새로운 프롬프트",
                         "위험 분석 기준 변경"
                 );
 
         given(promptVersionCommandRepository
-                .findTopByPromptKeyOrderByCreatedAtDesc(AiPromptKey.RISK_ANALYSIS))
+                .findTopByPromptKeyOrderByCreatedAtDesc(AiPromptKey.STRATEGY_RISK_ANALYSIS))
                 .willReturn(Optional.of(existing));
 
         given(promptVersionCommandRepository
                 .findByPromptKeyAndStatus(
-                        AiPromptKey.RISK_ANALYSIS,
+                        AiPromptKey.STRATEGY_RISK_ANALYSIS,
                         AiPromptStatus.ACTIVE))
                 .willReturn(Optional.of(existing));
 
@@ -117,7 +118,7 @@ class AiPromptVersionCommandServiceTest {
     @DisplayName("v9 다음 버전은 v10으로 생성한다")
     void incrementVersionFromV9ToV10() {
         AiPromptVersion existing = AiPromptVersion.create(
-                AiPromptKey.RISK_ANALYSIS,
+                AiPromptKey.STRATEGY_RISK_ANALYSIS,
                 "v9",
                 "기존 프롬프트",
                 "기존 버전"
@@ -125,18 +126,18 @@ class AiPromptVersionCommandServiceTest {
 
         AiPromptVersionCreateRequest request =
                 new AiPromptVersionCreateRequest(
-                        AiPromptKey.RISK_ANALYSIS,
+                        AiPromptKey.STRATEGY_RISK_ANALYSIS,
                         "새 프롬프트",
                         "변경"
                 );
 
         given(promptVersionCommandRepository
-                .findTopByPromptKeyOrderByCreatedAtDesc(AiPromptKey.RISK_ANALYSIS))
+                .findTopByPromptKeyOrderByCreatedAtDesc(AiPromptKey.STRATEGY_RISK_ANALYSIS))
                 .willReturn(Optional.of(existing));
 
         given(promptVersionCommandRepository
                 .findByPromptKeyAndStatus(
-                        AiPromptKey.RISK_ANALYSIS,
+                        AiPromptKey.STRATEGY_RISK_ANALYSIS,
                         AiPromptStatus.ACTIVE))
                 .willReturn(Optional.of(existing));
 
@@ -155,21 +156,21 @@ class AiPromptVersionCommandServiceTest {
         // given
         AiPromptVersionCreateRequest request =
                 new AiPromptVersionCreateRequest(
-                        AiPromptKey.RISK_ANALYSIS,
+                        AiPromptKey.STRATEGY_RISK_ANALYSIS,
                         "위험 분석 프롬프트",
                         "동시 등록"
                 );
 
         given(promptVersionCommandRepository
                 .findByPromptKeyAndStatus(
-                        AiPromptKey.RISK_ANALYSIS,
+                        AiPromptKey.STRATEGY_RISK_ANALYSIS,
                         AiPromptStatus.ACTIVE
                 ))
                 .willReturn(Optional.empty());
 
         given(promptVersionCommandRepository
                 .findTopByPromptKeyOrderByCreatedAtDesc(
-                        AiPromptKey.RISK_ANALYSIS
+                        AiPromptKey.STRATEGY_RISK_ANALYSIS
                 ))
                 .willReturn(Optional.empty());
 
@@ -203,21 +204,21 @@ class AiPromptVersionCommandServiceTest {
     void createWithUnexpectedDataIntegrityViolation() {
         AiPromptVersionCreateRequest request =
                 new AiPromptVersionCreateRequest(
-                        AiPromptKey.RISK_ANALYSIS,
+                        AiPromptKey.STRATEGY_RISK_ANALYSIS,
                         "위험 분석 프롬프트",
                         "테스트"
                 );
 
         given(promptVersionCommandRepository
                 .findByPromptKeyAndStatus(
-                        AiPromptKey.RISK_ANALYSIS,
+                        AiPromptKey.STRATEGY_RISK_ANALYSIS,
                         AiPromptStatus.ACTIVE
                 ))
                 .willReturn(Optional.empty());
 
         given(promptVersionCommandRepository
                 .findTopByPromptKeyOrderByCreatedAtDesc(
-                        AiPromptKey.RISK_ANALYSIS
+                        AiPromptKey.STRATEGY_RISK_ANALYSIS
                 ))
                 .willReturn(Optional.empty());
 
@@ -236,5 +237,61 @@ class AiPromptVersionCommandServiceTest {
         );
 
         assertThat(thrown).isSameAs(unexpectedException);
+    }
+
+    @Test
+    void create_retiresOnlyActivePromptWithSamePromptKey() {
+        // given
+        AiPromptVersion strategyPrompt = AiPromptVersion.create(
+                AiPromptKey.STRATEGY_RISK_ANALYSIS,
+                "v1",
+                "전략 위험 분석 프롬프트",
+                "최초 등록"
+        );
+
+        AiPromptVersion backtestPrompt = AiPromptVersion.create(
+                AiPromptKey.BACKTEST_ANALYSIS,
+                "v1",
+                "백테스트 분석 프롬프트",
+                "최초 등록"
+        );
+
+        when(promptVersionCommandRepository.findByPromptKeyAndStatus(
+                AiPromptKey.STRATEGY_RISK_ANALYSIS,
+                AiPromptStatus.ACTIVE
+        )).thenReturn(Optional.of(strategyPrompt));
+
+        when(promptVersionCommandRepository
+                .findTopByPromptKeyOrderByCreatedAtDesc(
+                        AiPromptKey.STRATEGY_RISK_ANALYSIS
+                ))
+                .thenReturn(Optional.of(strategyPrompt));
+
+        when(promptVersionCommandRepository.saveAndFlush(any(AiPromptVersion.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        AiPromptVersionCreateRequest request =
+                new AiPromptVersionCreateRequest(
+                        AiPromptKey.STRATEGY_RISK_ANALYSIS,
+                        "새 전략 위험 분석 프롬프트",
+                        "프롬프트 개선"
+                );
+
+        // when
+        AiPromptVersionCreateResponse response =
+                promptVersionCommandService.create(request);
+
+        // then
+        assertThat(strategyPrompt.getStatus())
+                .isEqualTo(AiPromptStatus.RETIRED);
+
+        assertThat(backtestPrompt.getStatus())
+                .isEqualTo(AiPromptStatus.ACTIVE);
+
+        assertThat(response.promptKey())
+                .isEqualTo(AiPromptKey.STRATEGY_RISK_ANALYSIS);
+
+        assertThat(response.version())
+                .isEqualTo("v2");
     }
 }

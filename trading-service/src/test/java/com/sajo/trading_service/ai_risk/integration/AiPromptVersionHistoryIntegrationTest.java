@@ -69,7 +69,7 @@ public class AiPromptVersionHistoryIntegrationTest {
     void getPromptVersionHistory_success() throws Exception {
 
         AiPromptVersion prompt = AiPromptVersion.create(
-                AiPromptKey.RISK_ANALYSIS,
+                AiPromptKey.STRATEGY_RISK_ANALYSIS,
                 "v1",
                 "AI 위험 분석 프롬프트",
                 "최초 등록"
@@ -85,6 +85,7 @@ public class AiPromptVersionHistoryIntegrationTest {
                         .backtestId(UUID.randomUUID())
                         .prompt(
                                 new AiAnalysisHistory.PromptSnapshot(
+                                        AiPromptKey.STRATEGY_RISK_ANALYSIS,
                                         "v1",
                                         "AI 위험 분석 프롬프트"
                                 )
@@ -106,6 +107,7 @@ public class AiPromptVersionHistoryIntegrationTest {
                         .backtestId(UUID.randomUUID())
                         .prompt(
                                 new AiAnalysisHistory.PromptSnapshot(
+                                        AiPromptKey.STRATEGY_RISK_ANALYSIS,
                                         "v1",
                                         "AI 위험 분석 프롬프트"
                                 )
@@ -129,7 +131,7 @@ public class AiPromptVersionHistoryIntegrationTest {
                 .andExpect(jsonPath("$.data.content.length()").value(1))
 
                 .andExpect(jsonPath("$.data.content[0].promptKey")
-                        .value("RISK_ANALYSIS"))
+                        .value("STRATEGY_RISK_ANALYSIS"))
                 .andExpect(jsonPath("$.data.content[0].version")
                         .value("v1"))
                 .andExpect(jsonPath("$.data.content[0].status")
@@ -151,7 +153,7 @@ public class AiPromptVersionHistoryIntegrationTest {
     void getPromptVersionHistory_failureTypeCounts_success() throws Exception {
 
         AiPromptVersion prompt = AiPromptVersion.create(
-                AiPromptKey.RISK_ANALYSIS,
+                AiPromptKey.STRATEGY_RISK_ANALYSIS,
                 "v1",
                 "AI 위험 분석 프롬프트",
                 "최초 등록"
@@ -169,6 +171,7 @@ public class AiPromptVersionHistoryIntegrationTest {
                             .backtestId(UUID.randomUUID())
                             .prompt(
                                     new AiAnalysisHistory.PromptSnapshot(
+                                            AiPromptKey.STRATEGY_RISK_ANALYSIS,
                                             "v1",
                                             "AI 위험 분석 프롬프트"
                                     )
@@ -192,6 +195,7 @@ public class AiPromptVersionHistoryIntegrationTest {
                         .backtestId(UUID.randomUUID())
                         .prompt(
                                 new AiAnalysisHistory.PromptSnapshot(
+                                        AiPromptKey.STRATEGY_RISK_ANALYSIS,
                                         "v1",
                                         "AI 위험 분석 프롬프트"
                                 )
@@ -231,7 +235,7 @@ public class AiPromptVersionHistoryIntegrationTest {
     void getPromptVersionHistory_separatesStatisticsByVersion() throws Exception {
 
         AiPromptVersion v1 = AiPromptVersion.create(
-                AiPromptKey.RISK_ANALYSIS,
+                AiPromptKey.STRATEGY_RISK_ANALYSIS,
                 "v1",
                 "기존 프롬프트",
                 "최초 등록"
@@ -239,7 +243,7 @@ public class AiPromptVersionHistoryIntegrationTest {
         v1.retire();
 
         AiPromptVersion v2 = AiPromptVersion.create(
-                AiPromptKey.RISK_ANALYSIS,
+                AiPromptKey.STRATEGY_RISK_ANALYSIS,
                 "v2",
                 "개선된 프롬프트",
                 "프롬프트 개선"
@@ -254,6 +258,7 @@ public class AiPromptVersionHistoryIntegrationTest {
                         .strategyId(UUID.randomUUID())
                         .backtestId(UUID.randomUUID())
                         .prompt(new AiAnalysisHistory.PromptSnapshot(
+                                AiPromptKey.STRATEGY_RISK_ANALYSIS,
                                 "v1",
                                 "기존 프롬프트"
                         ))
@@ -271,6 +276,7 @@ public class AiPromptVersionHistoryIntegrationTest {
                         .strategyId(UUID.randomUUID())
                         .backtestId(UUID.randomUUID())
                         .prompt(new AiAnalysisHistory.PromptSnapshot(
+                                AiPromptKey.STRATEGY_RISK_ANALYSIS,
                                 "v1",
                                 "기존 프롬프트"
                         ))
@@ -288,6 +294,7 @@ public class AiPromptVersionHistoryIntegrationTest {
                         .strategyId(UUID.randomUUID())
                         .backtestId(UUID.randomUUID())
                         .prompt(new AiAnalysisHistory.PromptSnapshot(
+                                AiPromptKey.STRATEGY_RISK_ANALYSIS,
                                 "v2",
                                 "개선된 프롬프트"
                         ))
@@ -333,7 +340,7 @@ public class AiPromptVersionHistoryIntegrationTest {
     void getPromptVersionHistory_withoutAnalysisHistory() throws Exception {
 
         AiPromptVersion prompt = AiPromptVersion.create(
-                AiPromptKey.RISK_ANALYSIS,
+                AiPromptKey.STRATEGY_RISK_ANALYSIS,
                 "v1",
                 "AI 위험 분석 프롬프트",
                 "최초 등록"
@@ -366,7 +373,7 @@ public class AiPromptVersionHistoryIntegrationTest {
     void getPromptVersionHistory_forbidden() throws Exception {
 
         AiPromptVersion prompt = AiPromptVersion.create(
-                AiPromptKey.RISK_ANALYSIS,
+                AiPromptKey.STRATEGY_RISK_ANALYSIS,
                 "v1",
                 "AI 위험 분석 프롬프트",
                 "최초 등록"
@@ -391,7 +398,7 @@ public class AiPromptVersionHistoryIntegrationTest {
 
             promptRepository
                     .findByPromptKeyAndStatus(
-                            AiPromptKey.RISK_ANALYSIS,
+                            AiPromptKey.STRATEGY_RISK_ANALYSIS,
                             AiPromptStatus.ACTIVE
                     )
                     .ifPresent(prompt -> {
@@ -400,7 +407,7 @@ public class AiPromptVersionHistoryIntegrationTest {
                     });
 
             AiPromptVersion prompt = AiPromptVersion.create(
-                    AiPromptKey.RISK_ANALYSIS,
+                    AiPromptKey.STRATEGY_RISK_ANALYSIS,
                     "v" + i,
                     "프롬프트 " + i,
                     "버전 " + i

@@ -15,6 +15,10 @@ import java.util.UUID;
 public interface OrderCommandRepository extends JpaRepository<Order, UUID> {
     boolean existsBySignalId(UUID signalId);
 
+    long countByAutoTradingIdAndDeletedAtIsNull(
+            UUID autoTradingId
+    );
+
     @Query("""
     select count(o)
     from Order o
