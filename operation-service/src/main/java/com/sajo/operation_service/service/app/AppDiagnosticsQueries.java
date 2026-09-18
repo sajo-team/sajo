@@ -37,4 +37,18 @@ final class AppDiagnosticsQueries {
                 (jvm_gc_max_data_size_bytes{application="%s"} > 0)
                 """.formatted(application, application);
     }
+
+    // rules.yml의 HikariPoolPending 알람과 동일한 지표
+    static String hikariPoolPending(String application) {
+        return "hikaricp_connections_pending{application=\"%s\"}".formatted(application);
+    }
+
+    // rules.yml의 HighGcOverhead 알람과 동일한 공식(최근 5분 중 GC pause에 쓴 시간 비율)
+    static String gcOverhead(String application) {
+        return """
+                sum by (application, instance) (
+                  rate(jvm_gc_pause_seconds_sum{application="%s"}[5m])
+                )
+                """.formatted(application);
+    }
 }

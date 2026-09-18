@@ -45,4 +45,22 @@ class AppDiagnosticsQueriesTest {
                 .contains("jvm_gc_live_data_size_bytes{application=\"trading-service\"}")
                 .contains("jvm_gc_max_data_size_bytes{application=\"trading-service\"}");
     }
+
+    @Test
+    @DisplayName("hikariPoolPending 쿼리는 hikaricp_connections_pending을 application으로 필터링한다")
+    void hikariPoolPending_filtersByApplication() {
+        String query = AppDiagnosticsQueries.hikariPoolPending("trading-service");
+
+        assertThat(query).isEqualTo("hikaricp_connections_pending{application=\"trading-service\"}");
+    }
+
+    @Test
+    @DisplayName("gcOverhead 쿼리는 rules.yml의 HighGcOverhead와 동일한 공식을 쓴다")
+    void gcOverhead_reusesHighGcOverheadFormula() {
+        String query = AppDiagnosticsQueries.gcOverhead("trading-service");
+
+        assertThat(query)
+                .contains("jvm_gc_pause_seconds_sum{application=\"trading-service\"}")
+                .contains("sum by (application, instance)");
+    }
 }

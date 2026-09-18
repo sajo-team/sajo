@@ -30,8 +30,8 @@ class DiagnosticsServiceTest {
     }
 
     @Test
-    @DisplayName("4개 진단 쿼리(p99/5xx/CPU/Heap)를 모두 조회해서 맵으로 반환한다")
-    void collect_queriesAllFourMetrics() {
+    @DisplayName("6개 진단 쿼리(p99/5xx/CPU/Heap/HikariPending/GcOverhead)를 모두 조회해서 맵으로 반환한다")
+    void collect_queriesAllSixMetrics() {
         Instant time = Instant.parse("2026-09-17T03:00:00Z");
         PrometheusQueryResult dummyResult = PrometheusQueryResult.success("query", List.of());
 
@@ -39,7 +39,7 @@ class DiagnosticsServiceTest {
 
         Map<String, PrometheusQueryResult> metrics = diagnosticsService.collect("trading-service", time);
 
-        assertThat(metrics).hasSize(4);
-        verify(prometheusClient, times(4)).query(anyString(), eq(time));
+        assertThat(metrics).hasSize(6);
+        verify(prometheusClient, times(6)).query(anyString(), eq(time));
     }
 }
