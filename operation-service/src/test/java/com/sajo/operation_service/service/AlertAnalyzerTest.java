@@ -5,6 +5,7 @@ import com.sajo.operation_service.controller.dto.request.AlertManagerWebhookRequ
 import com.sajo.operation_service.service.dependency.DependencyMappingService;
 import com.sajo.operation_service.service.host.HostDiagnosticsService;
 import com.sajo.operation_service.service.strategy.AppMetricsStrategy;
+import com.sajo.operation_service.service.strategy.NoOpStrategy;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -43,7 +44,8 @@ class AlertAnalyzerTest {
         dependencyMappingService = mock(DependencyMappingService.class);
         chatClient = mock(ChatClient.class, RETURNS_DEEP_STUBS);
         appMetricsStrategy = mock(AppMetricsStrategy.class);
-        alertAnalyzer = new AlertAnalyzer(hostDiagnosticsService, dependencyMappingService, chatClient, appMetricsStrategy);
+        alertAnalyzer = new AlertAnalyzer(
+                hostDiagnosticsService, dependencyMappingService, chatClient, appMetricsStrategy, new NoOpStrategy());
     }
 
     private AlertManagerWebhookRequest.Alert createAlert(Map<String, String> labels) {
@@ -80,8 +82,7 @@ class AlertAnalyzerTest {
     }
 
     @Test
-    @DisplayName("HighNodeCpuUsage는 실제로 application 라벨 없이 온다(avg by (instance)로 집계돼 라벨이 사라짐, rules.yml) - " +
-            "그래도 alertname 기준으로 sajo-node 그룹임을 인식해 전략 없이 호스트 스냅샷만으로 분석한다")
+    @DisplayName("HighNodeCpuUsage는 application 라벨 없이도 올 수 있다 - NoOpStrategy로 등록돼 있어 호스트 스냅샷만으로 분석한다")
     void analyze_highNodeCpuUsageWithoutApplicationLabel_stillAnalyzesUsingHostSnapshot() {
         AlertManagerWebhookRequest.Alert alert = createAlert(Map.of("alertname", "HighNodeCpuUsage"));
         PrometheusQueryResult dummy = PrometheusQueryResult.success("query", List.of());
@@ -97,7 +98,7 @@ class AlertAnalyzerTest {
     }
 
     @Test
-    @DisplayName("sajo-node 그룹 중 라벨이 보존되는 알람(예: HighNodeMemoryUsage)도 전략 없이 분석한다")
+    @DisplayName("sajo-node 그룹 중 라벨이 보존되는 알람(예: HighNodeMemoryUsage)도 NoOpStrategy로 분석한다")
     void analyze_highNodeMemoryUsageWithApplicationLabel_stillAnalyzesUsingHostSnapshot() {
         AlertManagerWebhookRequest.Alert alert = createAlert(Map.of(
                 "alertname", "HighNodeMemoryUsage", "application", "node"

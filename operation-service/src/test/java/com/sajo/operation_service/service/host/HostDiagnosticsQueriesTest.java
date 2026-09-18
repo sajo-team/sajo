@@ -18,6 +18,14 @@ class HostDiagnosticsQueriesTest {
     }
 
     @Test
+    @DisplayName("cpuUsage 쿼리는 rules.yml의 HighNodeCpuUsage와 동일하게 instance, application으로 집계한다")
+    void cpuUsage_groupsByInstanceAndApplication() {
+        String query = HostDiagnosticsQueries.cpuUsage();
+
+        assertThat(query).contains("avg by (instance, application)");
+    }
+
+    @Test
     @DisplayName("memoryUsage 쿼리는 MemAvailable 대비 사용률을 계산한다")
     void memoryUsage_usesMemAvailableRatio() {
         String query = HostDiagnosticsQueries.memoryUsage();

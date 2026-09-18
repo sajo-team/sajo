@@ -10,7 +10,7 @@ final class HostDiagnosticsQueries {
     // rules.yml의 HighNodeCpuUsage와 동일한 공식
     static String cpuUsage() {
         return """
-                1 - avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m]))
+                1 - avg by (instance, application) (rate(node_cpu_seconds_total{mode="idle"}[5m]))
                 """;
     }
 

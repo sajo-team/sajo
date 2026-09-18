@@ -6,6 +6,7 @@ import com.sajo.operation_service.service.dependency.DependencyMappingService;
 import com.sajo.operation_service.service.host.HostDiagnosticsService;
 import com.sajo.operation_service.service.strategy.AlertDiagnosisStrategy;
 import com.sajo.operation_service.service.strategy.AppMetricsStrategy;
+import com.sajo.operation_service.service.strategy.NoOpStrategy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
@@ -14,20 +15,11 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 @Slf4j
 @Service
 public class AlertAnalyzer {
-
-    // sajo-node 그룹만 호스트 스냅샷이 own snapshot과 같아서 전략 없이도 fallback이 안전하다.
-    private static final Set<String> NODE_GROUP_ALERTNAMES = Set.of(
-            AlertNames.HIGH_NODE_CPU_USAGE,
-            AlertNames.HIGH_NODE_MEMORY_USAGE,
-            AlertNames.NODE_DISK_LOW,
-            AlertNames.NODE_DISK_WILL_FILL_IN_24H
-    );
 
     private final HostDiagnosticsService hostDiagnosticsService;
     private final DependencyMappingService dependencyMappingService;
@@ -50,7 +42,8 @@ public class AlertAnalyzer {
             HostDiagnosticsService hostDiagnosticsService,
             DependencyMappingService dependencyMappingService,
             ChatClient chatClient,
-            AppMetricsStrategy appMetricsStrategy
+            AppMetricsStrategy appMetricsStrategy,
+            NoOpStrategy noOpStrategy
     ) {
         this.hostDiagnosticsService = hostDiagnosticsService;
         this.dependencyMappingService = dependencyMappingService;
@@ -61,12 +54,14 @@ public class AlertAnalyzer {
                 Map.entry(AlertNames.HIGH_CPU_USAGE, appMetricsStrategy),
                 Map.entry(AlertNames.HIGH_MEMORY_USAGE, appMetricsStrategy),
                 Map.entry(AlertNames.HIGH_GC_OVERHEAD, appMetricsStrategy),
-                Map.entry(AlertNames.HIKARI_POOL_PENDING, appMetricsStrategy)
+                Map.entry(AlertNames.HIKARI_POOL_PENDING, appMetricsStrategy),
+                Map.entry(AlertNames.HIGH_NODE_CPU_USAGE, noOpStrategy),
+                Map.entry(AlertNames.HIGH_NODE_MEMORY_USAGE, noOpStrategy),
+                Map.entry(AlertNames.NODE_DISK_LOW, noOpStrategy),
+                Map.entry(AlertNames.NODE_DISK_WILL_FILL_IN_24H, noOpStrategy)
         );
     }
 
-    // 참고 정보(호스트+의존관계)만으로는 근거 없는 분석문만 나오므로, own snapshot이 없는 alertname은
-    // sajo-node(호스트 스냅샷이 own snapshot과 동일)만 예외로 두고 나머지는 분석을 건너뛴다(빈 Optional).
     public Optional<String> analyze(AlertManagerWebhookRequest.Alert alert) {
         String alertname = alert.labels().get("alertname");
 
@@ -77,7 +72,7 @@ public class AlertAnalyzer {
         String target = alert.labels().get("application");
 
         AlertDiagnosisStrategy strategy = strategiesByAlertname.get(alertname);
-        if (strategy == null && !NODE_GROUP_ALERTNAMES.contains(alertname)) {
+        if (strategy == null) {
             log.info("전략이 아직 없는 alertname이라 분석을 건너뜁니다. alertname={}, application={}", alertname, target);
             return Optional.empty();
         }
@@ -86,9 +81,7 @@ public class AlertAnalyzer {
 
         // 1. 알람 종류별 own snapshot - 알람을 실제로 울리게 한 지표
         Map<String, PrometheusQueryResult> metrics = new LinkedHashMap<>();
-        if (strategy != null) {
-            metrics.putAll(strategy.diagnose(alert, time));
-        }
+        metrics.putAll(strategy.diagnose(alert, time));
 
         // 2. 호스트 스냅샷 - 항상 공통
         metrics.putAll(hostDiagnosticsService.collect(time));
