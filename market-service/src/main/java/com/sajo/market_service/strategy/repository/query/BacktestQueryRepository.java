@@ -10,12 +10,6 @@ import java.util.UUID;
 
 public interface BacktestQueryRepository extends JpaRepository<Backtest, UUID> {
 
-    Optional<Backtest> findByIdAndStrategyIdAndUserIdAndDeletedAtIsNull(
-            UUID id,
-            UUID strategyId,
-            UUID userId
-    );
-
     Page<Backtest> findByStrategyIdAndUserIdAndDeletedAtIsNull(
             UUID strategyId,
             UUID userId,

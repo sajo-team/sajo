@@ -9,6 +9,7 @@ import com.sajo.market_service.strategy.repository.command.BacktestCommandReposi
 import com.sajo.market_service.strategy.repository.command.StrategyCommandRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -26,6 +27,7 @@ public class BacktestExecutionService {
     private final StrategyCommandRepository strategyCommandRepository;
     private final BacktestPriceReader backtestPriceReader;
 
+    @Async("backtestExecutor")
     public void execute(UUID backtestId) {
         Backtest backtest = backtestCommandRepository.findById(backtestId)
                 .orElseThrow(() -> new BusinessException(StrategyErrorCode.BACKTEST_NOT_FOUND));

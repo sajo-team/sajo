@@ -154,6 +154,10 @@ public class Strategy extends BaseUpdatableEntity {
             throw new BusinessException(StrategyErrorCode.INVALID_STRATEGY, "1회 주문 금액은 전략 배정 금액보다 클 수 없습니다.");
         }
 
+        if (buyConditionPrice >= sellConditionPrice) {
+            throw new BusinessException(StrategyErrorCode.INVALID_STRATEGY, "매수 조건 가격은 매도 조건 가격보다 작아야 합니다.");
+        }
+
         return new Strategy(
                 userId,
                 stockId,
@@ -199,6 +203,28 @@ public class Strategy extends BaseUpdatableEntity {
                         ? orderAmount
                         : this.orderAmount;
 
+        if (newOrderAmount != null
+                && newOrderAmount > newAllocatedAmount) {
+            throw new BusinessException(
+                    StrategyErrorCode.INVALID_STRATEGY,
+                    "1회 주문 금액은 전략 배정 금액보다 클 수 없습니다."
+            );
+        }
+
+        Long newBuyConditionPrice =
+                buyConditionPrice != null
+                    ? buyConditionPrice
+                    : this.buyConditionPrice;
+
+        Long newSellConditionPrice =
+                sellConditionPrice != null
+                        ? sellConditionPrice
+                        : this.sellConditionPrice;
+
+        if (newBuyConditionPrice >= newSellConditionPrice) {
+            throw new BusinessException(StrategyErrorCode.INVALID_STRATEGY, "매수 조건 가격은 매도 조건 가격보다 작아야 합니다.");
+        }
+
         if (allocatedAmount != null) {
             validatePositive(
                     allocatedAmount,
@@ -210,14 +236,6 @@ public class Strategy extends BaseUpdatableEntity {
             validatePositive(
                     orderAmount,
                     "1회 주문 금액은 0보다 커야 합니다."
-            );
-        }
-
-        if (newOrderAmount != null
-                && newOrderAmount > newAllocatedAmount) {
-            throw new BusinessException(
-                    StrategyErrorCode.INVALID_STRATEGY,
-                    "1회 주문 금액은 전략 배정 금액보다 클 수 없습니다."
             );
         }
 
@@ -342,6 +360,12 @@ public class Strategy extends BaseUpdatableEntity {
     private void validateNotDeleted() {
         if (this.status == StrategyStatus.DELETED || getDeletedAt() != null) {
             throw new BusinessException(StrategyErrorCode.STRATEGY_NOT_FOUND);
+        }
+    }
+
+    public void validateOwner(UUID userId) {
+        if (!this.userId.equals(userId)) {
+            throw new BusinessException(StrategyErrorCode.STRATEGY_ACCESS_DENIED);
         }
     }
 }

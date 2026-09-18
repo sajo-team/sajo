@@ -50,12 +50,13 @@ public class StrategyQueryService {
     public StrategyDetailResponse getStrategy(UUID userId, UUID strategyId) {
         log.info("전략 상세 조회 시작. strategyId={}", strategyId);
 
-        Strategy strategy = strategyQueryRepository.findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId)
+        Strategy strategy = strategyQueryRepository.findByIdAndDeletedAtIsNull(strategyId)
                 .orElseThrow(() -> {
-                    log.warn("전략 상세 조회 실패: 전략을 찾을 수 없습니다. strategyId={}", strategyId);
+                    log.warn("전략을 찾을 수 없습니다.\n strategyId = {}", strategyId);
                     return new BusinessException(StrategyErrorCode.STRATEGY_NOT_FOUND);
                 });
 
+        strategy.validateOwner(userId);
         log.info("전략 상세 조회 완료. strategyId={}, status={}", strategyId, strategy.getStatus());
 
         return StrategyDetailResponse.from(strategy);
