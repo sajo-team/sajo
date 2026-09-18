@@ -21,7 +21,7 @@ import java.util.stream.Collectors;
 @Service
 public class AlertAnalyzer {
 
-    // sajo-node 그룹만 호스트 스냅샷(1번)이 own snapshot과 같아서 전략(3번) 없이도 fallback이 안전하다.
+    // sajo-node 그룹만 호스트 스냅샷이 own snapshot과 같아서 전략 없이도 fallback이 안전하다.
     private static final Set<String> NODE_GROUP_ALERTNAMES = Set.of(
             AlertNames.HIGH_NODE_CPU_USAGE,
             AlertNames.HIGH_NODE_MEMORY_USAGE,
@@ -84,18 +84,18 @@ public class AlertAnalyzer {
 
         Instant time = alert.startsAt();
 
-        // 1. 호스트 스냅샷 - 항상 공통
+        // 1. 알람 종류별 own snapshot - 알람을 실제로 울리게 한 지표
         Map<String, PrometheusQueryResult> metrics = new LinkedHashMap<>();
-        metrics.putAll(hostDiagnosticsService.collect(time));
-
-        // 2. 의존관계 스냅샷 - 참고 정보
-        if (target != null) {
-            metrics.putAll(dependencyMappingService.collect(target, time));
-        }
-
-        // 3. 알람 종류별 own snapshot - 알람을 실제로 울리게 한 지표
         if (strategy != null) {
             metrics.putAll(strategy.diagnose(alert, time));
+        }
+
+        // 2. 호스트 스냅샷 - 항상 공통
+        metrics.putAll(hostDiagnosticsService.collect(time));
+
+        // 3. 의존관계 스냅샷 - 참고 정보
+        if (target != null) {
+            metrics.putAll(dependencyMappingService.collect(target, time));
         }
 
         String userPrompt = createUserPrompt(alert, metrics);

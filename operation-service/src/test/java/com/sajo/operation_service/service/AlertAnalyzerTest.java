@@ -24,7 +24,6 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -152,48 +151,44 @@ class AlertAnalyzerTest {
     }
 
     @Test
-    @DisplayName("application 라벨이 없어도 전략이 있는 alertname이면 의존관계 조회만 건너뛰고 분석은 계속한다")
-    void analyze_strategyMappedButMissingApplicationLabel_skipsDependencyLookupOnly() {
+    @DisplayName("전략이 먼저 실행되어 application 라벨 검증에 실패하면 호스트/의존관계 조회 없이 즉시 예외가 전파된다")
+    void analyze_strategyMappedButMissingApplicationLabel_failsFastWithoutHostOrDependencyLookup() {
         AlertManagerWebhookRequest.Alert alert = createAlert(Map.of("alertname", "HighCpuUsage"));
-        PrometheusQueryResult dummy = PrometheusQueryResult.success("query", List.of());
 
-        when(hostDiagnosticsService.collect(alert.startsAt())).thenReturn(Map.of("호스트 CPU 사용률(0~1)", dummy));
         when(appMetricsStrategy.diagnose(alert, alert.startsAt()))
                 .thenThrow(new IllegalArgumentException("application 라벨이 없는 알람"));
 
         assertThatThrownBy(() -> alertAnalyzer.analyze(alert))
                 .isInstanceOf(IllegalArgumentException.class);
 
-        verify(dependencyMappingService, never()).collect(anyString(), any(Instant.class));
+        verifyNoInteractions(hostDiagnosticsService, dependencyMappingService, chatClient);
     }
 
     @Test
-    @DisplayName("전략에서 검증 실패(예: application 라벨 문제)로 예외가 나면 그대로 전파되고 LLM은 호출되지 않는다")
-    void analyze_strategyFailure_propagatesExceptionWithoutCallingLlm() {
+    @DisplayName("전략에서 검증 실패(예: application 라벨 문제)로 예외가 나면 호스트/의존관계/LLM 호출 없이 그대로 전파된다")
+    void analyze_strategyFailure_failsFastWithoutHostOrDependencyOrLlmCall() {
         AlertManagerWebhookRequest.Alert alert = createAlert(Map.of(
                 "alertname", "HighCpuUsage",
                 "application", "trading-service\"} or process_cpu_usage{application=\"a"
         ));
 
-        when(hostDiagnosticsService.collect(alert.startsAt())).thenReturn(Map.of());
-        when(dependencyMappingService.collect(eq(alert.labels().get("application")), eq(alert.startsAt())))
-                .thenReturn(Map.of());
         when(appMetricsStrategy.diagnose(eq(alert), eq(alert.startsAt())))
                 .thenThrow(new IllegalArgumentException("application 라벨 형식이 올바르지 않은 알람"));
 
         assertThatThrownBy(() -> alertAnalyzer.analyze(alert))
                 .isInstanceOf(IllegalArgumentException.class);
 
-        verifyNoInteractions(chatClient);
+        verifyNoInteractions(hostDiagnosticsService, dependencyMappingService, chatClient);
     }
 
     @Test
-    @DisplayName("호스트 진단 조회가 실패하면 예외가 그대로 전파된다")
+    @DisplayName("전략 검증을 통과한 뒤 호스트 진단 조회가 실패하면 예외가 그대로 전파된다")
     void analyze_hostDiagnosticsFailure_propagatesException() {
         AlertManagerWebhookRequest.Alert alert = createAlert(Map.of(
                 "alertname", "HighCpuUsage", "application", "trading-service"
         ));
 
+        when(appMetricsStrategy.diagnose(alert, alert.startsAt())).thenReturn(Map.of());
         when(hostDiagnosticsService.collect(any(Instant.class)))
                 .thenThrow(new RuntimeException("Prometheus 타임아웃"));
 
@@ -201,7 +196,7 @@ class AlertAnalyzerTest {
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("Prometheus 타임아웃");
 
-        verifyNoInteractions(dependencyMappingService, appMetricsStrategy, chatClient);
+        verifyNoInteractions(dependencyMappingService, chatClient);
     }
 
     @Test
