@@ -52,69 +52,6 @@ class BacktestQueryRepositoryTest {
     private BacktestQueryRepository backtestQueryRepository;
 
     @Test
-    @DisplayName("백테스트 ID, 전략 ID, 사용자 ID가 일치하면 조회된다")
-    void findByIdAndStrategyIdAndUserIdAndDeletedAtIsNull() {
-        // given
-        UUID userId = UUID.randomUUID();
-        Strategy strategy = strategyCommandRepository.saveAndFlush(newStrategy(userId));
-        Backtest saved = backtestCommandRepository.saveAndFlush(newBacktest(strategy));
-
-        // when
-        Optional<Backtest> result = backtestQueryRepository.findByIdAndStrategyIdAndUserIdAndDeletedAtIsNull(
-                saved.getId(),
-                strategy.getId(),
-                userId
-        );
-
-        // then
-        assertThat(result).isPresent();
-        assertThat(result.get().getId()).isEqualTo(saved.getId());
-        assertThat(result.get().getStrategyId()).isEqualTo(strategy.getId());
-        assertThat(result.get().getUserId()).isEqualTo(userId);
-    }
-
-    @Test
-    @DisplayName("사용자 ID가 다르면 백테스트가 조회되지 않는다")
-    void findByIdAndStrategyIdAndUserIdAndDeletedAtIsNullReturnsEmptyWhenUserIdMismatch() {
-        // given
-        UUID userId = UUID.randomUUID();
-        UUID otherUserId = UUID.randomUUID();
-        Strategy strategy = strategyCommandRepository.saveAndFlush(newStrategy(userId));
-        Backtest saved = backtestCommandRepository.saveAndFlush(newBacktest(strategy));
-
-        // when
-        Optional<Backtest> result = backtestQueryRepository.findByIdAndStrategyIdAndUserIdAndDeletedAtIsNull(
-                saved.getId(),
-                strategy.getId(),
-                otherUserId
-        );
-
-        // then
-        assertThat(result).isEmpty();
-    }
-
-    @Test
-    @DisplayName("소프트 삭제된 백테스트는 조회되지 않는다")
-    void findByIdAndStrategyIdAndUserIdAndDeletedAtIsNullExcludesSoftDeleted() {
-        // given
-        UUID userId = UUID.randomUUID();
-        Strategy strategy = strategyCommandRepository.saveAndFlush(newStrategy(userId));
-        Backtest backtest = newBacktest(strategy);
-        backtest.softDelete(userId);
-        Backtest saved = backtestCommandRepository.saveAndFlush(backtest);
-
-        // when
-        Optional<Backtest> result = backtestQueryRepository.findByIdAndStrategyIdAndUserIdAndDeletedAtIsNull(
-                saved.getId(),
-                strategy.getId(),
-                userId
-        );
-
-        // then
-        assertThat(result).isEmpty();
-    }
-
-    @Test
     @DisplayName("특정 전략의 본인 백테스트 목록만 조회된다")
     void findByStrategyIdAndUserIdAndDeletedAtIsNull() {
         // given

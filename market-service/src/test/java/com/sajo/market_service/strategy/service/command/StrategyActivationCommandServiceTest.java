@@ -36,7 +36,7 @@ class StrategyActivationCommandServiceTest {
         StrategyActivationCommandService service =
                 new StrategyActivationCommandService(strategyCommandRepository);
 
-        given(strategyCommandRepository.findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId))
+        given(strategyCommandRepository.findByIdAndDeletedAtIsNull(strategyId))
                 .willReturn(Optional.of(strategy));
 
         // when
@@ -66,7 +66,7 @@ class StrategyActivationCommandServiceTest {
         StrategyActivationCommandService service =
                 new StrategyActivationCommandService(strategyCommandRepository);
 
-        given(strategyCommandRepository.findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId))
+        given(strategyCommandRepository.findByIdAndDeletedAtIsNull(strategyId))
                 .willReturn(Optional.of(strategy));
 
         // when
@@ -94,7 +94,7 @@ class StrategyActivationCommandServiceTest {
         StrategyActivationCommandService service =
                 new StrategyActivationCommandService(strategyCommandRepository);
 
-        given(strategyCommandRepository.findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId))
+        given(strategyCommandRepository.findByIdAndDeletedAtIsNull(strategyId))
                 .willReturn(Optional.empty());
 
         // when & then
@@ -149,7 +149,7 @@ class StrategyActivationCommandServiceTest {
         StrategyActivationCommandService service =
                 new StrategyActivationCommandService(strategyCommandRepository);
 
-        given(strategyCommandRepository.findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId))
+        given(strategyCommandRepository.findByIdAndDeletedAtIsNull(strategyId))
                 .willReturn(Optional.of(strategy));
 
         // when & then
@@ -164,6 +164,35 @@ class StrategyActivationCommandServiceTest {
                     BusinessException businessException = (BusinessException) exception;
                     assertThat(businessException.getErrorCode())
                             .isEqualTo(StrategyErrorCode.INVALID_STRATEGY);
+                });
+    }
+
+    @Test
+    @DisplayName("다른 사용자의 전략은 상태를 변경할 수 없다")
+    void changeActivationAccessDenied() {
+        // given
+        UUID ownerId = UUID.randomUUID();
+        UUID requesterId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+        Strategy strategy = createStrategy(ownerId);
+        StrategyActivationCommandService service =
+                new StrategyActivationCommandService(strategyCommandRepository);
+
+        given(strategyCommandRepository.findByIdAndDeletedAtIsNull(strategyId))
+                .willReturn(Optional.of(strategy));
+
+        // when & then
+        assertThatThrownBy(() -> service.changeActivation(
+                requesterId,
+                strategyId,
+                true,
+                StrategyActivationSnapshot.from(strategy)
+        ))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(StrategyErrorCode.STRATEGY_ACCESS_DENIED);
                 });
     }
 

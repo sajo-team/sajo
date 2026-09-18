@@ -27,9 +27,7 @@ public class StrategyActivationCommandService {
             StrategyActivationSnapshot snapshot
     ) {
         // 외부 호출 이후 다시 조회해 최신 상태와 소유권 확인
-        Strategy strategy = strategyCommandRepository
-                .findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId)
-                .orElseThrow(() -> new BusinessException(StrategyErrorCode.STRATEGY_NOT_FOUND));
+        Strategy strategy = getOwnedStrategy(strategyId, userId);
 
         if (Boolean.TRUE.equals(active)) {
             if (snapshot == null || !snapshot.matches(strategy)) {
@@ -45,5 +43,16 @@ public class StrategyActivationCommandService {
         }
 
         return StrategyActivationResponse.from(strategy);
+    }
+
+    private Strategy getOwnedStrategy(UUID strategyId, UUID userId) {
+        Strategy strategy = strategyCommandRepository.findByIdAndDeletedAtIsNull(strategyId)
+                .orElseThrow(() -> {
+                    log.warn("전략을 찾을 수 없습니다.\n strategyId = {}", strategyId);
+                    return new BusinessException(StrategyErrorCode.STRATEGY_NOT_FOUND);
+                });
+
+        strategy.validateOwner(userId);
+        return strategy;
     }
 }

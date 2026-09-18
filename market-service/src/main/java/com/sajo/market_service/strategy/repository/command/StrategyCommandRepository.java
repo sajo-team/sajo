@@ -11,4 +11,6 @@ import java.util.UUID;
 public interface StrategyCommandRepository extends JpaRepository<Strategy, UUID> {
 
     Optional<Strategy> findByIdAndUserIdAndDeletedAtIsNull(UUID id, UUID userId);
+
+    Optional<Strategy> findByIdAndDeletedAtIsNull(UUID id);
 }

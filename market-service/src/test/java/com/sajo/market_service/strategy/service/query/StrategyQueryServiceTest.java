@@ -132,7 +132,7 @@ class StrategyQueryServiceTest {
         );
 
         given(strategyQueryRepository
-                .findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId))
+                .findByIdAndDeletedAtIsNull(strategyId))
                 .willReturn(Optional.of(strategy));
 
         // when
@@ -158,12 +158,36 @@ class StrategyQueryServiceTest {
         UUID strategyId = UUID.randomUUID();
 
         given(strategyQueryRepository
-                .findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId))
+                .findByIdAndDeletedAtIsNull(strategyId))
                 .willReturn(Optional.empty());
 
         // when & then
         assertThatThrownBy(() -> strategyQueryService.getStrategy(userId,strategyId))
                 .isInstanceOf(BusinessException.class)
                 .hasMessage(StrategyErrorCode.STRATEGY_NOT_FOUND.getMessage());
+    }
+
+    @Test
+    @DisplayName("다른 사용자의 전략을 조회하려 하면 접근이 거부된다.")
+    void getStrategyAccessDenied() {
+        // given
+        UUID ownerId = UUID.randomUUID();
+        UUID requesterId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+
+        Strategy strategy = Strategy.create(
+                ownerId, UUID.randomUUID(), "005930", "삼성전자 눌림목 전략",
+                70_000L, 80_000L, new BigDecimal("5.0000"), null,
+                3_000_000L, 100_000L, null, null, null
+        );
+
+        given(strategyQueryRepository
+                .findByIdAndDeletedAtIsNull(strategyId))
+                .willReturn(Optional.of(strategy));
+
+        // when & then
+        assertThatThrownBy(() -> strategyQueryService.getStrategy(requesterId, strategyId))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage(StrategyErrorCode.STRATEGY_ACCESS_DENIED.getMessage());
     }
 }
