@@ -4,7 +4,7 @@ import com.sajo.operation_service.client.PrometheusQueryResult;
 import com.sajo.operation_service.controller.dto.request.AlertManagerWebhookRequest;
 import com.sajo.operation_service.service.app.DiagnosticsService;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 import java.util.Map;
@@ -14,7 +14,7 @@ import java.util.Map;
 // 필요 없다: application 값만 다를 뿐 조회 로직 자체는 동일하기 때문.
 // ServiceDown처럼 "다운"류 알람은 이 전략이 아니라 별도 전략(직전 시점 조회)을 써야 한다 - 서비스가
 // 죽으면 이 전략이 조회하는 4개 지표가 전부 0으로 나와 의미가 없다(1단계에서 실측 확인됨).
-@Service
+@Component
 @RequiredArgsConstructor
 public class AppMetricsStrategy implements AlertDiagnosisStrategy {
 

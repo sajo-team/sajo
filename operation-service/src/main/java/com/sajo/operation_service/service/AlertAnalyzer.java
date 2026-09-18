@@ -92,7 +92,7 @@ public class AlertAnalyzer {
         }
 
         String userPrompt = createUserPrompt(alert, metrics);
-        log.info("LLM에 보낼 프롬프트. alertname={}\n{}", alertname, userPrompt);
+        log.debug("LLM에 보낼 프롬프트. alertname={}\n{}", alertname, userPrompt);
 
         String response = chatClient.prompt()
                 .system(SYSTEM_PROMPT)
