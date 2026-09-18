@@ -14,4 +14,9 @@ public final class AlertNames {
     public static final String HIGH_MEMORY_USAGE = "HighMemoryUsage";
     public static final String HIGH_GC_OVERHEAD = "HighGcOverhead";
     public static final String HIKARI_POOL_PENDING = "HikariPoolPending";
+
+    public static final String HIGH_NODE_CPU_USAGE = "HighNodeCpuUsage";
+    public static final String HIGH_NODE_MEMORY_USAGE = "HighNodeMemoryUsage";
+    public static final String NODE_DISK_LOW = "NodeDiskLow";
+    public static final String NODE_DISK_WILL_FILL_IN_24H = "NodeDiskWillFillIn24h";
 }

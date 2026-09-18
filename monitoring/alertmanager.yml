@@ -40,7 +40,7 @@ inhibit_rules:
     target_matchers:
       - alertname="HighNodeCpuUsage"
       - severity="warning"
-    equal: [instance]
+    equal: [application, instance]
 
   - source_matchers:
       - alertname="NodeDiskLow"

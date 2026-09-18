@@ -14,15 +14,23 @@ import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Slf4j
 @Service
 public class AlertAnalyzer {
 
-    // sajo-node 그룹 알람의 application 라벨 값 - 이 그룹만 "own snapshot"이 호스트 스냅샷(1번)과
-    // 내용이 같아서, 전략(3번)이 없어도 fallback이 안전하다.
-    private static final String NODE_APPLICATION = "node";
+    // sajo-node 그룹만 "own snapshot"이 호스트 스냅샷(1번)과 내용이 같아서, 전략(3번)이 없어도
+    // fallback이 안전하다. application 라벨 값이 아니라 alertname으로 판단한다 - HighNodeCpuUsage는
+    // PromQL이 avg by (instance)로 집계되어(rules.yml) application 라벨이 결과에서 제거되므로,
+    // 라벨 존재 여부에 의존하면 이 그룹의 대표 알람에서 fallback이 오히려 무력화된다(코드 리뷰 반영).
+    private static final Set<String> NODE_GROUP_ALERTNAMES = Set.of(
+            AlertNames.HIGH_NODE_CPU_USAGE,
+            AlertNames.HIGH_NODE_MEMORY_USAGE,
+            AlertNames.NODE_DISK_LOW,
+            AlertNames.NODE_DISK_WILL_FILL_IN_24H
+    );
 
     private final HostDiagnosticsService hostDiagnosticsService;
     private final DependencyMappingService dependencyMappingService;
@@ -67,7 +75,7 @@ public class AlertAnalyzer {
         String target = alert.labels().get("application");
 
         AlertDiagnosisStrategy strategy = strategiesByAlertname.get(alertname);
-        if (strategy == null && !NODE_APPLICATION.equals(target)) {
+        if (strategy == null && !NODE_GROUP_ALERTNAMES.contains(alertname)) {
             log.info("전략이 아직 없는 alertname이라 분석을 건너뜁니다. alertname={}, application={}", alertname, target);
             return Optional.empty();
         }
@@ -89,6 +97,7 @@ public class AlertAnalyzer {
         }
 
         String userPrompt = createUserPrompt(alert, metrics);
+        log.info("LLM에 보낼 프롬프트. alertname={}\n{}", alertname, userPrompt);
 
         String response = chatClient.prompt()
                 .system(SYSTEM_PROMPT)

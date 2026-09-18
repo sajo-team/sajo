@@ -81,10 +81,27 @@ class AlertAnalyzerTest {
     }
 
     @Test
-    @DisplayName("sajo-node 그룹(application=node)은 전략이 없어도 호스트+의존관계만으로 분석한다 - 호스트 스냅샷이 own snapshot을 대신함")
-    void analyze_nodeGroupWithoutStrategy_stillAnalyzesUsingHostSnapshot() {
+    @DisplayName("HighNodeCpuUsage는 실제로 application 라벨 없이 온다(avg by (instance)로 집계돼 라벨이 사라짐, rules.yml) - " +
+            "그래도 alertname 기준으로 sajo-node 그룹임을 인식해 전략 없이 호스트 스냅샷만으로 분석한다")
+    void analyze_highNodeCpuUsageWithoutApplicationLabel_stillAnalyzesUsingHostSnapshot() {
+        AlertManagerWebhookRequest.Alert alert = createAlert(Map.of("alertname", "HighNodeCpuUsage"));
+        PrometheusQueryResult dummy = PrometheusQueryResult.success("query", List.of());
+
+        when(hostDiagnosticsService.collect(alert.startsAt())).thenReturn(Map.of("호스트 CPU 사용률(0~1)", dummy));
+        when(chatClient.prompt().system(anyString()).user(anyString()).call().content())
+                .thenReturn("분석 결과 텍스트");
+
+        Optional<String> result = alertAnalyzer.analyze(alert);
+
+        assertThat(result).contains("분석 결과 텍스트");
+        verifyNoInteractions(appMetricsStrategy, dependencyMappingService);
+    }
+
+    @Test
+    @DisplayName("sajo-node 그룹 중 라벨이 보존되는 알람(예: HighNodeMemoryUsage)도 전략 없이 분석한다")
+    void analyze_highNodeMemoryUsageWithApplicationLabel_stillAnalyzesUsingHostSnapshot() {
         AlertManagerWebhookRequest.Alert alert = createAlert(Map.of(
-                "alertname", "HighNodeCpuUsage", "application", "node"
+                "alertname", "HighNodeMemoryUsage", "application", "node"
         ));
         PrometheusQueryResult dummy = PrometheusQueryResult.success("query", List.of());
 
