@@ -117,6 +117,17 @@ class AlertAnalyzerTest {
     }
 
     @Test
+    @DisplayName("alertname 라벨 자체가 없으면 NPE 없이 분석을 건너뛴다")
+    void analyze_missingAlertnameLabel_skipsWithoutNpe() {
+        AlertManagerWebhookRequest.Alert alert = createAlert(Map.of("application", "trading-service"));
+
+        Optional<String> result = alertAnalyzer.analyze(alert);
+
+        assertThat(result).isEmpty();
+        verifyNoInteractions(hostDiagnosticsService, dependencyMappingService, appMetricsStrategy, chatClient);
+    }
+
+    @Test
     @DisplayName("node가 아닌데 전략도 없는 alertname이면 분석 자체를 건너뛴다(호스트/의존관계/LLM 전부 호출 안 함) - 근거 없는 분석문을 만들지 않기 위함")
     void analyze_unmappedNonNodeAlertname_skipsAnalysisEntirely() {
         AlertManagerWebhookRequest.Alert alert = createAlert(Map.of(

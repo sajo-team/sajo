@@ -21,10 +21,7 @@ import java.util.stream.Collectors;
 @Service
 public class AlertAnalyzer {
 
-    // sajo-node 그룹만 "own snapshot"이 호스트 스냅샷(1번)과 내용이 같아서, 전략(3번)이 없어도
-    // fallback이 안전하다. application 라벨 값이 아니라 alertname으로 판단한다 - HighNodeCpuUsage는
-    // PromQL이 avg by (instance)로 집계되어(rules.yml) application 라벨이 결과에서 제거되므로,
-    // 라벨 존재 여부에 의존하면 이 그룹의 대표 알람에서 fallback이 오히려 무력화된다(코드 리뷰 반영).
+    // sajo-node 그룹만 호스트 스냅샷(1번)이 own snapshot과 같아서 전략(3번) 없이도 fallback이 안전하다.
     private static final Set<String> NODE_GROUP_ALERTNAMES = Set.of(
             AlertNames.HIGH_NODE_CPU_USAGE,
             AlertNames.HIGH_NODE_MEMORY_USAGE,
@@ -72,6 +69,11 @@ public class AlertAnalyzer {
     // sajo-node(호스트 스냅샷이 own snapshot과 동일)만 예외로 두고 나머지는 분석을 건너뛴다(빈 Optional).
     public Optional<String> analyze(AlertManagerWebhookRequest.Alert alert) {
         String alertname = alert.labels().get("alertname");
+
+        if (alertname == null) {
+            log.warn("alertname 라벨이 없는 알람이라 분석을 건너뜁니다. labels={}", alert.labels());
+            return Optional.empty();
+        }
         String target = alert.labels().get("application");
 
         AlertDiagnosisStrategy strategy = strategiesByAlertname.get(alertname);
