@@ -1,4 +1,4 @@
-package com.sajo.operation_service.service;
+package com.sajo.operation_service.service.app;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

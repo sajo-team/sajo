@@ -1,4 +1,4 @@
-package com.sajo.operation_service.service;
+package com.sajo.operation_service.service.app;
 
 // AppDiagnosticsSnapshot을 구성하는 PromQL 쿼리 조립만 담당 -
 final class AppDiagnosticsQueries {

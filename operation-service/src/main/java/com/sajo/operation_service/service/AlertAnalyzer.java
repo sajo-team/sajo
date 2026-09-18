@@ -2,6 +2,7 @@ package com.sajo.operation_service.service;
 
 import com.sajo.operation_service.client.PrometheusQueryResult;
 import com.sajo.operation_service.controller.dto.request.AlertManagerWebhookRequest;
+import com.sajo.operation_service.service.app.DiagnosticsService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;

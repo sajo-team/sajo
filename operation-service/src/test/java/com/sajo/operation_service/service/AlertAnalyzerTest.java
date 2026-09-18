@@ -2,6 +2,7 @@ package com.sajo.operation_service.service;
 
 import com.sajo.operation_service.client.PrometheusQueryResult;
 import com.sajo.operation_service.controller.dto.request.AlertManagerWebhookRequest;
+import com.sajo.operation_service.service.app.DiagnosticsService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

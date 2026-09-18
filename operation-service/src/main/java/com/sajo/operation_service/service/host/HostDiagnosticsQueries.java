@@ -1,4 +1,4 @@
-package com.sajo.operation_service.service;
+package com.sajo.operation_service.service.host;
 
 // 호스트(node-exporter) 스냅샷을 구성하는 PromQL 쿼리 조립만 담당 - 이 프로젝트는 호스트가 하나뿐이라
 // application 파라미터가 필요 없음. rules.yml의 sajo-node 그룹 알람과 동일한 공식을 재사용한다.

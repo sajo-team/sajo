@@ -1,4 +1,4 @@
-package com.sajo.operation_service.service;
+package com.sajo.operation_service.service.app;
 
 import com.sajo.operation_service.client.PrometheusClient;
 import com.sajo.operation_service.client.PrometheusQueryResult;
