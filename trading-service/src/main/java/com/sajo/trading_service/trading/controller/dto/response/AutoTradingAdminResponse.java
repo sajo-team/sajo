@@ -14,6 +14,7 @@ public record AutoTradingAdminResponse(
         UUID strategyId,
         AutoTradingDirection direction,
         Boolean enabled,
+        Boolean adminSuspended,
 
         UUID latestOrderId,
         OrderStatus latestOrderStatus,
@@ -35,6 +36,7 @@ public record AutoTradingAdminResponse(
                 autoTrading.getStrategyId(),
                 autoTrading.getDirection(),
                 autoTrading.getEnabled(),
+                autoTrading.getAdminSuspended(),
 
                 latestOrder != null
                         ? latestOrder.getId()

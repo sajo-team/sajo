@@ -6,6 +6,7 @@ import com.sajo.common.response.PageResponse;
 import com.sajo.trading_service.trading.controller.dto.request.AutoTradingAdminSearchCondition;
 import com.sajo.trading_service.trading.controller.dto.request.AutoTradingAdminSuspensionRequest;
 import com.sajo.trading_service.trading.controller.dto.response.AutoTradingAdminResponse;
+import com.sajo.trading_service.trading.controller.dto.response.AutoTradingGlobalSuspensionResponse;
 import com.sajo.trading_service.trading.service.command.AutoTradingAdminCommandService;
 import com.sajo.trading_service.trading.service.query.AutoTradingQueryService;
 import jakarta.validation.Valid;
@@ -69,6 +70,24 @@ public class AutoTradingAdminController {
         return GeneralResponse.toResponseEntity(
                 GeneralResponseCode.OK,
                 null
+        );
+    }
+
+    @GetMapping("/suspensions")
+    public ResponseEntity<GeneralResponse<AutoTradingGlobalSuspensionResponse>>
+    getGlobalSuspension(
+            @RequestHeader("X-User-Role") String role
+    ) {
+        if (!"ADMIN".equals(role)) {
+            throw new AccessDeniedException("관리자 권한이 필요합니다.");
+        }
+
+        AutoTradingGlobalSuspensionResponse response =
+                autoTradingQueryService.getGlobalSuspension();
+
+        return GeneralResponse.toResponseEntity(
+                GeneralResponseCode.OK,
+                response
         );
     }
 

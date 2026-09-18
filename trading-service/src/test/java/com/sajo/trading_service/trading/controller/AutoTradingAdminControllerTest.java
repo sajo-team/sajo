@@ -1,6 +1,7 @@
 package com.sajo.trading_service.trading.controller;
 
 import com.sajo.trading_service.trading.controller.dto.request.AutoTradingAdminSearchCondition;
+import com.sajo.trading_service.trading.controller.dto.response.AutoTradingGlobalSuspensionResponse;
 import com.sajo.trading_service.trading.domain.enums.AutoTradingDirection;
 import com.sajo.trading_service.trading.service.command.AutoTradingAdminCommandService;
 import com.sajo.trading_service.trading.service.query.AutoTradingQueryService;
@@ -342,5 +343,60 @@ class AutoTradingAdminControllerTest {
                 .andExpect(status().isBadRequest());
 
         verifyNoInteractions(autoTradingAdminCommandService);
+    }
+
+    @Test
+    @DisplayName("ADMIN 권한이면 전체 AutoTrading 긴급 중지 상태를 조회할 수 있다")
+    void getGlobalSuspensionWithAdminRole() throws Exception {
+        // given
+        given(autoTradingQueryService.getGlobalSuspension())
+                .willReturn(
+                        new AutoTradingGlobalSuspensionResponse(true)
+                );
+
+        // when & then
+        mockMvc.perform(
+                        get(
+                                "/api/v1/admin/trading/auto-tradings/suspensions"
+                        )
+                                .header("X-User-Role", "ADMIN")
+                )
+                .andExpect(status().isOk());
+
+        verify(autoTradingQueryService)
+                .getGlobalSuspension();
+    }
+
+    @Test
+    @DisplayName("ADMIN 권한이 아니면 전체 AutoTrading 긴급 중지 상태 조회가 거부된다")
+    void getGlobalSuspensionWithoutAdminRole() {
+        // when & then
+        ServletException exception = assertThrows(
+                ServletException.class,
+                () -> mockMvc.perform(
+                        get(
+                                "/api/v1/admin/trading/auto-tradings/suspensions"
+                        )
+                                .header("X-User-Role", "USER")
+                )
+        );
+
+        assertThat(exception.getCause())
+                .isInstanceOf(AccessDeniedException.class);
+
+        verifyNoInteractions(autoTradingQueryService);
+    }
+
+    @Test
+    @DisplayName("X-User-Role 헤더가 없으면 전체 AutoTrading 긴급 중지 상태 조회가 실패한다")
+    void getGlobalSuspensionWithoutRoleHeader() throws Exception {
+        mockMvc.perform(
+                        get(
+                                "/api/v1/admin/trading/auto-tradings/suspensions"
+                        )
+                )
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(autoTradingQueryService);
     }
 }
