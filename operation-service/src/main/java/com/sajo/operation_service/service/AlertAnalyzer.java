@@ -6,7 +6,9 @@ import com.sajo.operation_service.service.dependency.DependencyMappingService;
 import com.sajo.operation_service.service.host.HostDiagnosticsService;
 import com.sajo.operation_service.service.strategy.AlertDiagnosisStrategy;
 import com.sajo.operation_service.service.strategy.AppMetricsStrategy;
+import com.sajo.operation_service.service.strategy.MongoConnectionHighStrategy;
 import com.sajo.operation_service.service.strategy.NoOpStrategy;
+import com.sajo.operation_service.service.strategy.PostgresConnectionHighStrategy;
 import com.sajo.operation_service.service.strategy.RedisMemoryHighStrategy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
@@ -45,7 +47,9 @@ public class AlertAnalyzer {
             ChatClient chatClient,
             AppMetricsStrategy appMetricsStrategy,
             NoOpStrategy noOpStrategy,
-            RedisMemoryHighStrategy redisMemoryHighStrategy
+            RedisMemoryHighStrategy redisMemoryHighStrategy,
+            PostgresConnectionHighStrategy postgresConnectionHighStrategy,
+            MongoConnectionHighStrategy mongoConnectionHighStrategy
     ) {
         this.hostDiagnosticsService = hostDiagnosticsService;
         this.dependencyMappingService = dependencyMappingService;
@@ -61,7 +65,9 @@ public class AlertAnalyzer {
                 Map.entry(AlertNames.HIGH_NODE_MEMORY_USAGE, noOpStrategy),
                 Map.entry(AlertNames.NODE_DISK_LOW, noOpStrategy),
                 Map.entry(AlertNames.NODE_DISK_WILL_FILL_IN_24H, noOpStrategy),
-                Map.entry(AlertNames.REDIS_MEMORY_HIGH, redisMemoryHighStrategy)
+                Map.entry(AlertNames.REDIS_MEMORY_HIGH, redisMemoryHighStrategy),
+                Map.entry(AlertNames.POSTGRES_CONNECTIONS_HIGH, postgresConnectionHighStrategy),
+                Map.entry(AlertNames.MONGO_CONNECTIONS_HIGH, mongoConnectionHighStrategy)
         );
     }
 

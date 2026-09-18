@@ -21,4 +21,6 @@ public final class AlertNames {
     public static final String NODE_DISK_WILL_FILL_IN_24H = "NodeDiskWillFillIn24h";
 
     public static final String REDIS_MEMORY_HIGH = "RedisMemoryHigh";
+    public static final String POSTGRES_CONNECTIONS_HIGH = "PostgresConnectionsHigh";
+    public static final String MONGO_CONNECTIONS_HIGH = "MongoConnectionsHigh";
 }
