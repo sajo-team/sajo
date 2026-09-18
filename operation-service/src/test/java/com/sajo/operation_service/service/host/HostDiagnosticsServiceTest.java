@@ -1,4 +1,4 @@
-package com.sajo.operation_service.service;
+package com.sajo.operation_service.service.host;
 
 import com.sajo.operation_service.client.PrometheusClient;
 import com.sajo.operation_service.client.PrometheusQueryResult;
@@ -18,28 +18,28 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-class DiagnosticsServiceTest {
+class HostDiagnosticsServiceTest {
 
     private PrometheusClient prometheusClient;
-    private DiagnosticsService diagnosticsService;
+    private HostDiagnosticsService hostDiagnosticsService;
 
     @BeforeEach
     void setup() {
         prometheusClient = mock(PrometheusClient.class);
-        diagnosticsService = new DiagnosticsService(prometheusClient);
+        hostDiagnosticsService = new HostDiagnosticsService(prometheusClient);
     }
 
     @Test
-    @DisplayName("4개 진단 쿼리(p99/5xx/CPU/Heap)를 모두 조회해서 맵으로 반환한다")
-    void collect_queriesAllFourMetrics() {
+    @DisplayName("3개 호스트 진단 쿼리(CPU/메모리/디스크)를 모두 조회해서 맵으로 반환한다 - application 파라미터 없음")
+    void collect_queriesAllThreeHostMetrics() {
         Instant time = Instant.parse("2026-09-17T03:00:00Z");
         PrometheusQueryResult dummyResult = PrometheusQueryResult.success("query", List.of());
 
         when(prometheusClient.query(anyString(), eq(time))).thenReturn(dummyResult);
 
-        Map<String, PrometheusQueryResult> metrics = diagnosticsService.collect("trading-service", time);
+        Map<String, PrometheusQueryResult> metrics = hostDiagnosticsService.collect(time);
 
-        assertThat(metrics).hasSize(4);
-        verify(prometheusClient, times(4)).query(anyString(), eq(time));
+        assertThat(metrics).hasSize(3);
+        verify(prometheusClient, times(3)).query(anyString(), eq(time));
     }
 }

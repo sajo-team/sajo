@@ -1,0 +1,20 @@
+package com.sajo.operation_service.service.strategy;
+
+import com.sajo.operation_service.client.PrometheusQueryResult;
+import com.sajo.operation_service.controller.dto.request.AlertManagerWebhookRequest;
+import org.springframework.stereotype.Service;
+
+import java.time.Instant;
+import java.util.Map;
+
+// sajo-node 그룹처럼 own snapshot이 호스트 스냅샷과 동일해서 별도 조회가 필요 없는 alertname에 등록한다.
+// alertname 라우팅을 strategiesByAlertname 맵 하나로 통일하기 위한 전략 - 아무것도 조회하지 않고
+// 빈 결과만 반환한다(코드 리뷰 반영, 별도 예외 목록 없이 맵만으로 라우팅).
+@Service
+public class NoOpStrategy implements AlertDiagnosisStrategy {
+
+    @Override
+    public Map<String, PrometheusQueryResult> diagnose(AlertManagerWebhookRequest.Alert alert, Instant time) {
+        return Map.of();
+    }
+}

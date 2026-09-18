@@ -1,4 +1,4 @@
-package com.sajo.operation_service.service;
+package com.sajo.operation_service.service.app;
 
 import com.sajo.operation_service.client.PrometheusClient;
 import com.sajo.operation_service.client.PrometheusQueryResult;
@@ -22,6 +22,8 @@ public class DiagnosticsService {
         metrics.put("5xx 에러율(0~1)", prometheusClient.query(AppDiagnosticsQueries.errorRate(application), time));
         metrics.put("CPU 사용률(0~1)", prometheusClient.query(AppDiagnosticsQueries.cpuUsage(application), time));
         metrics.put("Heap(Old Gen) 사용률(0~1)", prometheusClient.query(AppDiagnosticsQueries.heapUsage(application), time));
+        metrics.put("HikariCP 커넥션 대기(pending)", prometheusClient.query(AppDiagnosticsQueries.hikariPoolPending(application), time));
+        metrics.put("GC pause 시간 비율(0~1)", prometheusClient.query(AppDiagnosticsQueries.gcOverhead(application), time));
 
         return metrics;
     }

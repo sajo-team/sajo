@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
@@ -34,7 +35,7 @@ class AlertAnalysisAsyncProcessorTest {
         AlertManagerWebhookRequest.Alert firing = createAlert("firing", "HighCpuUsage");
         AlertManagerWebhookRequest.Alert resolved = createAlert("resolved", "HighCpuUsage");
 
-        when(alertAnalyzer.analyze(any())).thenReturn("분석 결과");
+        when(alertAnalyzer.analyze(any())).thenReturn(Optional.of("분석 결과"));
 
         processor.process(new AlertManagerWebhookRequest("firing", List.of(firing, resolved)));
 
@@ -49,7 +50,7 @@ class AlertAnalysisAsyncProcessorTest {
         AlertManagerWebhookRequest.Alert second = createAlert("firing", "HighErrorRate");
 
         when(alertAnalyzer.analyze(first)).thenThrow(new RuntimeException("Prometheus 실패"));
-        when(alertAnalyzer.analyze(second)).thenReturn("분석 결과");
+        when(alertAnalyzer.analyze(second)).thenReturn(Optional.of("분석 결과"));
 
         processor.process(new AlertManagerWebhookRequest("firing", List.of(first, second)));
 

@@ -377,7 +377,7 @@ groups:
       # 호스트(EC2) 전체 CPU 사용률. 관례값(80%/95%)이며 실트래픽으로 검증된 값은 아님
       - alert: HighNodeCpuUsage
         expr: |
-          1 - avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) > 0.8
+          1 - avg by (instance, application) (rate(node_cpu_seconds_total{mode="idle"}[5m])) > 0.8
         for: 5m
         labels:
           severity: warning
@@ -387,7 +387,7 @@ groups:
 
       - alert: HighNodeCpuUsage
         expr: |
-          1 - avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) > 0.95
+          1 - avg by (instance, application) (rate(node_cpu_seconds_total{mode="idle"}[5m])) > 0.95
         for: 5m
         labels:
           severity: critical
