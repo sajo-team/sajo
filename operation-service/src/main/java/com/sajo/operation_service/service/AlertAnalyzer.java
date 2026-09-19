@@ -5,23 +5,14 @@ import com.sajo.operation_service.controller.dto.request.AlertManagerWebhookRequ
 import com.sajo.operation_service.service.diagnostics.dependency.DependencyMappingService;
 import com.sajo.operation_service.service.diagnostics.host.HostDiagnosticsService;
 import com.sajo.operation_service.service.strategy.AlertDiagnosisStrategy;
-import com.sajo.operation_service.service.strategy.app.AppMetricsStrategy;
-import com.sajo.operation_service.service.strategy.kafka.KafkaBrokerDownStrategy;
-import com.sajo.operation_service.service.strategy.kafka.KafkaConsumerGroupStrategy;
-import com.sajo.operation_service.service.strategy.mongo.MongoConnectionDownStrategy;
-import com.sajo.operation_service.service.strategy.mongo.MongoConnectionHighStrategy;
-import com.sajo.operation_service.service.strategy.NoOpStrategy;
-import com.sajo.operation_service.service.strategy.postgres.PostgresConnectionDownStrategy;
-import com.sajo.operation_service.service.strategy.postgres.PostgresConnectionHighStrategy;
-import com.sajo.operation_service.service.strategy.redis.RedisConnectionDownStrategy;
-import com.sajo.operation_service.service.strategy.redis.RedisMemoryHighStrategy;
-import com.sajo.operation_service.service.strategy.app.ServiceDownStrategy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -33,9 +24,7 @@ public class AlertAnalyzer {
     private final HostDiagnosticsService hostDiagnosticsService;
     private final DependencyMappingService dependencyMappingService;
     private final ChatClient chatClient;
-    // alertname -> 전략. 하나의 구현체가 여러 alertname을 담당할 수 있어서(예: AppMetricsStrategy)
-    // 구현체 스스로 자기 alertname을 선언하지 않고 여기서 명시적으로 구성한다.
-    private final Map<String, AlertDiagnosisStrategy> strategiesByAlertname;
+    private final Map<String, AlertDiagnosisStrategy> alertnameStrategyRegistry;
 
     private static final String SYSTEM_PROMPT = """
                 너는 SRE 어시스턴트다.
@@ -51,46 +40,24 @@ public class AlertAnalyzer {
             HostDiagnosticsService hostDiagnosticsService,
             DependencyMappingService dependencyMappingService,
             ChatClient chatClient,
-            AppMetricsStrategy appMetricsStrategy,
-            NoOpStrategy noOpStrategy,
-            RedisMemoryHighStrategy redisMemoryHighStrategy,
-            PostgresConnectionHighStrategy postgresConnectionHighStrategy,
-            MongoConnectionHighStrategy mongoConnectionHighStrategy,
-            RedisConnectionDownStrategy redisConnectionDownStrategy,
-            PostgresConnectionDownStrategy postgresConnectionDownStrategy,
-            MongoConnectionDownStrategy mongoConnectionDownStrategy,
-            KafkaBrokerDownStrategy kafkaBrokerDownStrategy,
-            ServiceDownStrategy serviceDownStrategy,
-            KafkaConsumerGroupStrategy kafkaConsumerGroupStrategy
+            List<AlertDiagnosisStrategy> strategies
     ) {
         this.hostDiagnosticsService = hostDiagnosticsService;
         this.dependencyMappingService = dependencyMappingService;
         this.chatClient = chatClient;
-        this.strategiesByAlertname = Map.ofEntries(
-                Map.entry(AlertNames.HIGH_ERROR_RATE, appMetricsStrategy),
-                Map.entry(AlertNames.HIGH_LATENCY, appMetricsStrategy),
-                Map.entry(AlertNames.HIGH_CPU_USAGE, appMetricsStrategy),
-                Map.entry(AlertNames.HIGH_MEMORY_USAGE, appMetricsStrategy),
-                Map.entry(AlertNames.HIGH_GC_OVERHEAD, appMetricsStrategy),
-                Map.entry(AlertNames.HIKARI_POOL_PENDING, appMetricsStrategy),
-                Map.entry(AlertNames.HIGH_NODE_CPU_USAGE, noOpStrategy),
-                Map.entry(AlertNames.HIGH_NODE_MEMORY_USAGE, noOpStrategy),
-                Map.entry(AlertNames.NODE_DISK_LOW, noOpStrategy),
-                Map.entry(AlertNames.NODE_DISK_WILL_FILL_IN_24H, noOpStrategy),
-                Map.entry(AlertNames.REDIS_MEMORY_HIGH, redisMemoryHighStrategy),
-                Map.entry(AlertNames.POSTGRES_CONNECTIONS_HIGH, postgresConnectionHighStrategy),
-                Map.entry(AlertNames.MONGO_CONNECTIONS_HIGH, mongoConnectionHighStrategy),
-                Map.entry(AlertNames.REDIS_CONNECTION_DOWN, redisConnectionDownStrategy),
-                Map.entry(AlertNames.POSTGRES_CONNECTION_DOWN, postgresConnectionDownStrategy),
-                Map.entry(AlertNames.MONGO_CONNECTION_DOWN, mongoConnectionDownStrategy),
-                Map.entry(AlertNames.KAFKA_BROKER_DOWN, kafkaBrokerDownStrategy),
-                Map.entry(AlertNames.SERVICE_DOWN, serviceDownStrategy),
-                Map.entry(AlertNames.CONSUMER_STALLED, kafkaConsumerGroupStrategy),
-                Map.entry(AlertNames.CONSUMER_FALLING_BEHIND, kafkaConsumerGroupStrategy),
-                Map.entry(AlertNames.CONSUMER_NO_MEMBERS, kafkaConsumerGroupStrategy),
-                Map.entry(AlertNames.CONSUMER_GROUP_MISSING, kafkaConsumerGroupStrategy),
-                Map.entry(AlertNames.MESSAGE_DEAD_LETTERED, kafkaConsumerGroupStrategy)
-        );
+
+        Map<String, AlertDiagnosisStrategy> map = new HashMap<>();
+        for (AlertDiagnosisStrategy strategy : strategies) {
+            for (String alertname : strategy.alertnames()) {
+                AlertDiagnosisStrategy previous = map.put(alertname, strategy);
+                if (previous != null) {
+                    throw new IllegalStateException(
+                            "alertname '" + alertname + "'이 두 전략에 중복 등록됨: "
+                                    + previous.getClass().getSimpleName() + ", " + strategy.getClass().getSimpleName());
+                }
+            }
+        }
+        this.alertnameStrategyRegistry = Map.copyOf(map);
     }
 
     public Optional<String> analyze(AlertManagerWebhookRequest.Alert alert) {
@@ -102,7 +69,7 @@ public class AlertAnalyzer {
         }
         String target = alert.labels().get("application");
 
-        AlertDiagnosisStrategy strategy = strategiesByAlertname.get(alertname);
+        AlertDiagnosisStrategy strategy = alertnameStrategyRegistry.get(alertname);
         if (strategy == null) {
             log.info("전략이 아직 없는 alertname이라 분석을 건너뜁니다. alertname={}, application={}", alertname, target);
             return Optional.empty();
@@ -131,7 +98,7 @@ public class AlertAnalyzer {
                 .call()
                 .content();
 
-        return Optional.of(response);
+        return Optional.ofNullable(response);
     }
 
     private String createUserPrompt(AlertManagerWebhookRequest.Alert alert, Map<String, PrometheusQueryResult> metrics) {

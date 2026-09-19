@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 import java.util.Map;
+import java.util.Set;
 
 // ConsumerStalled/FallingBehind/NoMembers/GroupMissing/MessageDeadLettered 5개 alertname을
 // 전부 이 클래스 하나가 담당한다 - 대상(토픽/컨슈머그룹)이 토픽/그룹 개수만큼 늘어나도 Java 클래스를
@@ -20,6 +21,17 @@ import java.util.Map;
 public class KafkaConsumerGroupStrategy implements AlertDiagnosisStrategy {
 
     private final KafkaDiagnosticsService kafkaDiagnosticsService;
+
+    @Override
+    public Set<String> alertnames() {
+        return Set.of(
+                AlertNames.CONSUMER_STALLED,
+                AlertNames.CONSUMER_FALLING_BEHIND,
+                AlertNames.CONSUMER_NO_MEMBERS,
+                AlertNames.CONSUMER_GROUP_MISSING,
+                AlertNames.MESSAGE_DEAD_LETTERED
+        );
+    }
 
     @Override
     public Map<String, PrometheusQueryResult> diagnose(AlertManagerWebhookRequest.Alert alert, Instant time) {

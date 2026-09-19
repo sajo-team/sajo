@@ -1,4 +1,5 @@
 package com.sajo.operation_service.service.strategy.app;
+import com.sajo.operation_service.service.AlertNames;
 import com.sajo.operation_service.service.strategy.AlertDiagnosisStrategy;
 import com.sajo.operation_service.service.strategy.DownAlertLookback;
 
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 import java.util.Map;
+import java.util.Set;
 
 // AppMetricsStrategy와 동일한 DiagnosticsService를 재사용하지만, 서비스가 죽으면 startsAt 시점엔
 // 이미 값이 없어서(실측 확인) 별도 클래스로 분리하고 lookback을 적용한다.
@@ -18,6 +20,11 @@ import java.util.Map;
 public class ServiceDownStrategy implements AlertDiagnosisStrategy {
 
     private final DiagnosticsService diagnosticsService;
+
+    @Override
+    public Set<String> alertnames() {
+        return Set.of(AlertNames.SERVICE_DOWN);
+    }
 
     @Override
     public Map<String, PrometheusQueryResult> diagnose(AlertManagerWebhookRequest.Alert alert, Instant time) {

@@ -31,6 +31,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -39,6 +40,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -58,17 +60,24 @@ class AlertAnalyzerTest {
         dependencyMappingService = mock(DependencyMappingService.class);
         chatClient = mock(ChatClient.class, RETURNS_DEEP_STUBS);
         appMetricsStrategy = mock(AppMetricsStrategy.class);
+        // 이 테스트 클래스에서 실제로 쓰는 alertname만 스텁한다(전체 6개 다 나열할 필요 없음) -
+        // 자기선언형 레지스트리로 바뀌면서 mock도 alertnames()를 스텁해야 라우팅 맵에 잡힌다.
+        when(appMetricsStrategy.alertnames()).thenReturn(Set.of(AlertNames.HIGH_CPU_USAGE));
         alertAnalyzer = new AlertAnalyzer(
-                hostDiagnosticsService, dependencyMappingService, chatClient, appMetricsStrategy, new NoOpStrategy(),
-                new RedisMemoryHighStrategy(mock(RedisDiagnosticsService.class)),
-                new PostgresConnectionHighStrategy(mock(PostgresDiagnosticsService.class)),
-                new MongoConnectionHighStrategy(mock(MongoDiagnosticsService.class)),
-                new RedisConnectionDownStrategy(mock(RedisDiagnosticsService.class)),
-                new PostgresConnectionDownStrategy(mock(PostgresDiagnosticsService.class)),
-                new MongoConnectionDownStrategy(mock(MongoDiagnosticsService.class)),
-                new KafkaBrokerDownStrategy(mock(KafkaDiagnosticsService.class)),
-                new ServiceDownStrategy(mock(DiagnosticsService.class)),
-                new KafkaConsumerGroupStrategy(mock(KafkaDiagnosticsService.class)));
+                hostDiagnosticsService, dependencyMappingService, chatClient,
+                List.of(
+                        appMetricsStrategy,
+                        new NoOpStrategy(),
+                        new RedisMemoryHighStrategy(mock(RedisDiagnosticsService.class)),
+                        new PostgresConnectionHighStrategy(mock(PostgresDiagnosticsService.class)),
+                        new MongoConnectionHighStrategy(mock(MongoDiagnosticsService.class)),
+                        new RedisConnectionDownStrategy(mock(RedisDiagnosticsService.class)),
+                        new PostgresConnectionDownStrategy(mock(PostgresDiagnosticsService.class)),
+                        new MongoConnectionDownStrategy(mock(MongoDiagnosticsService.class)),
+                        new KafkaBrokerDownStrategy(mock(KafkaDiagnosticsService.class)),
+                        new ServiceDownStrategy(mock(DiagnosticsService.class)),
+                        new KafkaConsumerGroupStrategy(mock(KafkaDiagnosticsService.class))
+                ));
     }
 
     private AlertManagerWebhookRequest.Alert createAlert(Map<String, String> labels) {
@@ -117,7 +126,8 @@ class AlertAnalyzerTest {
         Optional<String> result = alertAnalyzer.analyze(alert);
 
         assertThat(result).contains("분석 결과 텍스트");
-        verifyNoInteractions(appMetricsStrategy, dependencyMappingService);
+        verify(appMetricsStrategy, never()).diagnose(any(), any());
+        verifyNoInteractions(dependencyMappingService);
     }
 
     @Test
@@ -136,7 +146,7 @@ class AlertAnalyzerTest {
         Optional<String> result = alertAnalyzer.analyze(alert);
 
         assertThat(result).contains("분석 결과 텍스트");
-        verifyNoInteractions(appMetricsStrategy);
+        verify(appMetricsStrategy, never()).diagnose(any(), any());
     }
 
     @Test
@@ -147,7 +157,8 @@ class AlertAnalyzerTest {
         Optional<String> result = alertAnalyzer.analyze(alert);
 
         assertThat(result).isEmpty();
-        verifyNoInteractions(hostDiagnosticsService, dependencyMappingService, appMetricsStrategy, chatClient);
+        verify(appMetricsStrategy, never()).diagnose(any(), any());
+        verifyNoInteractions(hostDiagnosticsService, dependencyMappingService, chatClient);
     }
 
     @Test
@@ -160,7 +171,8 @@ class AlertAnalyzerTest {
         Optional<String> result = alertAnalyzer.analyze(alert);
 
         assertThat(result).isEmpty();
-        verifyNoInteractions(hostDiagnosticsService, dependencyMappingService, appMetricsStrategy, chatClient);
+        verify(appMetricsStrategy, never()).diagnose(any(), any());
+        verifyNoInteractions(hostDiagnosticsService, dependencyMappingService, chatClient);
     }
 
     @Test
@@ -171,7 +183,8 @@ class AlertAnalyzerTest {
         Optional<String> result = alertAnalyzer.analyze(alert);
 
         assertThat(result).isEmpty();
-        verifyNoInteractions(hostDiagnosticsService, dependencyMappingService, appMetricsStrategy, chatClient);
+        verify(appMetricsStrategy, never()).diagnose(any(), any());
+        verifyNoInteractions(hostDiagnosticsService, dependencyMappingService, chatClient);
     }
 
     @Test

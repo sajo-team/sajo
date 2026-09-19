@@ -1,7 +1,6 @@
 package com.sajo.operation_service.service.strategy.kafka;
 
 import com.sajo.operation_service.controller.dto.request.AlertManagerWebhookRequest;
-import org.springframework.lang.Nullable;
 
 import java.util.regex.Pattern;
 
@@ -16,17 +15,14 @@ final class KafkaConsumerLabels {
     private KafkaConsumerLabels() {
     }
 
-    @Nullable
     static String consumergroup(AlertManagerWebhookRequest.Alert alert) {
         return validate(alert, "consumergroup");
     }
 
-    @Nullable
     static String topic(AlertManagerWebhookRequest.Alert alert) {
         return validate(alert, "topic");
     }
 
-    @Nullable
     private static String validate(AlertManagerWebhookRequest.Alert alert, String labelName) {
         String value = alert.labels().get(labelName);
         if (value == null) {

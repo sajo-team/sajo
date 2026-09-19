@@ -1,4 +1,5 @@
 package com.sajo.operation_service.service.strategy.app;
+import com.sajo.operation_service.service.AlertNames;
 import com.sajo.operation_service.service.strategy.AlertDiagnosisStrategy;
 
 import com.sajo.operation_service.client.PrometheusQueryResult;
@@ -9,6 +10,7 @@ import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 import java.util.Map;
+import java.util.Set;
 
 // user-service/market-service/trading-service 공통 - 알람의 application 라벨로 어느 서비스인지
 // 판단해서 기존 DiagnosticsService(1단계에서 작성됨)를 그대로 재사용한다. 서비스마다 별도 클래스가
@@ -20,6 +22,18 @@ import java.util.Map;
 public class AppMetricsStrategy implements AlertDiagnosisStrategy {
 
     private final DiagnosticsService diagnosticsService;
+
+    @Override
+    public Set<String> alertnames() {
+        return Set.of(
+                AlertNames.HIGH_ERROR_RATE,
+                AlertNames.HIGH_LATENCY,
+                AlertNames.HIGH_CPU_USAGE,
+                AlertNames.HIGH_MEMORY_USAGE,
+                AlertNames.HIGH_GC_OVERHEAD,
+                AlertNames.HIKARI_POOL_PENDING
+        );
+    }
 
     @Override
     public Map<String, PrometheusQueryResult> diagnose(AlertManagerWebhookRequest.Alert alert, Instant time) {

@@ -3,7 +3,6 @@ package com.sajo.operation_service.service.diagnostics.kafka;
 import com.sajo.operation_service.client.PrometheusClient;
 import com.sajo.operation_service.client.PrometheusQueryResult;
 import lombok.RequiredArgsConstructor;
-import org.springframework.lang.Nullable;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
