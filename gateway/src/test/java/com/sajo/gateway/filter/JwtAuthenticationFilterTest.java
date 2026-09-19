@@ -1,5 +1,5 @@
 package com.sajo.gateway.filter;
- 
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sajo.common.jwt.JwtTokenProvider;
 import jakarta.servlet.http.HttpServletRequest;
@@ -9,25 +9,25 @@ import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
- 
+
 import java.util.UUID;
- 
+
 import static org.assertj.core.api.Assertions.assertThat;
- 
+
 @DisplayName("JwtAuthenticationFilter 테스트")
 class JwtAuthenticationFilterTest {
- 
+
     private static final String SECRET = "gateway-filter-test-secret-value-must-be-at-least-32-bytes";
- 
+
     private JwtTokenProvider jwtTokenProvider;
     private JwtAuthenticationFilter filter;
- 
+
     @BeforeEach
     void setUp() {
         jwtTokenProvider = new JwtTokenProvider(SECRET, 3600);
         filter = new JwtAuthenticationFilter(jwtTokenProvider, new ObjectMapper());
     }
- 
+
     @Test
     @DisplayName("유효한 토큰이면 통과시키고, downstream에는 검증된 userId/role/sessionId로 헤더를 세팅한다")
     void validTokenSetsUserIdAndRoleHeaders() throws Exception {
@@ -76,7 +76,7 @@ class JwtAuthenticationFilterTest {
         HttpServletRequest downstreamRequest = (HttpServletRequest) chain.getRequest();
         assertThat(downstreamRequest.getHeader("X-Session-Id")).isEqualTo(realSessionId);
     }
- 
+
     @Test
     @DisplayName("클라이언트가 X-User-Id/X-User-Role을 직접 실어 보내도 검증된 값으로 덮어쓴다 (스푸핑 방지)")
     void clientSuppliedHeadersAreOverridden() throws Exception {
@@ -84,23 +84,23 @@ class JwtAuthenticationFilterTest {
         UUID realUserId = UUID.randomUUID();
         UUID spoofedUserId = UUID.randomUUID();
         String token = jwtTokenProvider.createAccessToken(realUserId, "USER");
- 
+
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/accounts");
         request.addHeader("Authorization", "Bearer " + token);
         request.addHeader("X-User-Id", spoofedUserId.toString());
         request.addHeader("X-User-Role", "ADMIN"); // 일반 유저 토큰인데 헤더로 관리자 사칭 시도
         MockHttpServletResponse response = new MockHttpServletResponse();
         MockFilterChain chain = new MockFilterChain();
- 
+
         // when
         filter.doFilter(request, response, chain);
- 
+
         // then
         HttpServletRequest downstreamRequest = (HttpServletRequest) chain.getRequest();
         assertThat(downstreamRequest.getHeader("X-User-Id")).isEqualTo(realUserId.toString());
         assertThat(downstreamRequest.getHeader("X-User-Role")).isEqualTo("USER");
     }
- 
+
     @Test
     @DisplayName("Authorization 헤더가 없으면 401을 반환하고 체인을 진행하지 않는다")
     void missingAuthorizationHeaderReturnsUnauthorized() throws Exception {
@@ -108,16 +108,16 @@ class JwtAuthenticationFilterTest {
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/accounts");
         MockHttpServletResponse response = new MockHttpServletResponse();
         MockFilterChain chain = new MockFilterChain();
- 
+
         // when
         filter.doFilter(request, response, chain);
- 
+
         // then
         assertThat(response.getStatus()).isEqualTo(401);
         assertThat(response.getContentAsString()).contains("COMMON_0002");
         assertThat(chain.getRequest()).isNull();
     }
- 
+
     @Test
     @DisplayName("만료되거나 위조된 토큰이면 401을 반환한다")
     void invalidTokenReturnsUnauthorized() throws Exception {
@@ -126,15 +126,15 @@ class JwtAuthenticationFilterTest {
         request.addHeader("Authorization", "Bearer invalid.token.value");
         MockHttpServletResponse response = new MockHttpServletResponse();
         MockFilterChain chain = new MockFilterChain();
- 
+
         // when
         filter.doFilter(request, response, chain);
- 
+
         // then
         assertThat(response.getStatus()).isEqualTo(401);
         assertThat(chain.getRequest()).isNull();
     }
- 
+
     @Test
     @DisplayName("로그인 API는 토큰 없이 통과하고, 클라이언트가 보낸 X-User-Id/X-User-Role은 제거된다")
     void loginEndpointIsPermitAllAndStripsClientHeaders() throws Exception {
@@ -144,10 +144,10 @@ class JwtAuthenticationFilterTest {
         request.addHeader("X-User-Role", "ADMIN");
         MockHttpServletResponse response = new MockHttpServletResponse();
         MockFilterChain chain = new MockFilterChain();
- 
+
         // when
         filter.doFilter(request, response, chain);
- 
+
         // then
         HttpServletRequest downstreamRequest = (HttpServletRequest) chain.getRequest();
         assertThat(downstreamRequest).isNotNull();
@@ -199,14 +199,14 @@ class JwtAuthenticationFilterTest {
         MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/users");
         MockHttpServletResponse response = new MockHttpServletResponse();
         MockFilterChain chain = new MockFilterChain();
- 
+
         // when
         filter.doFilter(request, response, chain);
- 
+
         // then
         assertThat(chain.getRequest()).isNotNull();
     }
- 
+
     @Test
     @DisplayName("permitAll 목록은 path만이 아니라 method도 일치해야 한다 (예: GET /api/v1/users는 인증 필요)")
     void permitAllIsMethodSpecific() throws Exception {
@@ -214,15 +214,15 @@ class JwtAuthenticationFilterTest {
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/users");
         MockHttpServletResponse response = new MockHttpServletResponse();
         MockFilterChain chain = new MockFilterChain();
- 
+
         // when
         filter.doFilter(request, response, chain);
- 
+
         // then
         assertThat(response.getStatus()).isEqualTo(401);
         assertThat(chain.getRequest()).isNull();
     }
- 
+
     @Test
     @DisplayName("actuator 헬스체크는 토큰 없이 통과한다 (Prometheus/헬스체크용)")
     void actuatorEndpointIsPermitAll() throws Exception {
@@ -230,14 +230,14 @@ class JwtAuthenticationFilterTest {
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/actuator/health");
         MockHttpServletResponse response = new MockHttpServletResponse();
         MockFilterChain chain = new MockFilterChain();
- 
+
         // when
         filter.doFilter(request, response, chain);
- 
+
         // then
         assertThat(chain.getRequest()).isNotNull();
     }
- 
+
     @Test
     @DisplayName("actuator라도 명시적으로 허용하지 않은 엔드포인트는 인증이 필요하다 (와일드카드 아님)")
     void unlistedActuatorEndpointRequiresAuth() throws Exception {
@@ -245,30 +245,67 @@ class JwtAuthenticationFilterTest {
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/actuator/env");
         MockHttpServletResponse response = new MockHttpServletResponse();
         MockFilterChain chain = new MockFilterChain();
- 
+
         // when
         filter.doFilter(request, response, chain);
- 
+
         // then
         assertThat(response.getStatus()).isEqualTo(401);
         assertThat(chain.getRequest()).isNull();
     }
- 
+
+    // 코드 리뷰 반영 - OPTIONS라고 무조건 permitAll 처리하면 보호 경로가 인증 없이 뚫릴 수
+    // 있다는 지적. "진짜 preflight"(Origin + Access-Control-Request-Method 둘 다 있는 OPTIONS)만
+    // 통과시키는지, 그리고 그 둘 중 하나라도 없는 "그냥 OPTIONS"는 여전히 막히는지 확인한다.
+    @Test
+    @DisplayName("실제 CORS preflight(OPTIONS + Origin + Access-Control-Request-Method)는 토큰 없이 통과한다")
+    void realPreflightRequestIsPermitAllEvenOnProtectedPath() throws Exception {
+        // given - 인증이 필요한 보호 경로에 대한 preflight
+        MockHttpServletRequest request = new MockHttpServletRequest("OPTIONS", "/api/v1/admin/accounts");
+        request.addHeader("Origin", "https://sajostock.site");
+        request.addHeader("Access-Control-Request-Method", "GET");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        MockFilterChain chain = new MockFilterChain();
+
+        // when
+        filter.doFilter(request, response, chain);
+
+        // then
+        assertThat(chain.getRequest()).isNotNull();
+        assertThat(response.getStatus()).isNotEqualTo(401);
+    }
+
+    @Test
+    @DisplayName("Origin/Access-Control-Request-Method가 없는 일반 OPTIONS 요청은 보호 경로에서 여전히 401이다")
+    void plainOptionsRequestWithoutCorsHeadersIsStillBlockedOnProtectedPath() throws Exception {
+        // given - preflight를 흉내내지 않은, 그냥 메서드만 OPTIONS인 요청
+        MockHttpServletRequest request = new MockHttpServletRequest("OPTIONS", "/api/v1/admin/accounts");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        MockFilterChain chain = new MockFilterChain();
+
+        // when
+        filter.doFilter(request, response, chain);
+
+        // then
+        assertThat(response.getStatus()).isEqualTo(401);
+        assertThat(chain.getRequest()).isNull();
+    }
+
     @Test
     @DisplayName("role 클레임이 없는(도입 이전 발급) 토큰이면 X-User-Role 헤더가 세팅되지 않는다")
     void tokenWithoutRoleClaimOmitsRoleHeader() throws Exception {
         // given - role 없이 발급된 토큰 (과거 발급분 상황 재현)
         UUID userId = UUID.randomUUID();
         String token = jwtTokenProvider.createAccessToken(userId, null);
- 
+
         MockHttpServletRequest request = new MockHttpServletRequest("GET", "/api/v1/accounts");
         request.addHeader("Authorization", "Bearer " + token);
         MockHttpServletResponse response = new MockHttpServletResponse();
         MockFilterChain chain = new MockFilterChain();
- 
+
         // when
         filter.doFilter(request, response, chain);
- 
+
         // then
         HttpServletRequest downstreamRequest = (HttpServletRequest) chain.getRequest();
         assertThat(downstreamRequest.getHeader("X-User-Id")).isEqualTo(userId.toString());

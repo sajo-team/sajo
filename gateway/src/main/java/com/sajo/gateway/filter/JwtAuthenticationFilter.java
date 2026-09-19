@@ -15,6 +15,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.util.AntPathMatcher;
+import org.springframework.web.cors.CorsUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
@@ -89,11 +90,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private boolean isPermitAll(HttpServletRequest request) {
         String method = request.getMethod();
 
-        // CORS preflight(OPTIONS) 요청은 브라우저가 Authorization 헤더 없이 보내는 게
-        // 정상이라 여기서 무조건 통과시킨다. 실제로 어느 origin/method/header를 허용할지는
-        // CorsFilter(gateway/config/CorsConfig)가 판단하므로, 여기서 막으면 preflight
-        // 단계에서부터 401이 나서 실제 요청이 아예 시도되지 못한다.
-        if ("OPTIONS".equalsIgnoreCase(method)) {
+        // CORS preflight 요청(OPTIONS이면서 Origin + Access-Control-Request-Method 헤더가
+        // 모두 있는 경우)은 브라우저가 Authorization 헤더 없이 보내는 게 정상이라 통과시킨다.
+        // CorsFilter(HIGHEST_PRECEDENCE, gateway/config/CorsConfig)가 이 필터보다 먼저 실행돼서
+        // 실제 preflight는 이미 앞단에서 처리/차단되지만, 필터 등록 순서 변경 등에 기대지 않도록
+        // 이 필터에서도 방어적으로 명시한다.
+        //
+        // 주의: 단순히 method가 OPTIONS라고 전부 통과시키면 안 된다 - 리뷰 반영. gateway 라우트는
+        // Method predicate 없이 Path predicate만 쓰기 때문에, Origin/Access-Control-Request-Method
+        // 없는 "일반" OPTIONS 요청까지 permitAll로 처리하면 보호돼야 할 경로가 인증 없이
+        // downstream까지 프록시될 수 있다. 그래서 CorsUtils.isPreFlightRequest로 "진짜 preflight"인
+        // 경우만 좁혀서 통과시킨다.
+        if (CorsUtils.isPreFlightRequest(request)) {
             return true;
         }
 
@@ -103,7 +111,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                         && pathMatcher.match(endpoint.pathPattern(), path));
     }
 
-    // 이 필터는 GlobalExceptionHandler를 안 타므로(필터가 더 앞단) 여기서 직접 JSON 작성
+    // 이 필터는 GlobalExceptionHandler를 거치지 않는 위치라, 공통 스키마(ErrorResponse)를
     // 직접 Jackson으로 직렬화한다 - 문자열을 손으로 조립하면 스키마가 바뀔 때 여기만 따로
     // 맞춰줘야 하는 유지보수 포인트가 생긴다
     private void writeUnauthorized(HttpServletResponse response) throws IOException {
@@ -122,5 +130,4 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private record PublicEndpoint(String method, String pathPattern) {
     }
-
 }
