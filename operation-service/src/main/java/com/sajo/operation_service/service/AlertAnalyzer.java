@@ -6,10 +6,15 @@ import com.sajo.operation_service.service.dependency.DependencyMappingService;
 import com.sajo.operation_service.service.host.HostDiagnosticsService;
 import com.sajo.operation_service.service.strategy.AlertDiagnosisStrategy;
 import com.sajo.operation_service.service.strategy.AppMetricsStrategy;
+import com.sajo.operation_service.service.strategy.KafkaBrokerDownStrategy;
+import com.sajo.operation_service.service.strategy.MongoConnectionDownStrategy;
 import com.sajo.operation_service.service.strategy.MongoConnectionHighStrategy;
 import com.sajo.operation_service.service.strategy.NoOpStrategy;
+import com.sajo.operation_service.service.strategy.PostgresConnectionDownStrategy;
 import com.sajo.operation_service.service.strategy.PostgresConnectionHighStrategy;
+import com.sajo.operation_service.service.strategy.RedisConnectionDownStrategy;
 import com.sajo.operation_service.service.strategy.RedisMemoryHighStrategy;
+import com.sajo.operation_service.service.strategy.ServiceDownStrategy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
@@ -49,7 +54,12 @@ public class AlertAnalyzer {
             NoOpStrategy noOpStrategy,
             RedisMemoryHighStrategy redisMemoryHighStrategy,
             PostgresConnectionHighStrategy postgresConnectionHighStrategy,
-            MongoConnectionHighStrategy mongoConnectionHighStrategy
+            MongoConnectionHighStrategy mongoConnectionHighStrategy,
+            RedisConnectionDownStrategy redisConnectionDownStrategy,
+            PostgresConnectionDownStrategy postgresConnectionDownStrategy,
+            MongoConnectionDownStrategy mongoConnectionDownStrategy,
+            KafkaBrokerDownStrategy kafkaBrokerDownStrategy,
+            ServiceDownStrategy serviceDownStrategy
     ) {
         this.hostDiagnosticsService = hostDiagnosticsService;
         this.dependencyMappingService = dependencyMappingService;
@@ -67,7 +77,12 @@ public class AlertAnalyzer {
                 Map.entry(AlertNames.NODE_DISK_WILL_FILL_IN_24H, noOpStrategy),
                 Map.entry(AlertNames.REDIS_MEMORY_HIGH, redisMemoryHighStrategy),
                 Map.entry(AlertNames.POSTGRES_CONNECTIONS_HIGH, postgresConnectionHighStrategy),
-                Map.entry(AlertNames.MONGO_CONNECTIONS_HIGH, mongoConnectionHighStrategy)
+                Map.entry(AlertNames.MONGO_CONNECTIONS_HIGH, mongoConnectionHighStrategy),
+                Map.entry(AlertNames.REDIS_CONNECTION_DOWN, redisConnectionDownStrategy),
+                Map.entry(AlertNames.POSTGRES_CONNECTION_DOWN, postgresConnectionDownStrategy),
+                Map.entry(AlertNames.MONGO_CONNECTION_DOWN, mongoConnectionDownStrategy),
+                Map.entry(AlertNames.KAFKA_BROKER_DOWN, kafkaBrokerDownStrategy),
+                Map.entry(AlertNames.SERVICE_DOWN, serviceDownStrategy)
         );
     }
 

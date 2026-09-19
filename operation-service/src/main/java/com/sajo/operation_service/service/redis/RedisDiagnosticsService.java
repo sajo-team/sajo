@@ -25,4 +25,14 @@ public class RedisDiagnosticsService {
 
         return metrics;
     }
+
+    // RedisConnectionDown 전용 - collect()에 없는 2개(RDB 저장 상태/트래픽)를 더 본다.
+    public Map<String, PrometheusQueryResult> collectForConnectionDown(Instant time) {
+        Map<String, PrometheusQueryResult> metrics = new LinkedHashMap<>(collect(time));
+
+        metrics.put("RDB 마지막 저장 상태(1=성공/0=실패)", prometheusClient.query(RedisDiagnosticsQueries.rdbLastSaveStatus(), time));
+        metrics.put("초당 명령 처리량", prometheusClient.query(RedisDiagnosticsQueries.commandRate(), time));
+
+        return metrics;
+    }
 }

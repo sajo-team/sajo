@@ -25,4 +25,13 @@ public class PostgresDiagnosticsService {
 
         return metrics;
     }
+
+    public Map<String, PrometheusQueryResult> collectForConnectionDown(Instant time) {
+        Map<String, PrometheusQueryResult> metrics = new LinkedHashMap<>(collect(time));
+
+        metrics.put("전체 락 개수", prometheusClient.query(PostgresDiagnosticsQueries.locksTotal(), time));
+        metrics.put("초당 트랜잭션 처리량", prometheusClient.query(PostgresDiagnosticsQueries.transactionRate(), time));
+
+        return metrics;
+    }
 }

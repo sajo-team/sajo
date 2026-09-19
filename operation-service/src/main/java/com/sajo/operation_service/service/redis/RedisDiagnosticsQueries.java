@@ -18,4 +18,15 @@ final class RedisDiagnosticsQueries {
                 redis_memory_used_bytes / (redis_memory_max_bytes > 0)
                 """;
     }
+
+    // 1=성공, 0=실패. 실패면 디스크 공간 부족/fork 실패(메모리 부족) 등 죽기 전 자원 문제의 신호.
+    // 이 프로젝트 Redis는 appendonly=no라 AOF 상태는 의미 없어서 RDB만 본다(실측 확인).
+    static String rdbLastSaveStatus() {
+        return "redis_rdb_last_bgsave_status";
+    }
+
+    // 죽기 직전 트래픽 수준 - 다른 지표(연결끊김, 메모리 등)를 해석할 때 "바빴는지" 맥락을 준다.
+    static String commandRate() {
+        return "rate(redis_commands_processed_total[5m])";
+    }
 }

@@ -25,4 +25,14 @@ public class MongoDiagnosticsService {
 
         return metrics;
     }
+
+    // MongoConnectionDown 전용 - collect()에 없는 트래픽을 더 본다.
+    // DependencyMappingService는 collect()만 쓰므로 영향 없다.
+    public Map<String, PrometheusQueryResult> collectForConnectionDown(Instant time) {
+        Map<String, PrometheusQueryResult> metrics = new LinkedHashMap<>(collect(time));
+
+        metrics.put("초당 op 처리량", prometheusClient.query(MongoDiagnosticsQueries.opRate(), time));
+
+        return metrics;
+    }
 }

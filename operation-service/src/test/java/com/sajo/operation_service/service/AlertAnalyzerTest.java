@@ -2,16 +2,23 @@ package com.sajo.operation_service.service;
 
 import com.sajo.operation_service.client.PrometheusQueryResult;
 import com.sajo.operation_service.controller.dto.request.AlertManagerWebhookRequest;
+import com.sajo.operation_service.service.app.DiagnosticsService;
 import com.sajo.operation_service.service.dependency.DependencyMappingService;
 import com.sajo.operation_service.service.host.HostDiagnosticsService;
+import com.sajo.operation_service.service.kafka.KafkaDiagnosticsService;
 import com.sajo.operation_service.service.mongo.MongoDiagnosticsService;
 import com.sajo.operation_service.service.postgres.PostgresDiagnosticsService;
 import com.sajo.operation_service.service.redis.RedisDiagnosticsService;
 import com.sajo.operation_service.service.strategy.AppMetricsStrategy;
+import com.sajo.operation_service.service.strategy.KafkaBrokerDownStrategy;
+import com.sajo.operation_service.service.strategy.MongoConnectionDownStrategy;
 import com.sajo.operation_service.service.strategy.MongoConnectionHighStrategy;
 import com.sajo.operation_service.service.strategy.NoOpStrategy;
+import com.sajo.operation_service.service.strategy.PostgresConnectionDownStrategy;
 import com.sajo.operation_service.service.strategy.PostgresConnectionHighStrategy;
+import com.sajo.operation_service.service.strategy.RedisConnectionDownStrategy;
 import com.sajo.operation_service.service.strategy.RedisMemoryHighStrategy;
+import com.sajo.operation_service.service.strategy.ServiceDownStrategy;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -54,7 +61,12 @@ class AlertAnalyzerTest {
                 hostDiagnosticsService, dependencyMappingService, chatClient, appMetricsStrategy, new NoOpStrategy(),
                 new RedisMemoryHighStrategy(mock(RedisDiagnosticsService.class)),
                 new PostgresConnectionHighStrategy(mock(PostgresDiagnosticsService.class)),
-                new MongoConnectionHighStrategy(mock(MongoDiagnosticsService.class)));
+                new MongoConnectionHighStrategy(mock(MongoDiagnosticsService.class)),
+                new RedisConnectionDownStrategy(mock(RedisDiagnosticsService.class)),
+                new PostgresConnectionDownStrategy(mock(PostgresDiagnosticsService.class)),
+                new MongoConnectionDownStrategy(mock(MongoDiagnosticsService.class)),
+                new KafkaBrokerDownStrategy(mock(KafkaDiagnosticsService.class)),
+                new ServiceDownStrategy(mock(DiagnosticsService.class)));
     }
 
     private AlertManagerWebhookRequest.Alert createAlert(Map<String, String> labels) {
@@ -140,7 +152,7 @@ class AlertAnalyzerTest {
     @DisplayName("node가 아닌데 전략도 없는 alertname이면 분석 자체를 건너뛴다(호스트/의존관계/LLM 전부 호출 안 함) - 근거 없는 분석문을 만들지 않기 위함")
     void analyze_unmappedNonNodeAlertname_skipsAnalysisEntirely() {
         AlertManagerWebhookRequest.Alert alert = createAlert(Map.of(
-                "alertname", "RedisConnectionDown", "application", "redis"
+                "alertname", "TradingConsumerStalled", "application", "trading-service"
         ));
 
         Optional<String> result = alertAnalyzer.analyze(alert);
@@ -152,7 +164,7 @@ class AlertAnalyzerTest {
     @Test
     @DisplayName("전략이 없고 application 라벨 자체도 없으면(node 여부를 알 수 없음) 분석을 건너뛴다")
     void analyze_unmappedAlertnameWithoutApplicationLabel_skipsAnalysisEntirely() {
-        AlertManagerWebhookRequest.Alert alert = createAlert(Map.of("alertname", "ServiceDown"));
+        AlertManagerWebhookRequest.Alert alert = createAlert(Map.of("alertname", "TradingConsumerStalled"));
 
         Optional<String> result = alertAnalyzer.analyze(alert);
 

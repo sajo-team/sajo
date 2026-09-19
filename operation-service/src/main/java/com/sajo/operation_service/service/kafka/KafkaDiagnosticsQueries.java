@@ -11,4 +11,9 @@ final class KafkaDiagnosticsQueries {
     static String brokerCount() {
         return "kafka_brokers";
     }
+
+    // 죽기 직전 트래픽 수준 - 전체 토픽/파티션 오프셋 증가량 합산
+    static String messageRate() {
+        return "sum(rate(kafka_topic_partition_current_offset[5m]))";
+    }
 }

@@ -25,4 +25,13 @@ public class KafkaDiagnosticsService {
 
         return metrics;
     }
+
+    // KafkaBrokerDown 전용 - collect()에 없는 트래픽을 더 본다.
+    public Map<String, PrometheusQueryResult> collectForConnectionDown(Instant time) {
+        Map<String, PrometheusQueryResult> metrics = new LinkedHashMap<>(collect(time));
+
+        metrics.put("초당 메시지 처리량", prometheusClient.query(KafkaDiagnosticsQueries.messageRate(), time));
+
+        return metrics;
+    }
 }

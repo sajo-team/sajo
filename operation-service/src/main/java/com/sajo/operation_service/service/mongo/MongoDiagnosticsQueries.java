@@ -20,4 +20,9 @@ final class MongoDiagnosticsQueries {
                 sum without (conn_type) (mongodb_ss_connections{conn_type=~"current|available"})
                 """;
     }
+
+    // 죽기 직전 트래픽 수준(query/insert/update/delete 등 op 종류 무관하게 합산)
+    static String opRate() {
+        return "sum(rate(mongodb_ss_opcounters[5m]))";
+    }
 }

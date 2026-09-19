@@ -23,4 +23,10 @@ public final class AlertNames {
     public static final String REDIS_MEMORY_HIGH = "RedisMemoryHigh";
     public static final String POSTGRES_CONNECTIONS_HIGH = "PostgresConnectionsHigh";
     public static final String MONGO_CONNECTIONS_HIGH = "MongoConnectionsHigh";
+
+    public static final String REDIS_CONNECTION_DOWN = "RedisConnectionDown";
+    public static final String POSTGRES_CONNECTION_DOWN = "PostgresConnectionDown";
+    public static final String MONGO_CONNECTION_DOWN = "MongoConnectionDown";
+    public static final String KAFKA_BROKER_DOWN = "KafkaBrokerDown";
+    public static final String SERVICE_DOWN = "ServiceDown";
 }
