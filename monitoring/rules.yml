@@ -4,16 +4,27 @@ groups:
   # ============================================================
   - name: sajo-services
     rules:
-      # up은 타겟 라벨만 가짐 → Micrometer의 application 태그가 없으므로 job/instance 사용
       # 배포/재시작 한 번에 울리지 않도록 for를 1m으로
       - alert: ServiceDown
-        expr: up == 0
+        expr: up{job=~"discovery-service|gateway|user-service|market-service|trading-service|operation-service"} == 0
         for: 1m
         labels:
           severity: critical
         annotations:
-          summary: "{{ $labels.job }} 스크랩 실패"
-          description: "{{ $labels.job }}({{ $labels.instance }})에서 1분 이상 메트릭을 수집하지 못했습니다."
+          summary: "{{ $labels.application }} 스크랩 실패"
+          description: "{{ $labels.application }}({{ $labels.instance }})에서 1분 이상 메트릭을 수집하지 못했습니다."
+
+      # exporter/node-exporter 자체가 죽는 경우 - RedisConnectionDown 등(exporter는 살아있는데 대상만
+      # 죽은 경우)과 달리, 이건 exporter 프로세스 자체가 스크랩에 응답을 안 하는 상황이라 exporter가
+      # 내던 지표(redis_up 등)도 같이 사라진다. 지금까지 이 시나리오를 잡는 알람이 없었다.
+      - alert: ExporterDown
+        expr: up{job=~"redis|postgres|kafka|mongo|node"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.application }} exporter 스크랩 실패"
+          description: "{{ $labels.application }} exporter({{ $labels.instance }})에서 1분 이상 메트릭을 수집하지 못했습니다."
 
       # /actuator 요청(Prometheus 스크랩 포함)은 분모·분자에서 제외 (스크랩 요청이 에러율을 희석함)
       # 조건 = "5xx 비율 5% 초과" AND "5xx가 실제로 3건 이상"
@@ -150,134 +161,90 @@ groups:
       #  - 정체: lag > 0인데 offset이 안 움직임 (유입량과 무관)
       #  - 소진 시간: lag / 초당 처리량 = "지금 속도로 밀린 걸 다 처리하는 데 걸리는 초"
       #    lag 150이 1초 거리인 토픽도, 1시간 거리인 토픽도 같은 기준으로 판단 가능
-      # 매매 경로(trading.*)는 지연 시 잘못된 가격으로 주문이 나가므로 critical + 엄격한 임계값,
-      # 나머지는 warning. alertname을 분리해 inhibit_rules에 서로 걸리지 않게 함
       # _sum 메트릭은 group+topic 단위 합계 → 파티션 수와 무관
       # 참고: exporter의 --group.filter로 모니터링 대상 그룹을 좁혀야 죽은 옛 그룹이 노이즈를 만들지 않음
-
-      # ---------- 매매 경로 (critical) ----------
-      - alert: TradingConsumerStalled
+      - alert: ConsumerStalled
         expr: |
-          kafka_consumergroup_lag_sum{topic=~"trading\\..*"} > 0
+          kafka_consumergroup_lag_sum > 0
           and
-          rate(kafka_consumergroup_current_offset_sum{topic=~"trading\\..*"}[3m]) == 0
+          rate(kafka_consumergroup_current_offset_sum[3m]) == 0
         for: 2m
         labels:
           severity: critical
         annotations:
-          summary: "매매 컨슈머 정체 ({{ $labels.consumergroup }} / {{ $labels.topic }})"
+          summary: "컨슈머 정체 ({{ $labels.consumergroup }} / {{ $labels.topic }})"
           description: "{{ $labels.consumergroup }}가 {{ $labels.topic }}에 미처리 메시지({{ $value }}건)가 있는데 5분간 offset이 진행되지 않았습니다."
 
       # 처리는 되지만 현재 속도로 30초 안에 못 따라잡음
       # 처리량 0이면 분모 필터(> 0)로 제외 → 그 경우는 Stalled가 담당
       # TODO: 30s / 5건 재조정
-      - alert: TradingConsumerFallingBehind
+      - alert: ConsumerFallingBehind
         expr: |
           (
-            kafka_consumergroup_lag_sum{topic=~"trading\\..*"}
+            kafka_consumergroup_lag_sum
             /
-            (rate(kafka_consumergroup_current_offset_sum{topic=~"trading\\..*"}[5m]) > 0)
+            (rate(kafka_consumergroup_current_offset_sum[5m]) > 0)
           ) > 30
           and
-          kafka_consumergroup_lag_sum{topic=~"trading\\..*"} > 5
+          kafka_consumergroup_lag_sum > 5
         for: 1m
         labels:
           severity: critical
         annotations:
-          summary: "매매 컨슈머 처리 지연 ({{ $labels.consumergroup }} / {{ $labels.topic }})"
+          summary: "컨슈머 처리 지연 ({{ $labels.consumergroup }} / {{ $labels.topic }})"
           description: "현재 처리 속도로 {{ $labels.topic }}의 밀린 메시지를 소진하는 데 약 {{ $value | humanizeDuration }}가 걸립니다(임계 30s)."
 
-      # 그룹 단위 메트릭이라 topic 라벨이 없음 → 매매 경로 그룹은 이름으로 지정
-      # trading-service의 실제 group-id (trading-service/application.yaml)
-      - alert: TradingConsumerNoMembers
-        expr: kafka_consumergroup_members{consumergroup=~"trading-consumer-group"} == 0
+      - alert: ConsumerNoMembers
+        expr: kafka_consumergroup_members == 0
         for: 1m
         labels:
           severity: critical
         annotations:
-          summary: "매매 컨슈머 없음 ({{ $labels.consumergroup }})"
+          summary: "컨슈머 없음 ({{ $labels.consumergroup }})"
           description: "{{ $labels.consumergroup }} 그룹에 활성 컨슈머가 없습니다."
 
       # offset retention 만료로 그룹 자체가 사라지면 members == 0으로도 못 잡음
       # group id를 잘못 적었을 때도 바로 울려서 위 룰의 오설정을 드러내줌
-      # absent()는 정규식이 아닌 정확한 이름이어야 하므로 그룹마다 하나씩 추가
-      - alert: TradingConsumerGroupMissing
+      # absent()는 정규식이 아닌 정확한 이름이어야 하므로 알고 있는 그룹마다 하나씩 추가
+      # (trading-service/market-service의 application.yaml에 있는 실제 group-id)
+      # severity가 둘 다 critical이라 target_group으로 구분(promtool duplicate-rule lint 회피 목적,
+      # 알람 자체 라벨로도 어떤 그룹인지 바로 드러나서 부가 효과도 있음)
+      - alert: ConsumerGroupMissing
         expr: absent(kafka_consumergroup_members{consumergroup="trading-consumer-group", application="kafka"})
         for: 5m
         labels:
           severity: critical
+          target_group: trading-consumer-group
         annotations:
-          summary: "매매 컨슈머 그룹 메트릭 없음"
+          summary: "컨슈머 그룹 메트릭 없음 (trading-consumer-group)"
           description: "trading-consumer-group 컨슈머 그룹 메트릭이 5분간 수집되지 않았습니다. 그룹 삭제 또는 group id 설정 오류를 확인하세요."
+
+      - alert: ConsumerGroupMissing
+        expr: absent(kafka_consumergroup_members{consumergroup="market-consumer-group", application="kafka"})
+        for: 5m
+        labels:
+          severity: critical
+          target_group: market-consumer-group
+        annotations:
+          summary: "컨슈머 그룹 메트릭 없음 (market-consumer-group)"
+          description: "market-consumer-group 컨슈머 그룹 메트릭이 5분간 수집되지 않았습니다. 그룹 삭제 또는 group id 설정 오류를 확인하세요."
 
       # DefaultErrorHandler + DeadLetterPublishingRecoverer면 실패 메시지가 DLT로 넘어가며
       # 원본 offset은 정상 진행 → lag 0인데 메시지는 버려지는 상태. DLT 유입 자체를 알림
       # (DeadLetterPublishingRecoverer 기본 접미사 .DLT, @RetryableTopic 기본 접미사 -dlt)
       # sum by에 application을 안 넣으면(모든 시계열이 application="kafka"로 고정값이라 집계
       # 결과 자체는 안 바뀜) 이 라벨이 사라져서, group_by(alertname, application) 기준 Slack
-      # 제목이 "TradingMessageDeadLettered ()"처럼 괄호가 비어서 나가게 됨
-      - alert: TradingMessageDeadLettered
+      # 제목이 "MessageDeadLettered ()"처럼 괄호가 비어서 나가게 됨
+      - alert: MessageDeadLettered
         expr: |
           sum by (topic, application) (
-            increase(kafka_topic_partition_current_offset{topic=~"trading\\..*(\\.DLT|-dlt)"}[5m])
+            increase(kafka_topic_partition_current_offset{topic=~".+(\\.DLT|-dlt)"}[5m])
           ) > 0
         labels:
           severity: critical
         annotations:
-          summary: "매매 메시지 DLT 유입 ({{ $labels.topic }})"
+          summary: "메시지 DLT 유입 ({{ $labels.topic }})"
           description: "최근 5분간 {{ $labels.topic }}에 약 {{ $value | printf \"%.0f\" }}건이 적재되었습니다. 처리 실패한 메시지를 확인하세요."
-
-      # ---------- 그 외 토픽 (warning) ----------
-      - alert: KafkaConsumerStalled
-        expr: |
-          kafka_consumergroup_lag_sum{topic!~"trading\\..*"} > 0
-          and
-          rate(kafka_consumergroup_current_offset_sum{topic!~"trading\\..*"}[3m]) == 0
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Kafka 컨슈머 정체 ({{ $labels.consumergroup }} / {{ $labels.topic }})"
-          description: "{{ $labels.consumergroup }}가 {{ $labels.topic }}에 미처리 메시지({{ $value }}건)가 있는데 8분간 offset이 진행되지 않았습니다."
-
-      # TODO: 5분 / 10건 재조정
-      - alert: KafkaConsumerFallingBehind
-        expr: |
-          (
-            kafka_consumergroup_lag_sum{topic!~"trading\\..*"}
-            /
-            (rate(kafka_consumergroup_current_offset_sum{topic!~"trading\\..*"}[5m]) > 0)
-          ) > 300
-          and
-          kafka_consumergroup_lag_sum{topic!~"trading\\..*"} > 10
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Kafka 컨슈머 처리 지연 ({{ $labels.consumergroup }} / {{ $labels.topic }})"
-          description: "현재 처리 속도로 {{ $labels.topic }}의 밀린 메시지를 소진하는 데 약 {{ $value | humanizeDuration }}가 걸립니다(임계 5m)."
-
-      - alert: KafkaConsumerNoMembers
-        expr: kafka_consumergroup_members{consumergroup!~"trading-consumer-group"} == 0
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Kafka 컨슈머 없음 ({{ $labels.consumergroup }})"
-          description: "{{ $labels.consumergroup }} 그룹에 활성 컨슈머가 없습니다."
-
-      # sum by에 application을 안 넣으면 이 라벨이 사라져서, group_by(alertname, application)
-      # 기준 Slack 제목이 "KafkaMessageDeadLettered ()"처럼 괄호가 비어서 나가게 됨
-      - alert: KafkaMessageDeadLettered
-        expr: |
-          sum by (topic, application) (
-            increase(kafka_topic_partition_current_offset{topic=~".+(\\.DLT|-dlt)", topic!~"trading\\..*"}[5m])
-          ) > 0
-        labels:
-          severity: warning
-        annotations:
-          summary: "DLT 유입 ({{ $labels.topic }})"
-          description: "최근 5분간 {{ $labels.topic }}에 약 {{ $value | printf \"%.0f\" }}건이 적재되었습니다."
 
       # ---------- 브로커 ----------
       - alert: KafkaBrokerDown

@@ -46,6 +46,11 @@ public class PrometheusClient {
                 .encode()
                 .toUri();
 
+        // UriComponentsBuilder.encode()는 RFC 3986 기준으로 '+'가 유효한 문자라 인코딩하지 않는데,
+        // Prometheus(Go net/url)는 application/x-www-form-urlencoded 관례를 따라 쿼리스트링의 '+'를
+        // 공백으로 해석한다.- %2B로 재인코딩해서 방지한다.
+        uri = URI.create(uri.toString().replace("+", "%2B"));
+
         PrometheusApiResponse response;
         try {
             response = restClient.get()

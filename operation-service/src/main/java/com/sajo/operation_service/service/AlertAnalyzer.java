@@ -2,17 +2,18 @@ package com.sajo.operation_service.service;
 
 import com.sajo.operation_service.client.PrometheusQueryResult;
 import com.sajo.operation_service.controller.dto.request.AlertManagerWebhookRequest;
-import com.sajo.operation_service.service.dependency.DependencyMappingService;
-import com.sajo.operation_service.service.host.HostDiagnosticsService;
+import com.sajo.operation_service.service.diagnostics.dependency.DependencyMappingService;
+import com.sajo.operation_service.service.diagnostics.host.HostDiagnosticsService;
 import com.sajo.operation_service.service.strategy.AlertDiagnosisStrategy;
-import com.sajo.operation_service.service.strategy.AppMetricsStrategy;
-import com.sajo.operation_service.service.strategy.NoOpStrategy;
+import com.sajo.operation_service.service.strategy.StrategyDiagnosis;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -24,9 +25,7 @@ public class AlertAnalyzer {
     private final HostDiagnosticsService hostDiagnosticsService;
     private final DependencyMappingService dependencyMappingService;
     private final ChatClient chatClient;
-    // alertname -> 전략. 하나의 구현체가 여러 alertname을 담당할 수 있어서(예: AppMetricsStrategy)
-    // 구현체 스스로 자기 alertname을 선언하지 않고 여기서 명시적으로 구성한다.
-    private final Map<String, AlertDiagnosisStrategy> strategiesByAlertname;
+    private final Map<String, AlertDiagnosisStrategy> alertnameStrategyRegistry;
 
     private static final String SYSTEM_PROMPT = """
                 너는 SRE 어시스턴트다.
@@ -42,24 +41,24 @@ public class AlertAnalyzer {
             HostDiagnosticsService hostDiagnosticsService,
             DependencyMappingService dependencyMappingService,
             ChatClient chatClient,
-            AppMetricsStrategy appMetricsStrategy,
-            NoOpStrategy noOpStrategy
+            List<AlertDiagnosisStrategy> strategies
     ) {
         this.hostDiagnosticsService = hostDiagnosticsService;
         this.dependencyMappingService = dependencyMappingService;
         this.chatClient = chatClient;
-        this.strategiesByAlertname = Map.ofEntries(
-                Map.entry(AlertNames.HIGH_ERROR_RATE, appMetricsStrategy),
-                Map.entry(AlertNames.HIGH_LATENCY, appMetricsStrategy),
-                Map.entry(AlertNames.HIGH_CPU_USAGE, appMetricsStrategy),
-                Map.entry(AlertNames.HIGH_MEMORY_USAGE, appMetricsStrategy),
-                Map.entry(AlertNames.HIGH_GC_OVERHEAD, appMetricsStrategy),
-                Map.entry(AlertNames.HIKARI_POOL_PENDING, appMetricsStrategy),
-                Map.entry(AlertNames.HIGH_NODE_CPU_USAGE, noOpStrategy),
-                Map.entry(AlertNames.HIGH_NODE_MEMORY_USAGE, noOpStrategy),
-                Map.entry(AlertNames.NODE_DISK_LOW, noOpStrategy),
-                Map.entry(AlertNames.NODE_DISK_WILL_FILL_IN_24H, noOpStrategy)
-        );
+
+        Map<String, AlertDiagnosisStrategy> map = new HashMap<>();
+        for (AlertDiagnosisStrategy strategy : strategies) {
+            for (String alertname : strategy.alertnames()) {
+                AlertDiagnosisStrategy previous = map.put(alertname, strategy);
+                if (previous != null) {
+                    throw new IllegalStateException(
+                            "alertname '" + alertname + "'이 두 전략에 중복 등록됨: "
+                                    + previous.getClass().getSimpleName() + ", " + strategy.getClass().getSimpleName());
+                }
+            }
+        }
+        this.alertnameStrategyRegistry = Map.copyOf(map);
     }
 
     public Optional<String> analyze(AlertManagerWebhookRequest.Alert alert) {
@@ -71,7 +70,7 @@ public class AlertAnalyzer {
         }
         String target = alert.labels().get("application");
 
-        AlertDiagnosisStrategy strategy = strategiesByAlertname.get(alertname);
+        AlertDiagnosisStrategy strategy = alertnameStrategyRegistry.get(alertname);
         if (strategy == null) {
             log.info("전략이 아직 없는 alertname이라 분석을 건너뜁니다. alertname={}, application={}", alertname, target);
             return Optional.empty();
@@ -79,20 +78,21 @@ public class AlertAnalyzer {
 
         Instant time = alert.startsAt();
 
-        // 1. 알람 종류별 own snapshot - 알람을 실제로 울리게 한 지표
-        Map<String, PrometheusQueryResult> metrics = new LinkedHashMap<>();
-        metrics.putAll(strategy.diagnose(alert, time));
+        // 1. 알람 종류별 own snapshot - 알람을 실제로 울리게 한 지표. lookback을 적용하는 전략은
+        // 실제 조회 시각이 time과 다를 수 있어서(diagnosis.queryTime()), 아래 2/3과 분리해서 다룬다.
+        StrategyDiagnosis diagnosis = strategy.diagnose(alert, time);
 
-        // 2. 호스트 스냅샷 - 항상 공통
-        metrics.putAll(hostDiagnosticsService.collect(time));
+        // 2. 호스트 스냅샷 - 항상 공통, 항상 time(발생 시각) 기준
+        Map<String, PrometheusQueryResult> hostAndDependencyMetrics = new LinkedHashMap<>();
+        hostAndDependencyMetrics.putAll(hostDiagnosticsService.collect(time));
 
-        // 3. 의존관계 스냅샷 - 참고 정보
+        // 3. 의존관계 스냅샷 - 참고 정보, 항상 time(발생 시각) 기준
         if (target != null) {
-            metrics.putAll(dependencyMappingService.collect(target, time));
+            hostAndDependencyMetrics.putAll(dependencyMappingService.collect(target, time));
         }
 
-        String userPrompt = createUserPrompt(alert, metrics);
-        log.info("LLM에 보낼 프롬프트. alertname={}\n{}", alertname, userPrompt);
+        String userPrompt = createUserPrompt(alert, diagnosis, hostAndDependencyMetrics);
+        log.debug("LLM에 보낼 프롬프트. alertname={}\n{}", alertname, userPrompt);
 
         String response = chatClient.prompt()
                 .system(SYSTEM_PROMPT)
@@ -100,14 +100,14 @@ public class AlertAnalyzer {
                 .call()
                 .content();
 
-        return Optional.of(response);
+        return Optional.ofNullable(response);
     }
 
-    private String createUserPrompt(AlertManagerWebhookRequest.Alert alert, Map<String, PrometheusQueryResult> metrics) {
-        String metricsText = metrics.entrySet().stream()
-                .map(entry -> "[" + entry.getKey() + "]\n" + entry.getValue().toPromptText())
-                .collect(Collectors.joining("\n\n"));
-
+    private String createUserPrompt(
+            AlertManagerWebhookRequest.Alert alert,
+            StrategyDiagnosis diagnosis,
+            Map<String, PrometheusQueryResult> hostAndDependencyMetrics
+    ) {
         return """
                 [알람]
                 이름: %s
@@ -116,7 +116,10 @@ public class AlertAnalyzer {
                 설명: %s
                 발생 시각: %s
 
-                [진단 지표 (발생 시점 기준 조회)]
+                [알람 자체 진단 지표 (조회 시각: %s)]
+                %s
+
+                [호스트/의존관계 스냅샷 (조회 시각: %s, 알람 발생 시각과 동일)]
                 %s
                 """.formatted(
                 alert.labels().get("alertname"),
@@ -124,7 +127,16 @@ public class AlertAnalyzer {
                 alert.annotations().get("summary"),
                 alert.annotations().get("description"),
                 alert.startsAt(),
-                metricsText
+                diagnosis.queryTime(),
+                formatMetrics(diagnosis.metrics()),
+                alert.startsAt(),
+                formatMetrics(hostAndDependencyMetrics)
         );
+    }
+
+    private String formatMetrics(Map<String, PrometheusQueryResult> metrics) {
+        return metrics.entrySet().stream()
+                .map(entry -> "[" + entry.getKey() + "]\n" + entry.getValue().toPromptText())
+                .collect(Collectors.joining("\n\n"));
     }
 }

@@ -19,4 +19,22 @@ public final class AlertNames {
     public static final String HIGH_NODE_MEMORY_USAGE = "HighNodeMemoryUsage";
     public static final String NODE_DISK_LOW = "NodeDiskLow";
     public static final String NODE_DISK_WILL_FILL_IN_24H = "NodeDiskWillFillIn24h";
+
+    public static final String REDIS_MEMORY_HIGH = "RedisMemoryHigh";
+    public static final String POSTGRES_CONNECTIONS_HIGH = "PostgresConnectionsHigh";
+    public static final String MONGO_CONNECTIONS_HIGH = "MongoConnectionsHigh";
+
+    public static final String REDIS_CONNECTION_DOWN = "RedisConnectionDown";
+    public static final String POSTGRES_CONNECTION_DOWN = "PostgresConnectionDown";
+    public static final String MONGO_CONNECTION_DOWN = "MongoConnectionDown";
+    public static final String KAFKA_BROKER_DOWN = "KafkaBrokerDown";
+    public static final String SERVICE_DOWN = "ServiceDown";
+    public static final String EXPORTER_DOWN = "ExporterDown";
+
+
+    public static final String CONSUMER_STALLED = "ConsumerStalled";
+    public static final String CONSUMER_FALLING_BEHIND = "ConsumerFallingBehind";
+    public static final String CONSUMER_NO_MEMBERS = "ConsumerNoMembers";
+    public static final String CONSUMER_GROUP_MISSING = "ConsumerGroupMissing";
+    public static final String MESSAGE_DEAD_LETTERED = "MessageDeadLettered";
 }
