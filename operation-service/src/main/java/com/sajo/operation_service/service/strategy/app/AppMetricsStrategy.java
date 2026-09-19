@@ -1,16 +1,14 @@
 package com.sajo.operation_service.service.strategy.app;
+
+import com.sajo.operation_service.controller.dto.request.AlertManagerWebhookRequest;
 import com.sajo.operation_service.service.AlertNames;
+import com.sajo.operation_service.service.diagnostics.app.DiagnosticsService;
 import com.sajo.operation_service.service.strategy.AlertDiagnosisStrategy;
 import com.sajo.operation_service.service.strategy.StrategyDiagnosis;
-
-import com.sajo.operation_service.client.PrometheusQueryResult;
-import com.sajo.operation_service.controller.dto.request.AlertManagerWebhookRequest;
-import com.sajo.operation_service.service.diagnostics.app.DiagnosticsService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
-import java.util.Map;
 import java.util.Set;
 
 // user-service/market-service/trading-service 공통 - 알람의 application 라벨로 어느 서비스인지
