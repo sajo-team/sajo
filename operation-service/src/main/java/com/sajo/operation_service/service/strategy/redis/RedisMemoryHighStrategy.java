@@ -1,0 +1,29 @@
+package com.sajo.operation_service.service.strategy.redis;
+
+import com.sajo.operation_service.controller.dto.request.AlertManagerWebhookRequest;
+import com.sajo.operation_service.service.AlertNames;
+import com.sajo.operation_service.service.diagnostics.redis.RedisDiagnosticsService;
+import com.sajo.operation_service.service.strategy.AlertDiagnosisStrategy;
+import com.sajo.operation_service.service.strategy.StrategyDiagnosis;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
+
+import java.time.Instant;
+import java.util.Set;
+
+@RequiredArgsConstructor
+@Component
+public class RedisMemoryHighStrategy implements AlertDiagnosisStrategy{
+
+    private final RedisDiagnosticsService redisDiagnosticsService;
+
+    @Override
+    public Set<String> alertnames() {
+        return Set.of(AlertNames.REDIS_MEMORY_HIGH);
+    }
+
+    @Override
+    public StrategyDiagnosis diagnose(AlertManagerWebhookRequest.Alert alert, Instant time) {
+        return new StrategyDiagnosis(time, redisDiagnosticsService.collect(time));
+    }
+}

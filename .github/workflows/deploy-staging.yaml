@@ -1,12 +1,19 @@
 name: CD Deploy (Staging)
 
+# [중단됨] 스테이징 서버 미사용(웹소켓 이슈)으로 자동 배포를 비활성화함 (#284)
+# 재개 방법:
+#   1) 스테이징 EC2 Start 및 STAGING_* Secrets 유효성 확인
+#   2) 아래 workflow_run 주석을 해제하고 workflow_dispatch 자리표시자를 제거
+# 참고: 각 job의 조건이 workflow_run 컨텍스트에 의존하므로
+#       workflow_dispatch로 수동 실행하면 job이 skip 됨 (on 블록 유효성 유지용)
 on:
-  workflow_run:
-    workflows: ["CI Build"]
-    types:
-      - completed
-    branches:
-      - dev
+  # workflow_run:
+  #   workflows: ["CI Build"]
+  #   types:
+  #     - completed
+  #   branches:
+  #     - dev
+  workflow_dispatch:
 
 concurrency:
   group: cd-deploy-staging

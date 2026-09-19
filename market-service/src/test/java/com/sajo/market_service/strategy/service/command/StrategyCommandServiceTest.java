@@ -225,7 +225,7 @@ class StrategyCommandServiceTest {
                 new BigDecimal("10.0000")
         );
 
-        given(strategyCommandRepository.findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId))
+        given(strategyCommandRepository.findByIdAndDeletedAtIsNull(strategyId))
                 .willReturn(Optional.of(strategy));
 
         // when
@@ -265,7 +265,7 @@ class StrategyCommandServiceTest {
                 null
         );
 
-        given(strategyCommandRepository.findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId))
+        given(strategyCommandRepository.findByIdAndDeletedAtIsNull(strategyId))
             .willReturn(Optional.empty());
 
         // when & then
@@ -276,6 +276,37 @@ class StrategyCommandServiceTest {
             assertThat(businessException.getErrorCode())
             .isEqualTo(StrategyErrorCode.STRATEGY_NOT_FOUND);
         });
+    }
+
+    @Test
+    @DisplayName("다른 사용자의 전략을 수정하려 하면 접근이 거부된다")
+    void updateStrategyAccessDenied() {
+        // given
+        UUID ownerId = UUID.randomUUID();
+        UUID requesterId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+
+        Strategy strategy = Strategy.create(
+                ownerId, UUID.randomUUID(), "005930", "기존 전략",
+                70_000L, 80_000L, new BigDecimal("5.0000"), null,
+                3_000_000L, 100_000L, null, null, null
+        );
+
+        StrategyUpdateRequest request = new StrategyUpdateRequest(
+                "수정된 전략", null, null, null, null, null, null, null, null, null
+        );
+
+        given(strategyCommandRepository.findByIdAndDeletedAtIsNull(strategyId))
+                .willReturn(Optional.of(strategy));
+
+        // when & then
+        assertThatThrownBy(() -> strategyCommandService.updateStrategy(requesterId, strategyId, request))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(StrategyErrorCode.STRATEGY_ACCESS_DENIED);
+                });
     }
 
     @Test
@@ -314,7 +345,7 @@ class StrategyCommandServiceTest {
                 null
         );
 
-        given(strategyCommandRepository.findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId))
+        given(strategyCommandRepository.findByIdAndDeletedAtIsNull(strategyId))
                 .willReturn(Optional.of(strategy));
 
         // when
@@ -349,7 +380,7 @@ class StrategyCommandServiceTest {
                 null
         );
 
-        given(strategyCommandRepository.findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId))
+        given(strategyCommandRepository.findByIdAndDeletedAtIsNull(strategyId))
                 .willReturn(Optional.of(strategy));
 
         // when
@@ -369,7 +400,7 @@ class StrategyCommandServiceTest {
         UUID userId = UUID.randomUUID();
         UUID strategyId = UUID.randomUUID();
 
-        given(strategyCommandRepository.findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId))
+        given(strategyCommandRepository.findByIdAndDeletedAtIsNull(strategyId))
                 .willReturn(Optional.empty());
 
         // when & then
@@ -379,6 +410,33 @@ class StrategyCommandServiceTest {
                     BusinessException businessException = (BusinessException) exception;
                     assertThat(businessException.getErrorCode())
                             .isEqualTo(StrategyErrorCode.STRATEGY_NOT_FOUND);
+                });
+    }
+
+    @Test
+    @DisplayName("다른 사용자의 전략을 삭제하려 하면 접근이 거부된다")
+    void deleteStrategyAccessDenied() {
+        // given
+        UUID ownerId = UUID.randomUUID();
+        UUID requesterId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+
+        Strategy strategy = Strategy.create(
+                ownerId, UUID.randomUUID(), "005930", "삭제할 전략",
+                70_000L, 80_000L, new BigDecimal("5.0000"), null,
+                3_000_000L, 100_000L, null, null, null
+        );
+
+        given(strategyCommandRepository.findByIdAndDeletedAtIsNull(strategyId))
+                .willReturn(Optional.of(strategy));
+
+        // when & then
+        assertThatThrownBy(() -> strategyCommandService.deleteStrategy(requesterId, strategyId))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(StrategyErrorCode.STRATEGY_ACCESS_DENIED);
                 });
     }
 
@@ -407,7 +465,7 @@ class StrategyCommandServiceTest {
 
         StrategyActivationRequest request = new StrategyActivationRequest(true);
 
-        given(strategyCommandRepository.findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId))
+        given(strategyCommandRepository.findByIdAndDeletedAtIsNull(strategyId))
                 .willReturn(Optional.of(strategy));
 
         StrategyActivationResponse expectedResponse = new StrategyActivationResponse(
@@ -481,7 +539,7 @@ class StrategyCommandServiceTest {
         strategy.activate();
 
         StrategyActivationRequest request = new StrategyActivationRequest(false);
-        given(strategyCommandRepository.findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId))
+        given(strategyCommandRepository.findByIdAndDeletedAtIsNull(strategyId))
                 .willReturn(Optional.of(strategy));
 
         StrategyActivationResponse expectedResponse =
@@ -540,7 +598,7 @@ class StrategyCommandServiceTest {
                 null
         );
 
-        given(strategyCommandRepository.findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId))
+        given(strategyCommandRepository.findByIdAndDeletedAtIsNull(strategyId))
                 .willReturn(Optional.of(strategy));
 
         // when & then
@@ -576,7 +634,7 @@ class StrategyCommandServiceTest {
         );
         strategy.activate();
 
-        given(strategyCommandRepository.findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId))
+        given(strategyCommandRepository.findByIdAndDeletedAtIsNull(strategyId))
                 .willReturn(Optional.of(strategy));
 
         // when & then
@@ -597,7 +655,7 @@ class StrategyCommandServiceTest {
 
         StrategyActivationRequest request = new StrategyActivationRequest(true);
 
-        given(strategyCommandRepository.findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId))
+        given(strategyCommandRepository.findByIdAndDeletedAtIsNull(strategyId))
                 .willReturn(Optional.empty());
 
         // when & then
@@ -607,6 +665,35 @@ class StrategyCommandServiceTest {
                     BusinessException businessException = (BusinessException) exception;
                     assertThat(businessException.getErrorCode())
                             .isEqualTo(StrategyErrorCode.STRATEGY_NOT_FOUND);
+                });
+    }
+
+    @Test
+    @DisplayName("다른 사용자의 전략을 활성화하려 하면 접근이 거부된다.")
+    void updateActivationAccessDenied() {
+        // given
+        UUID ownerId = UUID.randomUUID();
+        UUID requesterId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+
+        Strategy strategy = Strategy.create(
+                ownerId, UUID.randomUUID(), "005930", "테스트 전략",
+                70_000L, 80_000L, new BigDecimal("5.0000"), null,
+                3_000_000L, 100_000L, null, null, null
+        );
+
+        StrategyActivationRequest request = new StrategyActivationRequest(true);
+
+        given(strategyCommandRepository.findByIdAndDeletedAtIsNull(strategyId))
+                .willReturn(Optional.of(strategy));
+
+        // when & then
+        assertThatThrownBy(() -> strategyCommandService.updateActivation(requesterId, strategyId, request))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(StrategyErrorCode.STRATEGY_ACCESS_DENIED);
                 });
     }
 }

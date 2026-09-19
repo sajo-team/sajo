@@ -2,6 +2,26 @@ package com.sajo.operation_service.service;
 
 import com.sajo.operation_service.client.PrometheusQueryResult;
 import com.sajo.operation_service.controller.dto.request.AlertManagerWebhookRequest;
+import com.sajo.operation_service.service.diagnostics.app.DiagnosticsService;
+import com.sajo.operation_service.service.diagnostics.dependency.DependencyMappingService;
+import com.sajo.operation_service.service.diagnostics.host.HostDiagnosticsService;
+import com.sajo.operation_service.service.diagnostics.kafka.KafkaDiagnosticsService;
+import com.sajo.operation_service.service.diagnostics.mongo.MongoDiagnosticsService;
+import com.sajo.operation_service.service.diagnostics.postgres.PostgresDiagnosticsService;
+import com.sajo.operation_service.service.diagnostics.redis.RedisDiagnosticsService;
+import com.sajo.operation_service.service.strategy.app.AppMetricsStrategy;
+import com.sajo.operation_service.service.strategy.kafka.KafkaBrokerDownStrategy;
+import com.sajo.operation_service.service.strategy.kafka.KafkaConsumerGroupStrategy;
+import com.sajo.operation_service.service.strategy.mongo.MongoConnectionDownStrategy;
+import com.sajo.operation_service.service.strategy.mongo.MongoConnectionHighStrategy;
+import com.sajo.operation_service.service.strategy.NoOpStrategy;
+import com.sajo.operation_service.service.strategy.postgres.PostgresConnectionDownStrategy;
+import com.sajo.operation_service.service.strategy.postgres.PostgresConnectionHighStrategy;
+import com.sajo.operation_service.service.strategy.redis.RedisConnectionDownStrategy;
+import com.sajo.operation_service.service.strategy.redis.RedisMemoryHighStrategy;
+import com.sajo.operation_service.service.strategy.app.ServiceDownStrategy;
+import com.sajo.operation_service.service.strategy.AlertDiagnosisStrategy;
+import com.sajo.operation_service.service.strategy.StrategyDiagnosis;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -12,13 +32,18 @@ import org.springframework.ai.chat.client.ChatClient;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Answers.RETURNS_DEEP_STUBS;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -26,15 +51,36 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class AlertAnalyzerTest {
 
-    private DiagnosticsService diagnosticsService;
+    private HostDiagnosticsService hostDiagnosticsService;
+    private DependencyMappingService dependencyMappingService;
     private ChatClient chatClient;
+    private AppMetricsStrategy appMetricsStrategy;
     private AlertAnalyzer alertAnalyzer;
 
     @BeforeEach
     void setup() {
-        diagnosticsService = mock(DiagnosticsService.class);
+        hostDiagnosticsService = mock(HostDiagnosticsService.class);
+        dependencyMappingService = mock(DependencyMappingService.class);
         chatClient = mock(ChatClient.class, RETURNS_DEEP_STUBS);
-        alertAnalyzer = new AlertAnalyzer(diagnosticsService, chatClient);
+        appMetricsStrategy = mock(AppMetricsStrategy.class);
+        // 이 테스트 클래스에서 실제로 쓰는 alertname만 스텁한다(전체 6개 다 나열할 필요 없음) -
+        // 자기선언형 레지스트리로 바뀌면서 mock도 alertnames()를 스텁해야 라우팅 맵에 잡힌다.
+        when(appMetricsStrategy.alertnames()).thenReturn(Set.of(AlertNames.HIGH_CPU_USAGE));
+        alertAnalyzer = new AlertAnalyzer(
+                hostDiagnosticsService, dependencyMappingService, chatClient,
+                List.of(
+                        appMetricsStrategy,
+                        new NoOpStrategy(),
+                        new RedisMemoryHighStrategy(mock(RedisDiagnosticsService.class)),
+                        new PostgresConnectionHighStrategy(mock(PostgresDiagnosticsService.class)),
+                        new MongoConnectionHighStrategy(mock(MongoDiagnosticsService.class)),
+                        new RedisConnectionDownStrategy(mock(RedisDiagnosticsService.class), hostDiagnosticsService),
+                        new PostgresConnectionDownStrategy(mock(PostgresDiagnosticsService.class), hostDiagnosticsService),
+                        new MongoConnectionDownStrategy(mock(MongoDiagnosticsService.class), hostDiagnosticsService),
+                        new KafkaBrokerDownStrategy(mock(KafkaDiagnosticsService.class), hostDiagnosticsService),
+                        new ServiceDownStrategy(mock(DiagnosticsService.class), hostDiagnosticsService),
+                        new KafkaConsumerGroupStrategy(mock(KafkaDiagnosticsService.class))
+                ));
     }
 
     private AlertManagerWebhookRequest.Alert createAlert(Map<String, String> labels) {
@@ -47,70 +93,152 @@ class AlertAnalyzerTest {
     }
 
     @Test
-    @DisplayName("application 라벨이 없으면 IllegalArgumentException을 던진다")
-    void analyze_missingApplicationLabel_throws() {
-        AlertManagerWebhookRequest.Alert alert = createAlert(Map.of("alertname", "ServiceDown"));
+    @DisplayName("정상 케이스: 호스트+의존관계+전략 지표를 모두 조회하고 LLM 응답을 반환한다")
+    void analyze_success_returnsLlmResponse() {
+        AlertManagerWebhookRequest.Alert alert = createAlert(Map.of(
+                "alertname", "HighCpuUsage", "application", "trading-service", "severity", "warning"
+        ));
+        PrometheusQueryResult dummy = PrometheusQueryResult.success(
+                "query", List.of(new PrometheusQueryResult.Series(Map.of(), "0.92")));
 
-        assertThatThrownBy(() -> alertAnalyzer.analyze(alert))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("ServiceDown");
+        when(hostDiagnosticsService.collect(alert.startsAt())).thenReturn(Map.of("호스트 CPU 사용률(0~1)", dummy));
+        when(dependencyMappingService.collect("trading-service", alert.startsAt()))
+                .thenReturn(Map.of("[의존 대상: postgres] Postgres 커넥션 사용률(0~1)", dummy));
+        when(appMetricsStrategy.diagnose(alert, alert.startsAt()))
+                .thenReturn(new StrategyDiagnosis(alert.startsAt(), Map.of("CPU 사용률(0~1)", dummy)));
+        when(chatClient.prompt().system(anyString()).user(anyString()).call().content())
+                .thenReturn("분석 결과 텍스트");
 
-        verifyNoInteractions(diagnosticsService, chatClient);
+        Optional<String> result = alertAnalyzer.analyze(alert);
+
+        assertThat(result).contains("분석 결과 텍스트");
+        verify(hostDiagnosticsService).collect(alert.startsAt());
+        verify(dependencyMappingService).collect("trading-service", alert.startsAt());
+        verify(appMetricsStrategy).diagnose(alert, alert.startsAt());
     }
 
     @Test
-    @DisplayName("application 라벨에 PromQL 인젝션에 쓰일 수 있는 문자가 섞이면 IllegalArgumentException을 던진다")
-    void analyze_applicationLabelWithInvalidCharacters_throws() {
+    @DisplayName("HighNodeCpuUsage는 application 라벨 없이도 올 수 있다 - NoOpStrategy로 등록돼 있어 호스트 스냅샷만으로 분석한다")
+    void analyze_highNodeCpuUsageWithoutApplicationLabel_stillAnalyzesUsingHostSnapshot() {
+        AlertManagerWebhookRequest.Alert alert = createAlert(Map.of("alertname", "HighNodeCpuUsage"));
+        PrometheusQueryResult dummy = PrometheusQueryResult.success("query", List.of());
+
+        when(hostDiagnosticsService.collect(alert.startsAt())).thenReturn(Map.of("호스트 CPU 사용률(0~1)", dummy));
+        when(chatClient.prompt().system(anyString()).user(anyString()).call().content())
+                .thenReturn("분석 결과 텍스트");
+
+        Optional<String> result = alertAnalyzer.analyze(alert);
+
+        assertThat(result).contains("분석 결과 텍스트");
+        verify(appMetricsStrategy, never()).diagnose(any(), any());
+        verifyNoInteractions(dependencyMappingService);
+    }
+
+    @Test
+    @DisplayName("sajo-node 그룹 중 라벨이 보존되는 알람(예: HighNodeMemoryUsage)도 NoOpStrategy로 분석한다")
+    void analyze_highNodeMemoryUsageWithApplicationLabel_stillAnalyzesUsingHostSnapshot() {
+        AlertManagerWebhookRequest.Alert alert = createAlert(Map.of(
+                "alertname", "HighNodeMemoryUsage", "application", "node"
+        ));
+        PrometheusQueryResult dummy = PrometheusQueryResult.success("query", List.of());
+
+        when(hostDiagnosticsService.collect(alert.startsAt())).thenReturn(Map.of("호스트 CPU 사용률(0~1)", dummy));
+        when(dependencyMappingService.collect("node", alert.startsAt())).thenReturn(Map.of());
+        when(chatClient.prompt().system(anyString()).user(anyString()).call().content())
+                .thenReturn("분석 결과 텍스트");
+
+        Optional<String> result = alertAnalyzer.analyze(alert);
+
+        assertThat(result).contains("분석 결과 텍스트");
+        verify(appMetricsStrategy, never()).diagnose(any(), any());
+    }
+
+    @Test
+    @DisplayName("alertname 라벨 자체가 없으면 NPE 없이 분석을 건너뛴다")
+    void analyze_missingAlertnameLabel_skipsWithoutNpe() {
+        AlertManagerWebhookRequest.Alert alert = createAlert(Map.of("application", "trading-service"));
+
+        Optional<String> result = alertAnalyzer.analyze(alert);
+
+        assertThat(result).isEmpty();
+        verify(appMetricsStrategy, never()).diagnose(any(), any());
+        verifyNoInteractions(hostDiagnosticsService, dependencyMappingService, chatClient);
+    }
+
+    @Test
+    @DisplayName("node가 아닌데 전략도 없는 alertname이면 분석 자체를 건너뛴다(호스트/의존관계/LLM 전부 호출 안 함) - 근거 없는 분석문을 만들지 않기 위함")
+    void analyze_unmappedNonNodeAlertname_skipsAnalysisEntirely() {
+        AlertManagerWebhookRequest.Alert alert = createAlert(Map.of(
+                "alertname", "TradingConsumerStalled", "application", "trading-service"
+        ));
+
+        Optional<String> result = alertAnalyzer.analyze(alert);
+
+        assertThat(result).isEmpty();
+        verify(appMetricsStrategy, never()).diagnose(any(), any());
+        verifyNoInteractions(hostDiagnosticsService, dependencyMappingService, chatClient);
+    }
+
+    @Test
+    @DisplayName("전략이 없고 application 라벨 자체도 없으면(node 여부를 알 수 없음) 분석을 건너뛴다")
+    void analyze_unmappedAlertnameWithoutApplicationLabel_skipsAnalysisEntirely() {
+        AlertManagerWebhookRequest.Alert alert = createAlert(Map.of("alertname", "TradingConsumerStalled"));
+
+        Optional<String> result = alertAnalyzer.analyze(alert);
+
+        assertThat(result).isEmpty();
+        verify(appMetricsStrategy, never()).diagnose(any(), any());
+        verifyNoInteractions(hostDiagnosticsService, dependencyMappingService, chatClient);
+    }
+
+    @Test
+    @DisplayName("전략이 먼저 실행되어 application 라벨 검증에 실패하면 호스트/의존관계 조회 없이 즉시 예외가 전파된다")
+    void analyze_strategyMappedButMissingApplicationLabel_failsFastWithoutHostOrDependencyLookup() {
+        AlertManagerWebhookRequest.Alert alert = createAlert(Map.of("alertname", "HighCpuUsage"));
+
+        when(appMetricsStrategy.diagnose(alert, alert.startsAt()))
+                .thenThrow(new IllegalArgumentException("application 라벨이 없는 알람"));
+
+        assertThatThrownBy(() -> alertAnalyzer.analyze(alert))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        verifyNoInteractions(hostDiagnosticsService, dependencyMappingService, chatClient);
+    }
+
+    @Test
+    @DisplayName("전략에서 검증 실패(예: application 라벨 문제)로 예외가 나면 호스트/의존관계/LLM 호출 없이 그대로 전파된다")
+    void analyze_strategyFailure_failsFastWithoutHostOrDependencyOrLlmCall() {
         AlertManagerWebhookRequest.Alert alert = createAlert(Map.of(
                 "alertname", "HighCpuUsage",
                 "application", "trading-service\"} or process_cpu_usage{application=\"a"
         ));
 
+        when(appMetricsStrategy.diagnose(eq(alert), eq(alert.startsAt())))
+                .thenThrow(new IllegalArgumentException("application 라벨 형식이 올바르지 않은 알람"));
+
         assertThatThrownBy(() -> alertAnalyzer.analyze(alert))
                 .isInstanceOf(IllegalArgumentException.class);
 
-        verifyNoInteractions(diagnosticsService, chatClient);
+        verifyNoInteractions(hostDiagnosticsService, dependencyMappingService, chatClient);
     }
 
     @Test
-    @DisplayName("정상 케이스: 진단 지표를 조회하고 LLM 응답을 그대로 반환한다")
-    void analyze_success_returnsLlmResponse() {
-        AlertManagerWebhookRequest.Alert alert = createAlert(Map.of(
-                "alertname", "HighCpuUsage", "application", "trading-service", "severity", "warning"
-        ));
-
-        Map<String, PrometheusQueryResult> metrics = Map.of(
-                "CPU 사용률(0~1)", PrometheusQueryResult.success(
-                        "process_cpu_usage{application=\"trading-service\"}",
-                        List.of(new PrometheusQueryResult.Series(Map.of("application", "trading-service"), "0.92"))
-                )
-        );
-
-        when(diagnosticsService.collect("trading-service", alert.startsAt())).thenReturn(metrics);
-        when(chatClient.prompt().system(anyString()).user(anyString()).call().content())
-                .thenReturn("분석 결과 텍스트");
-
-        String result = alertAnalyzer.analyze(alert);
-
-        assertThat(result).isEqualTo("분석 결과 텍스트");
-        verify(diagnosticsService).collect("trading-service", alert.startsAt());
-    }
-
-    @Test
-    @DisplayName("진단 지표 조회가 실패하면 예외가 그대로 전파된다")
-    void analyze_diagnosticsFailure_propagatesException() {
+    @DisplayName("전략 검증을 통과한 뒤 호스트 진단 조회가 실패하면 예외가 그대로 전파된다")
+    void analyze_hostDiagnosticsFailure_propagatesException() {
         AlertManagerWebhookRequest.Alert alert = createAlert(Map.of(
                 "alertname", "HighCpuUsage", "application", "trading-service"
         ));
 
-        when(diagnosticsService.collect(anyString(), any(Instant.class)))
+        when(appMetricsStrategy.diagnose(alert, alert.startsAt()))
+                .thenReturn(new StrategyDiagnosis(alert.startsAt(), Map.of()));
+        when(hostDiagnosticsService.collect(any(Instant.class)))
                 .thenThrow(new RuntimeException("Prometheus 타임아웃"));
 
         assertThatThrownBy(() -> alertAnalyzer.analyze(alert))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("Prometheus 타임아웃");
 
-        verifyNoInteractions(chatClient);
+        verifyNoInteractions(dependencyMappingService, chatClient);
     }
 
     @Test
@@ -120,12 +248,45 @@ class AlertAnalyzerTest {
                 "alertname", "HighCpuUsage", "application", "trading-service"
         ));
 
-        when(diagnosticsService.collect(anyString(), any(Instant.class))).thenReturn(Map.of());
+        when(hostDiagnosticsService.collect(any(Instant.class))).thenReturn(Map.of());
+        when(dependencyMappingService.collect(anyString(), any(Instant.class))).thenReturn(Map.of());
+        when(appMetricsStrategy.diagnose(any(), any())).thenReturn(new StrategyDiagnosis(alert.startsAt(), Map.of()));
         when(chatClient.prompt().system(anyString()).user(anyString()).call().content())
                 .thenThrow(new RuntimeException("OpenAI API error"));
 
         assertThatThrownBy(() -> alertAnalyzer.analyze(alert))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("OpenAI API error");
+    }
+
+    @Test
+    @DisplayName("서로 다른 alertname을 선언하는 전략들로 생성하면 정상적으로 만들어진다")
+    void constructor_distinctAlertnames_buildsSuccessfully() {
+        AlertDiagnosisStrategy strategyA = mock(AlertDiagnosisStrategy.class);
+        AlertDiagnosisStrategy strategyB = mock(AlertDiagnosisStrategy.class);
+        when(strategyA.alertnames()).thenReturn(Set.of("AlertA"));
+        when(strategyB.alertnames()).thenReturn(Set.of("AlertB"));
+
+        assertThatCode(() -> new AlertAnalyzer(
+                hostDiagnosticsService, dependencyMappingService, chatClient,
+                List.of(strategyA, strategyB)
+        )).doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("두 전략이 같은 alertname을 선언하면 시작 시점에 IllegalStateException을 던진다 - " +
+            "전략이 여러 패키지로 흩어진 자기선언형 구조에서 중복 등록을 fail-fast로 막는 안전장치")
+    void constructor_duplicateAlertname_throwsIllegalStateException() {
+        AlertDiagnosisStrategy strategyA = mock(AlertDiagnosisStrategy.class);
+        AlertDiagnosisStrategy strategyB = mock(AlertDiagnosisStrategy.class);
+        when(strategyA.alertnames()).thenReturn(Set.of("DuplicateAlert"));
+        when(strategyB.alertnames()).thenReturn(Set.of("DuplicateAlert"));
+
+        assertThatThrownBy(() -> new AlertAnalyzer(
+                hostDiagnosticsService, dependencyMappingService, chatClient,
+                List.of(strategyA, strategyB)
+        ))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("DuplicateAlert");
     }
 }

@@ -31,8 +31,6 @@ public interface StrategyQueryRepository extends JpaRepository<Strategy, UUID> {
             Pageable pageable
     );
 
-    Optional<Strategy> findByIdAndUserIdAndDeletedAtIsNull(UUID id, UUID userId);
-
     Optional<Strategy> findByIdAndDeletedAtIsNull(UUID id);
 
     List<Strategy> findAllByStockCodeAndStatusAndDeletedAtIsNull(String stockCode, StrategyStatus status);

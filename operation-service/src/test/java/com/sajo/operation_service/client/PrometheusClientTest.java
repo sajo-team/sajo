@@ -16,11 +16,15 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
+import org.mockito.ArgumentCaptor;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Answers.RETURNS_DEEP_STUBS;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class PrometheusClientTest {
@@ -126,6 +130,24 @@ class PrometheusClientTest {
 
         assertThat(result.successful()).isTrue();
         assertThat(result.series()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("PromQL에 + 연산자가 있으면 URI에 %2B로 인코딩한다 - 그냥 두면 Prometheus(Go net/url)가 " +
+            "쿼리스트링의 +를 공백으로 해석해서 \"sum(a) + sum(b)\"가 \"sum(a) sum(b)\"로 깨져 파싱 에러가 난다(실측 확인)")
+    void query_plusOperatorInPromql_encodesAsPercentTwoB() {
+        PrometheusApiResponse response = new PrometheusApiResponse("success", null, null, null);
+        mockResponse(response);
+        ArgumentCaptor<URI> uriCaptor = ArgumentCaptor.forClass(URI.class);
+
+        prometheusClient.query("sum(a) + sum(b)", Instant.now());
+
+        // mockResponse() 안의 when(...) 스텁 설정 자체도 .uri(any())를 1번 호출해서 기록에 남는다
+        // (RETURNS_DEEP_STUBS 특성) - getValue()는 마지막(실제 query() 호출) 값을 돌려주므로 문제없다.
+        verify(restClient.get(), atLeastOnce()).uri(uriCaptor.capture());
+        String rawQuery = uriCaptor.getValue().getRawQuery();
+        assertThat(rawQuery).contains("%2B");
+        assertThat(rawQuery).doesNotContain("+");
     }
 
     @Test

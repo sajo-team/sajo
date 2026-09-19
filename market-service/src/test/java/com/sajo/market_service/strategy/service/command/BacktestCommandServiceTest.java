@@ -22,7 +22,6 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -55,13 +54,12 @@ class BacktestCommandServiceTest {
     }
 
     @Test
-    @DisplayName("백테스트 실행이 완료되면 최신 상태를 조회해 응답한다.")
+    @DisplayName("백테스트를 생성하면 REQUESTED 상태로 즉시 응답하고 실행을 비동기로 위임한다.")
     void createBacktest() {
         // given
         UUID userId = UUID.randomUUID();
         UUID strategyId = UUID.randomUUID();
         UUID backtestId = UUID.randomUUID();
-        AtomicReference<Backtest> savedReference = new AtomicReference<>();
 
         Strategy strategy = newStrategy(userId);
         ReflectionTestUtils.setField(strategy, "id", strategyId);
@@ -72,30 +70,21 @@ class BacktestCommandServiceTest {
                 1_000_000L
         );
 
-        given(strategyCommandRepository.findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId))
+        given(strategyCommandRepository.findByIdAndDeletedAtIsNull(strategyId))
                 .willReturn(Optional.of(strategy));
 
         given(backtestCommandRepository.saveAndFlush(any(Backtest.class)))
                 .willAnswer(invocation -> {
                     Backtest backtest = invocation.getArgument(0);
                     ReflectionTestUtils.setField(backtest, "id", backtestId);
-                    savedReference.set(backtest);
                     return backtest;
                 });
 
-        // 동기 실행 자체는 BacktestExecutionServiceTest에서 검증한다.
-        // 이 테스트에서는 생성 서비스가 실행 서비스를 연결하는지만 확인한다.
+        // 실제 실행 로직은 BacktestExecutionServiceTest에서 검증한다.
+        // 이 테스트에서는 생성 서비스가 실행 서비스를 비동기로 호출만 하고 즉시 응답하는지 확인한다.
         org.mockito.BDDMockito.willDoNothing()
                 .given(backtestExecutionService)
                 .execute(backtestId);
-
-        given(backtestCommandRepository.findById(backtestId))
-                .willAnswer(invocation -> {
-                    Backtest executedBacktest = savedReference.get();
-                    executedBacktest.start();
-                    executedBacktest.complete(BigDecimal.ZERO, 0);
-                    return Optional.of(executedBacktest);
-                });
 
         // when
         BacktestCreateResponse response = backtestCommandService.createBacktest(userId, strategyId, request);
@@ -104,6 +93,7 @@ class BacktestCommandServiceTest {
         ArgumentCaptor<Backtest> captor = ArgumentCaptor.forClass(Backtest.class);
         verify(backtestCommandRepository).saveAndFlush(captor.capture());
         verify(backtestExecutionService).execute(backtestId);
+        verify(backtestCommandRepository, never()).findById(any(UUID.class));
 
         Backtest savedBacktest = captor.getValue();
         assertThat(savedBacktest.getStrategyId()).isEqualTo(strategyId);
@@ -112,13 +102,45 @@ class BacktestCommandServiceTest {
         assertThat(savedBacktest.getStartDate()).isEqualTo(LocalDate.of(2026, 1, 1));
         assertThat(savedBacktest.getEndDate()).isEqualTo(LocalDate.of(2026, 3, 31));
         assertThat(savedBacktest.getInitialCash()).isEqualTo(1_000_000L);
-        assertThat(savedBacktest.getStatus()).isEqualTo(BacktestStatus.COMPLETED);
+        assertThat(savedBacktest.getStatus()).isEqualTo(BacktestStatus.REQUESTED);
         assertThat(savedBacktest.getRequestedAt()).isNotNull();
 
         assertThat(response.backtestId()).isEqualTo(backtestId);
         assertThat(response.strategyId()).isEqualTo(strategyId);
-        assertThat(response.status()).isEqualTo(BacktestStatus.COMPLETED);
+        assertThat(response.status()).isEqualTo(BacktestStatus.REQUESTED);
         assertThat(response.requestedAt()).isNotNull();
+    }
+
+    @Test
+    @DisplayName("다른 사용자의 전략으로 백테스트를 생성하려 하면 접근이 거부된다.")
+    void createBacktestAccessDenied() {
+        // given
+        UUID ownerId = UUID.randomUUID();
+        UUID requesterId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+
+        Strategy strategy = newStrategy(ownerId);
+        ReflectionTestUtils.setField(strategy, "id", strategyId);
+
+        BacktestCreateRequest request = new BacktestCreateRequest(
+                LocalDate.of(2026, 1, 1),
+                LocalDate.of(2026, 3, 31),
+                1_000_000L
+        );
+
+        given(strategyCommandRepository.findByIdAndDeletedAtIsNull(strategyId))
+                .willReturn(Optional.of(strategy));
+
+        // when & then
+        assertThatThrownBy(() -> backtestCommandService.createBacktest(requesterId, strategyId, request))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(StrategyErrorCode.STRATEGY_ACCESS_DENIED);
+                });
+
+        verify(backtestCommandRepository, never()).saveAndFlush(any(Backtest.class));
     }
 
     @Test
@@ -134,7 +156,7 @@ class BacktestCommandServiceTest {
                  1_000_000L
         );
 
-        given(strategyCommandRepository.findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId))
+        given(strategyCommandRepository.findByIdAndDeletedAtIsNull(strategyId))
                 .willReturn(Optional.empty());
 
         // when & then
@@ -164,7 +186,7 @@ class BacktestCommandServiceTest {
                   1_000_000L
         );
 
-        given(strategyCommandRepository.findByIdAndUserIdAndDeletedAtIsNull(strategyId, userId))
+        given(strategyCommandRepository.findByIdAndDeletedAtIsNull(strategyId))
                 .willReturn(Optional.of(strategy));
 
         // when & then

@@ -54,11 +54,8 @@ class BacktestQueryServiceTest {
         UUID backtestId = UUID.randomUUID();
         Backtest backtest = newBacktest(userId, strategyId, backtestId);
 
-        given(backtestQueryRepository.findByIdAndStrategyIdAndUserIdAndDeletedAtIsNull(
-                backtestId,
-                strategyId,
-                userId
-        )).willReturn(Optional.of(backtest));
+        given(backtestQueryRepository.findByIdAndDeletedAtIsNull(backtestId))
+                .willReturn(Optional.of(backtest));
 
         // when
         BacktestStatusResponse response = backtestQueryService.getBacktestStatus(userId, strategyId, backtestId);
@@ -77,11 +74,8 @@ class BacktestQueryServiceTest {
         UUID backtestId = UUID.randomUUID();
         Backtest backtest = newCompletedBacktest(userId, strategyId, backtestId);
 
-        given(backtestQueryRepository.findByIdAndStrategyIdAndUserIdAndDeletedAtIsNull(
-                backtestId,
-                strategyId,
-                userId
-        )).willReturn(Optional.of(backtest));
+        given(backtestQueryRepository.findByIdAndDeletedAtIsNull(backtestId))
+                .willReturn(Optional.of(backtest));
 
         // when
         BacktestDetailResponse response = backtestQueryService.getBacktestDetail(userId, strategyId, backtestId);
@@ -157,11 +151,8 @@ class BacktestQueryServiceTest {
         UUID strategyId = UUID.randomUUID();
         UUID backtestId = UUID.randomUUID();
 
-        given(backtestQueryRepository.findByIdAndStrategyIdAndUserIdAndDeletedAtIsNull(
-                backtestId,
-                strategyId,
-                userId
-        )).willReturn(Optional.empty());
+        given(backtestQueryRepository.findByIdAndDeletedAtIsNull(backtestId))
+                .willReturn(Optional.empty());
 
         // when & then
         assertThatThrownBy(() -> backtestQueryService.getBacktestDetail(userId, strategyId, backtestId))
@@ -170,6 +161,29 @@ class BacktestQueryServiceTest {
                     BusinessException businessException = (BusinessException) exception;
                     assertThat(businessException.getErrorCode())
                             .isEqualTo(StrategyErrorCode.BACKTEST_NOT_FOUND);
+                });
+    }
+
+    @Test
+    @DisplayName("다른 사용자의 백테스트를 조회하려 하면 접근이 거부된다")
+    void getBacktestDetailAccessDenied() {
+        // given
+        UUID ownerId = UUID.randomUUID();
+        UUID requesterId = UUID.randomUUID();
+        UUID strategyId = UUID.randomUUID();
+        UUID backtestId = UUID.randomUUID();
+        Backtest backtest = newCompletedBacktest(ownerId, strategyId, backtestId);
+
+        given(backtestQueryRepository.findByIdAndDeletedAtIsNull(backtestId))
+                .willReturn(Optional.of(backtest));
+
+        // when & then
+        assertThatThrownBy(() -> backtestQueryService.getBacktestDetail(requesterId, strategyId, backtestId))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(StrategyErrorCode.BACKTEST_ACCESS_DENIED);
                 });
     }
 
