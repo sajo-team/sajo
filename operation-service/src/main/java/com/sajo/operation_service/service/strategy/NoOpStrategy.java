@@ -20,7 +20,9 @@ public class NoOpStrategy implements AlertDiagnosisStrategy {
                 AlertNames.HIGH_NODE_CPU_USAGE,
                 AlertNames.HIGH_NODE_MEMORY_USAGE,
                 AlertNames.NODE_DISK_LOW,
-                AlertNames.NODE_DISK_WILL_FILL_IN_24H
+                AlertNames.NODE_DISK_WILL_FILL_IN_24H,
+                // exporter 자체가 죽으면 그 exporter가 내던 지표도 같이 사라져서 own snapshot이 무의미하다.
+                AlertNames.EXPORTER_DOWN
         );
     }
 

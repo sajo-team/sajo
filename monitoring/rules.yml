@@ -4,16 +4,27 @@ groups:
   # ============================================================
   - name: sajo-services
     rules:
-      # up은 타겟 라벨만 가짐 → Micrometer의 application 태그가 없으므로 job/instance 사용
       # 배포/재시작 한 번에 울리지 않도록 for를 1m으로
       - alert: ServiceDown
-        expr: up == 0
+        expr: up{job=~"discovery-service|gateway|user-service|market-service|trading-service|operation-service"} == 0
         for: 1m
         labels:
           severity: critical
         annotations:
-          summary: "{{ $labels.job }} 스크랩 실패"
-          description: "{{ $labels.job }}({{ $labels.instance }})에서 1분 이상 메트릭을 수집하지 못했습니다."
+          summary: "{{ $labels.application }} 스크랩 실패"
+          description: "{{ $labels.application }}({{ $labels.instance }})에서 1분 이상 메트릭을 수집하지 못했습니다."
+
+      # exporter/node-exporter 자체가 죽는 경우 - RedisConnectionDown 등(exporter는 살아있는데 대상만
+      # 죽은 경우)과 달리, 이건 exporter 프로세스 자체가 스크랩에 응답을 안 하는 상황이라 exporter가
+      # 내던 지표(redis_up 등)도 같이 사라진다. 지금까지 이 시나리오를 잡는 알람이 없었다.
+      - alert: ExporterDown
+        expr: up{job=~"redis|postgres|kafka|mongo|node"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "{{ $labels.application }} exporter 스크랩 실패"
+          description: "{{ $labels.application }} exporter({{ $labels.instance }})에서 1분 이상 메트릭을 수집하지 못했습니다."
 
       # /actuator 요청(Prometheus 스크랩 포함)은 분모·분자에서 제외 (스크랩 요청이 에러율을 희석함)
       # 조건 = "5xx 비율 5% 초과" AND "5xx가 실제로 3건 이상"

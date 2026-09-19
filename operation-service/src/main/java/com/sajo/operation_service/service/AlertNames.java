@@ -29,6 +29,7 @@ public final class AlertNames {
     public static final String MONGO_CONNECTION_DOWN = "MongoConnectionDown";
     public static final String KAFKA_BROKER_DOWN = "KafkaBrokerDown";
     public static final String SERVICE_DOWN = "ServiceDown";
+    public static final String EXPORTER_DOWN = "ExporterDown";
 
 
     public static final String CONSUMER_STALLED = "ConsumerStalled";
