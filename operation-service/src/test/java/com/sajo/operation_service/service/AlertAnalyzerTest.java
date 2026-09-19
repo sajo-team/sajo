@@ -4,8 +4,14 @@ import com.sajo.operation_service.client.PrometheusQueryResult;
 import com.sajo.operation_service.controller.dto.request.AlertManagerWebhookRequest;
 import com.sajo.operation_service.service.dependency.DependencyMappingService;
 import com.sajo.operation_service.service.host.HostDiagnosticsService;
+import com.sajo.operation_service.service.mongo.MongoDiagnosticsService;
+import com.sajo.operation_service.service.postgres.PostgresDiagnosticsService;
+import com.sajo.operation_service.service.redis.RedisDiagnosticsService;
 import com.sajo.operation_service.service.strategy.AppMetricsStrategy;
+import com.sajo.operation_service.service.strategy.MongoConnectionHighStrategy;
 import com.sajo.operation_service.service.strategy.NoOpStrategy;
+import com.sajo.operation_service.service.strategy.PostgresConnectionHighStrategy;
+import com.sajo.operation_service.service.strategy.RedisMemoryHighStrategy;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -45,7 +51,10 @@ class AlertAnalyzerTest {
         chatClient = mock(ChatClient.class, RETURNS_DEEP_STUBS);
         appMetricsStrategy = mock(AppMetricsStrategy.class);
         alertAnalyzer = new AlertAnalyzer(
-                hostDiagnosticsService, dependencyMappingService, chatClient, appMetricsStrategy, new NoOpStrategy());
+                hostDiagnosticsService, dependencyMappingService, chatClient, appMetricsStrategy, new NoOpStrategy(),
+                new RedisMemoryHighStrategy(mock(RedisDiagnosticsService.class)),
+                new PostgresConnectionHighStrategy(mock(PostgresDiagnosticsService.class)),
+                new MongoConnectionHighStrategy(mock(MongoDiagnosticsService.class)));
     }
 
     private AlertManagerWebhookRequest.Alert createAlert(Map<String, String> labels) {
@@ -131,7 +140,7 @@ class AlertAnalyzerTest {
     @DisplayName("node가 아닌데 전략도 없는 alertname이면 분석 자체를 건너뛴다(호스트/의존관계/LLM 전부 호출 안 함) - 근거 없는 분석문을 만들지 않기 위함")
     void analyze_unmappedNonNodeAlertname_skipsAnalysisEntirely() {
         AlertManagerWebhookRequest.Alert alert = createAlert(Map.of(
-                "alertname", "RedisMemoryHigh", "application", "redis"
+                "alertname", "RedisConnectionDown", "application", "redis"
         ));
 
         Optional<String> result = alertAnalyzer.analyze(alert);
