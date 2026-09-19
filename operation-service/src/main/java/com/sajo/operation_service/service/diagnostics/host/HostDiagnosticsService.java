@@ -26,4 +26,16 @@ public class HostDiagnosticsService {
 
         return metrics;
     }
+
+    // 연결끊김류(Down) 전략 전용 - "대상이 죽음"과 "네트워크 문제로 연결만 끊김"을 구분할 근거를 준다.
+    // 모든 알람에 공통으로 붙는 collect()와 달리, 이건 Down 계열 전략들만 own snapshot에 포함시킨다.
+    public Map<String, PrometheusQueryResult> collectNetworkForConnectionDown(Instant time) {
+        Map<String, PrometheusQueryResult> metrics = new LinkedHashMap<>();
+
+        metrics.put("호스트 네트워크 에러율(패킷/초)", prometheusClient.query(HostDiagnosticsQueries.networkErrorRate(), time));
+        metrics.put("호스트 네트워크 드롭율(패킷/초)", prometheusClient.query(HostDiagnosticsQueries.networkDropRate(), time));
+        metrics.put("TCP 연결 타임아웃율(회/초)", prometheusClient.query(HostDiagnosticsQueries.tcpTimeoutRate(), time));
+
+        return metrics;
+    }
 }

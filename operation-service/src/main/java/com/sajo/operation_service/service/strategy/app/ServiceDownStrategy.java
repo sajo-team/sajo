@@ -1,8 +1,10 @@
 package com.sajo.operation_service.service.strategy.app;
 
+import com.sajo.operation_service.client.PrometheusQueryResult;
 import com.sajo.operation_service.controller.dto.request.AlertManagerWebhookRequest;
 import com.sajo.operation_service.service.AlertNames;
 import com.sajo.operation_service.service.diagnostics.app.DiagnosticsService;
+import com.sajo.operation_service.service.diagnostics.host.HostDiagnosticsService;
 import com.sajo.operation_service.service.strategy.AlertDiagnosisStrategy;
 import com.sajo.operation_service.service.strategy.DownAlertLookback;
 import com.sajo.operation_service.service.strategy.StrategyDiagnosis;
@@ -10,6 +12,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Set;
 
 // AppMetricsStrategy와 동일한 DiagnosticsService를 재사용하지만, 서비스가 죽으면 startsAt 시점엔
@@ -19,6 +23,7 @@ import java.util.Set;
 public class ServiceDownStrategy implements AlertDiagnosisStrategy {
 
     private final DiagnosticsService diagnosticsService;
+    private final HostDiagnosticsService hostDiagnosticsService;
 
     @Override
     public Set<String> alertnames() {
@@ -29,6 +34,8 @@ public class ServiceDownStrategy implements AlertDiagnosisStrategy {
     public StrategyDiagnosis diagnose(AlertManagerWebhookRequest.Alert alert, Instant time) {
         String application = ApplicationLabels.require(alert);
         Instant queryTime = time.minus(DownAlertLookback.VALUE);
-        return new StrategyDiagnosis(queryTime, diagnosticsService.collect(application, queryTime));
+        Map<String, PrometheusQueryResult> metrics = new LinkedHashMap<>(diagnosticsService.collect(application, queryTime));
+        metrics.putAll(hostDiagnosticsService.collectNetworkForConnectionDown(queryTime));
+        return new StrategyDiagnosis(queryTime, metrics);
     }
 }

@@ -72,11 +72,11 @@ class AlertAnalyzerTest {
                         new RedisMemoryHighStrategy(mock(RedisDiagnosticsService.class)),
                         new PostgresConnectionHighStrategy(mock(PostgresDiagnosticsService.class)),
                         new MongoConnectionHighStrategy(mock(MongoDiagnosticsService.class)),
-                        new RedisConnectionDownStrategy(mock(RedisDiagnosticsService.class)),
-                        new PostgresConnectionDownStrategy(mock(PostgresDiagnosticsService.class)),
-                        new MongoConnectionDownStrategy(mock(MongoDiagnosticsService.class)),
-                        new KafkaBrokerDownStrategy(mock(KafkaDiagnosticsService.class)),
-                        new ServiceDownStrategy(mock(DiagnosticsService.class)),
+                        new RedisConnectionDownStrategy(mock(RedisDiagnosticsService.class), hostDiagnosticsService),
+                        new PostgresConnectionDownStrategy(mock(PostgresDiagnosticsService.class), hostDiagnosticsService),
+                        new MongoConnectionDownStrategy(mock(MongoDiagnosticsService.class), hostDiagnosticsService),
+                        new KafkaBrokerDownStrategy(mock(KafkaDiagnosticsService.class), hostDiagnosticsService),
+                        new ServiceDownStrategy(mock(DiagnosticsService.class), hostDiagnosticsService),
                         new KafkaConsumerGroupStrategy(mock(KafkaDiagnosticsService.class))
                 ));
     }

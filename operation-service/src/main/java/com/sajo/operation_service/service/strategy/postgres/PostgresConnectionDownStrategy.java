@@ -1,7 +1,9 @@
 package com.sajo.operation_service.service.strategy.postgres;
 
+import com.sajo.operation_service.client.PrometheusQueryResult;
 import com.sajo.operation_service.controller.dto.request.AlertManagerWebhookRequest;
 import com.sajo.operation_service.service.AlertNames;
+import com.sajo.operation_service.service.diagnostics.host.HostDiagnosticsService;
 import com.sajo.operation_service.service.diagnostics.postgres.PostgresDiagnosticsService;
 import com.sajo.operation_service.service.strategy.AlertDiagnosisStrategy;
 import com.sajo.operation_service.service.strategy.DownAlertLookback;
@@ -10,6 +12,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Set;
 
 @Component
@@ -17,6 +21,7 @@ import java.util.Set;
 public class PostgresConnectionDownStrategy implements AlertDiagnosisStrategy {
 
     private final PostgresDiagnosticsService postgresDiagnosticsService;
+    private final HostDiagnosticsService hostDiagnosticsService;
 
     @Override
     public Set<String> alertnames() {
@@ -26,6 +31,8 @@ public class PostgresConnectionDownStrategy implements AlertDiagnosisStrategy {
     @Override
     public StrategyDiagnosis diagnose(AlertManagerWebhookRequest.Alert alert, Instant time) {
         Instant queryTime = time.minus(DownAlertLookback.VALUE);
-        return new StrategyDiagnosis(queryTime, postgresDiagnosticsService.collectForConnectionDown(queryTime));
+        Map<String, PrometheusQueryResult> metrics = new LinkedHashMap<>(postgresDiagnosticsService.collectForConnectionDown(queryTime));
+        metrics.putAll(hostDiagnosticsService.collectNetworkForConnectionDown(queryTime));
+        return new StrategyDiagnosis(queryTime, metrics);
     }
 }
