@@ -83,10 +83,11 @@ class KafkaConsumerGroupStrategyTest {
     }
 
     @Test
-    @DisplayName("ConsumerGroupMissing: 그룹이 사라진 알람이라 2분 lookback을 적용한다")
+    @DisplayName("ConsumerGroupMissing: 그룹이 사라진 알람이라 12분 lookback을 적용한다 " +
+            "(absent()의 lookback_delta 5분 + for 5분 지연을 감안한 값)")
     void diagnose_consumerGroupMissing_appliesLookback() {
         Instant startsAt = Instant.parse("2026-09-19T03:00:00Z");
-        Instant expectedLookback = startsAt.minus(Duration.ofMinutes(2));
+        Instant expectedLookback = startsAt.minus(Duration.ofMinutes(12));
         AlertManagerWebhookRequest.Alert alert = alertWithLabels(
                 "ConsumerGroupMissing", Map.of("consumergroup", "trading-consumer-group"), startsAt
         );

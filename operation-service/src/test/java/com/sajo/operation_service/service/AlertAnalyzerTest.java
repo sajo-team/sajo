@@ -20,6 +20,7 @@ import com.sajo.operation_service.service.strategy.postgres.PostgresConnectionHi
 import com.sajo.operation_service.service.strategy.redis.RedisConnectionDownStrategy;
 import com.sajo.operation_service.service.strategy.redis.RedisMemoryHighStrategy;
 import com.sajo.operation_service.service.strategy.app.ServiceDownStrategy;
+import com.sajo.operation_service.service.strategy.AlertDiagnosisStrategy;
 import com.sajo.operation_service.service.strategy.StrategyDiagnosis;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -35,6 +36,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Answers.RETURNS_DEEP_STUBS;
 import static org.mockito.ArgumentMatchers.any;
@@ -255,5 +257,36 @@ class AlertAnalyzerTest {
         assertThatThrownBy(() -> alertAnalyzer.analyze(alert))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("OpenAI API error");
+    }
+
+    @Test
+    @DisplayName("서로 다른 alertname을 선언하는 전략들로 생성하면 정상적으로 만들어진다")
+    void constructor_distinctAlertnames_buildsSuccessfully() {
+        AlertDiagnosisStrategy strategyA = mock(AlertDiagnosisStrategy.class);
+        AlertDiagnosisStrategy strategyB = mock(AlertDiagnosisStrategy.class);
+        when(strategyA.alertnames()).thenReturn(Set.of("AlertA"));
+        when(strategyB.alertnames()).thenReturn(Set.of("AlertB"));
+
+        assertThatCode(() -> new AlertAnalyzer(
+                hostDiagnosticsService, dependencyMappingService, chatClient,
+                List.of(strategyA, strategyB)
+        )).doesNotThrowAnyException();
+    }
+
+    @Test
+    @DisplayName("두 전략이 같은 alertname을 선언하면 시작 시점에 IllegalStateException을 던진다 - " +
+            "전략이 여러 패키지로 흩어진 자기선언형 구조에서 중복 등록을 fail-fast로 막는 안전장치")
+    void constructor_duplicateAlertname_throwsIllegalStateException() {
+        AlertDiagnosisStrategy strategyA = mock(AlertDiagnosisStrategy.class);
+        AlertDiagnosisStrategy strategyB = mock(AlertDiagnosisStrategy.class);
+        when(strategyA.alertnames()).thenReturn(Set.of("DuplicateAlert"));
+        when(strategyB.alertnames()).thenReturn(Set.of("DuplicateAlert"));
+
+        assertThatThrownBy(() -> new AlertAnalyzer(
+                hostDiagnosticsService, dependencyMappingService, chatClient,
+                List.of(strategyA, strategyB)
+        ))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("DuplicateAlert");
     }
 }

@@ -4,11 +4,11 @@ import com.sajo.operation_service.controller.dto.request.AlertManagerWebhookRequ
 import com.sajo.operation_service.service.AlertNames;
 import com.sajo.operation_service.service.diagnostics.kafka.KafkaDiagnosticsService;
 import com.sajo.operation_service.service.strategy.AlertDiagnosisStrategy;
-import com.sajo.operation_service.service.strategy.DownAlertLookback;
 import com.sajo.operation_service.service.strategy.StrategyDiagnosis;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Set;
 
@@ -18,6 +18,11 @@ import java.util.Set;
 @Component
 @RequiredArgsConstructor
 public class KafkaConsumerGroupStrategy implements AlertDiagnosisStrategy {
+
+    // absent()는 Prometheus lookback_delta(5분) 유예 후에야 참이 되고 거기에 for(5분)가 더해져서,
+    // startsAt이 이미 실제 소멸 시점보다 10분 뒤다 - 2분 lookback으론 여전히 죽은 이후를 보게 됨.
+    // 12분으로 안전마진 확보(다른 Down류의 DownAlertLookback 2분과는 별개).
+    private static final Duration CONSUMER_GROUP_MISSING_LOOKBACK = Duration.ofMinutes(12);
 
     private final KafkaDiagnosticsService kafkaDiagnosticsService;
 
@@ -41,10 +46,9 @@ public class KafkaConsumerGroupStrategy implements AlertDiagnosisStrategy {
                     "consumergroup/topic 라벨이 둘 다 없는 알람. alertname=" + alert.labels().get("alertname"));
         }
 
-        // ConsumerGroupMissing만 "그룹이 사라짐"류(다른 Down 알람과 동일한 성격)라 lookback이 필요하다.
-        // 나머지 4개는 그룹/토픽이 여전히 지표를 내는 "살아있지만 저하된" 상태라 lookback 없이 현재 시점을 본다.
+        // ConsumerGroupMissing만 lookback 필요, 나머지 4개는 살아있는 상태라 현재 시점을 본다.
         Instant queryTime = AlertNames.CONSUMER_GROUP_MISSING.equals(alert.labels().get("alertname"))
-                ? time.minus(DownAlertLookback.VALUE)
+                ? time.minus(CONSUMER_GROUP_MISSING_LOOKBACK)
                 : time;
 
         return new StrategyDiagnosis(queryTime, kafkaDiagnosticsService.collectForConsumerGroup(consumergroup, topic, queryTime));
