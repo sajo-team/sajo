@@ -92,4 +92,23 @@ class CorsConfigTest {
         assertThat(response.getHeader("Access-Control-Allow-Methods")).contains("POST");
         assertThat(chain.getRequest()).isNull();
     }
+
+    // 코드 리뷰 반영 - Access-Control-Max-Age 미설정 시 브라우저가 매 요청마다 preflight를
+    // 다시 보낼 수 있다는 지적. 값이 실제로 응답 헤더에 실리는지 확인한다.
+    @Test
+    @DisplayName("preflight 응답에 Access-Control-Max-Age가 포함되어 브라우저가 캐시할 수 있다")
+    void preflightResponseIncludesMaxAge() throws Exception {
+        // given
+        MockHttpServletRequest request = new MockHttpServletRequest("OPTIONS", "/api/v1/accounts");
+        request.addHeader("Origin", "https://sajostock.site");
+        request.addHeader("Access-Control-Request-Method", "POST");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+        MockFilterChain chain = new MockFilterChain();
+
+        // when
+        corsFilter.doFilter(request, response, chain);
+
+        // then
+        assertThat(response.getHeader("Access-Control-Max-Age")).isEqualTo("3600");
+    }
 }
