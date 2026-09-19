@@ -16,4 +16,24 @@ final class KafkaDiagnosticsQueries {
     static String messageRate() {
         return "sum(rate(kafka_topic_partition_current_offset[5m]))";
     }
+
+    // 아래 4개는 KafkaConsumerGroupStrategy 전용 - 알람 자신의 consumergroup/topic 라벨로 파라미터화된다.
+
+    // _sum은 이미 group+topic 단위 합계라, 그룹이 여러 토픽을 구독 중이면 토픽별로 다시 sum해서 그룹 전체 lag를 본다.
+    static String lagForGroup(String consumergroup) {
+        return "sum(kafka_consumergroup_lag_sum{consumergroup=\"%s\"})".formatted(consumergroup);
+    }
+
+    static String membersForGroup(String consumergroup) {
+        return "kafka_consumergroup_members{consumergroup=\"%s\"}".formatted(consumergroup);
+    }
+
+    static String lagForGroupTopic(String consumergroup, String topic) {
+        return "kafka_consumergroup_lag_sum{consumergroup=\"%s\", topic=\"%s\"}".formatted(consumergroup, topic);
+    }
+
+    // 파티션 합산 - 특정 토픽 하나의 초당 유입량(컨슈머그룹과 무관)
+    static String topicMessageRate(String topic) {
+        return "sum(rate(kafka_topic_partition_current_offset{topic=\"%s\"}[5m]))".formatted(topic);
+    }
 }

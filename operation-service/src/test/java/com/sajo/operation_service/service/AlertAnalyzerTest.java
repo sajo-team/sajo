@@ -11,6 +11,7 @@ import com.sajo.operation_service.service.postgres.PostgresDiagnosticsService;
 import com.sajo.operation_service.service.redis.RedisDiagnosticsService;
 import com.sajo.operation_service.service.strategy.AppMetricsStrategy;
 import com.sajo.operation_service.service.strategy.KafkaBrokerDownStrategy;
+import com.sajo.operation_service.service.strategy.KafkaConsumerGroupStrategy;
 import com.sajo.operation_service.service.strategy.MongoConnectionDownStrategy;
 import com.sajo.operation_service.service.strategy.MongoConnectionHighStrategy;
 import com.sajo.operation_service.service.strategy.NoOpStrategy;
@@ -66,7 +67,8 @@ class AlertAnalyzerTest {
                 new PostgresConnectionDownStrategy(mock(PostgresDiagnosticsService.class)),
                 new MongoConnectionDownStrategy(mock(MongoDiagnosticsService.class)),
                 new KafkaBrokerDownStrategy(mock(KafkaDiagnosticsService.class)),
-                new ServiceDownStrategy(mock(DiagnosticsService.class)));
+                new ServiceDownStrategy(mock(DiagnosticsService.class)),
+                new KafkaConsumerGroupStrategy(mock(KafkaDiagnosticsService.class)));
     }
 
     private AlertManagerWebhookRequest.Alert createAlert(Map<String, String> labels) {

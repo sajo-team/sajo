@@ -7,6 +7,7 @@ import com.sajo.operation_service.service.host.HostDiagnosticsService;
 import com.sajo.operation_service.service.strategy.AlertDiagnosisStrategy;
 import com.sajo.operation_service.service.strategy.AppMetricsStrategy;
 import com.sajo.operation_service.service.strategy.KafkaBrokerDownStrategy;
+import com.sajo.operation_service.service.strategy.KafkaConsumerGroupStrategy;
 import com.sajo.operation_service.service.strategy.MongoConnectionDownStrategy;
 import com.sajo.operation_service.service.strategy.MongoConnectionHighStrategy;
 import com.sajo.operation_service.service.strategy.NoOpStrategy;
@@ -59,7 +60,8 @@ public class AlertAnalyzer {
             PostgresConnectionDownStrategy postgresConnectionDownStrategy,
             MongoConnectionDownStrategy mongoConnectionDownStrategy,
             KafkaBrokerDownStrategy kafkaBrokerDownStrategy,
-            ServiceDownStrategy serviceDownStrategy
+            ServiceDownStrategy serviceDownStrategy,
+            KafkaConsumerGroupStrategy kafkaConsumerGroupStrategy
     ) {
         this.hostDiagnosticsService = hostDiagnosticsService;
         this.dependencyMappingService = dependencyMappingService;
@@ -82,7 +84,12 @@ public class AlertAnalyzer {
                 Map.entry(AlertNames.POSTGRES_CONNECTION_DOWN, postgresConnectionDownStrategy),
                 Map.entry(AlertNames.MONGO_CONNECTION_DOWN, mongoConnectionDownStrategy),
                 Map.entry(AlertNames.KAFKA_BROKER_DOWN, kafkaBrokerDownStrategy),
-                Map.entry(AlertNames.SERVICE_DOWN, serviceDownStrategy)
+                Map.entry(AlertNames.SERVICE_DOWN, serviceDownStrategy),
+                Map.entry(AlertNames.CONSUMER_STALLED, kafkaConsumerGroupStrategy),
+                Map.entry(AlertNames.CONSUMER_FALLING_BEHIND, kafkaConsumerGroupStrategy),
+                Map.entry(AlertNames.CONSUMER_NO_MEMBERS, kafkaConsumerGroupStrategy),
+                Map.entry(AlertNames.CONSUMER_GROUP_MISSING, kafkaConsumerGroupStrategy),
+                Map.entry(AlertNames.MESSAGE_DEAD_LETTERED, kafkaConsumerGroupStrategy)
         );
     }
 

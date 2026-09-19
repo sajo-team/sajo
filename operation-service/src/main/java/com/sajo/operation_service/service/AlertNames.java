@@ -29,4 +29,11 @@ public final class AlertNames {
     public static final String MONGO_CONNECTION_DOWN = "MongoConnectionDown";
     public static final String KAFKA_BROKER_DOWN = "KafkaBrokerDown";
     public static final String SERVICE_DOWN = "ServiceDown";
+
+
+    public static final String CONSUMER_STALLED = "ConsumerStalled";
+    public static final String CONSUMER_FALLING_BEHIND = "ConsumerFallingBehind";
+    public static final String CONSUMER_NO_MEMBERS = "ConsumerNoMembers";
+    public static final String CONSUMER_GROUP_MISSING = "ConsumerGroupMissing";
+    public static final String MESSAGE_DEAD_LETTERED = "MessageDeadLettered";
 }
