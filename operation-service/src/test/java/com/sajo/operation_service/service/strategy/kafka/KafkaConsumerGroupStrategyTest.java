@@ -3,6 +3,7 @@ package com.sajo.operation_service.service.strategy.kafka;
 import com.sajo.operation_service.client.PrometheusQueryResult;
 import com.sajo.operation_service.controller.dto.request.AlertManagerWebhookRequest;
 import com.sajo.operation_service.service.diagnostics.kafka.KafkaDiagnosticsService;
+import com.sajo.operation_service.service.strategy.StrategyDiagnosis;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -48,9 +49,10 @@ class KafkaConsumerGroupStrategyTest {
         when(kafkaDiagnosticsService.collectForConsumerGroup("trading-consumer-group", "trading.signal.generated", startsAt))
                 .thenReturn(expected);
 
-        Map<String, PrometheusQueryResult> result = strategy.diagnose(alert, startsAt);
+        StrategyDiagnosis result = strategy.diagnose(alert, startsAt);
 
-        assertThat(result).isEqualTo(expected);
+        assertThat(result.metrics()).isEqualTo(expected);
+        assertThat(result.queryTime()).isEqualTo(startsAt);
         verify(kafkaDiagnosticsService).collectForConsumerGroup("trading-consumer-group", "trading.signal.generated", startsAt);
     }
 
@@ -89,8 +91,9 @@ class KafkaConsumerGroupStrategyTest {
                 "ConsumerGroupMissing", Map.of("consumergroup", "trading-consumer-group"), startsAt
         );
 
-        strategy.diagnose(alert, startsAt);
+        StrategyDiagnosis result = strategy.diagnose(alert, startsAt);
 
+        assertThat(result.queryTime()).isEqualTo(expectedLookback);
         verify(kafkaDiagnosticsService).collectForConsumerGroup("trading-consumer-group", null, expectedLookback);
     }
 

@@ -1,5 +1,6 @@
 package com.sajo.operation_service.service.strategy.mongo;
 import com.sajo.operation_service.service.strategy.AlertDiagnosisStrategy;
+import com.sajo.operation_service.service.strategy.StrategyDiagnosis;
 import com.sajo.operation_service.service.strategy.DownAlertLookback;
 
 import com.sajo.operation_service.client.PrometheusQueryResult;
@@ -25,7 +26,8 @@ public class MongoConnectionDownStrategy implements AlertDiagnosisStrategy {
     }
 
     @Override
-    public Map<String, PrometheusQueryResult> diagnose(AlertManagerWebhookRequest.Alert alert, Instant time) {
-        return mongoDiagnosticsService.collectForConnectionDown(time.minus(DownAlertLookback.VALUE));
+    public StrategyDiagnosis diagnose(AlertManagerWebhookRequest.Alert alert, Instant time) {
+        Instant queryTime = time.minus(DownAlertLookback.VALUE);
+        return new StrategyDiagnosis(queryTime, mongoDiagnosticsService.collectForConnectionDown(queryTime));
     }
 }

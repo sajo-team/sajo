@@ -1,6 +1,7 @@
 package com.sajo.operation_service.service.strategy.app;
 import com.sajo.operation_service.service.AlertNames;
 import com.sajo.operation_service.service.strategy.AlertDiagnosisStrategy;
+import com.sajo.operation_service.service.strategy.StrategyDiagnosis;
 
 import com.sajo.operation_service.client.PrometheusQueryResult;
 import com.sajo.operation_service.controller.dto.request.AlertManagerWebhookRequest;
@@ -36,8 +37,8 @@ public class AppMetricsStrategy implements AlertDiagnosisStrategy {
     }
 
     @Override
-    public Map<String, PrometheusQueryResult> diagnose(AlertManagerWebhookRequest.Alert alert, Instant time) {
+    public StrategyDiagnosis diagnose(AlertManagerWebhookRequest.Alert alert, Instant time) {
         String application = ApplicationLabels.require(alert);
-        return diagnosticsService.collect(application, time);
+        return new StrategyDiagnosis(time, diagnosticsService.collect(application, time));
     }
 }

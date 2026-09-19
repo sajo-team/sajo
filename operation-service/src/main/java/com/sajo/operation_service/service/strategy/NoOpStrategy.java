@@ -26,7 +26,7 @@ public class NoOpStrategy implements AlertDiagnosisStrategy {
     }
 
     @Override
-    public Map<String, PrometheusQueryResult> diagnose(AlertManagerWebhookRequest.Alert alert, Instant time) {
-        return Map.of();
+    public StrategyDiagnosis diagnose(AlertManagerWebhookRequest.Alert alert, Instant time) {
+        return new StrategyDiagnosis(time, Map.of());
     }
 }

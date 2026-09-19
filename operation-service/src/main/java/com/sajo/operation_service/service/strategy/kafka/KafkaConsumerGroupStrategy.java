@@ -1,5 +1,6 @@
 package com.sajo.operation_service.service.strategy.kafka;
 import com.sajo.operation_service.service.strategy.AlertDiagnosisStrategy;
+import com.sajo.operation_service.service.strategy.StrategyDiagnosis;
 import com.sajo.operation_service.service.strategy.DownAlertLookback;
 
 import com.sajo.operation_service.client.PrometheusQueryResult;
@@ -34,7 +35,7 @@ public class KafkaConsumerGroupStrategy implements AlertDiagnosisStrategy {
     }
 
     @Override
-    public Map<String, PrometheusQueryResult> diagnose(AlertManagerWebhookRequest.Alert alert, Instant time) {
+    public StrategyDiagnosis diagnose(AlertManagerWebhookRequest.Alert alert, Instant time) {
         String consumergroup = KafkaConsumerLabels.consumergroup(alert);
         String topic = KafkaConsumerLabels.topic(alert);
         if (consumergroup == null && topic == null) {
@@ -48,6 +49,6 @@ public class KafkaConsumerGroupStrategy implements AlertDiagnosisStrategy {
                 ? time.minus(DownAlertLookback.VALUE)
                 : time;
 
-        return kafkaDiagnosticsService.collectForConsumerGroup(consumergroup, topic, queryTime);
+        return new StrategyDiagnosis(queryTime, kafkaDiagnosticsService.collectForConsumerGroup(consumergroup, topic, queryTime));
     }
 }

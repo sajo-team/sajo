@@ -1,10 +1,8 @@
 package com.sajo.operation_service.service.strategy;
 
-import com.sajo.operation_service.client.PrometheusQueryResult;
 import com.sajo.operation_service.controller.dto.request.AlertManagerWebhookRequest;
 
 import java.time.Instant;
-import java.util.Map;
 import java.util.Set;
 
 // 알람 종류(alertname)마다 동작 자체가 다른 진단 로직을 캡슐화한다.
@@ -19,7 +17,9 @@ public interface AlertDiagnosisStrategy {
     // 해당 전략을 사용하는 알람 이름들
     Set<String> alertnames();
 
-    // 반환 형식은 HostDiagnosticsService/DependencyMappingService/DiagnosticsService와 동일하게
+    // metrics는 HostDiagnosticsService/DependencyMappingService/DiagnosticsService와 동일하게
     // "설명 텍스트 -> 조회 결과" 맵으로 통일해서 AlertAnalyzer가 프롬프트에 그대로 이어붙일 수 있게 한다.
-    Map<String, PrometheusQueryResult> diagnose(AlertManagerWebhookRequest.Alert alert, Instant time);
+    // queryTime은 실제로 이 조회에 쓴 시각 - lookback 없는 전략은 그대로 받은 time을, lookback을
+    // 적용하는 전략(Down류)은 그 결과 시각을 돌려줘서 AlertAnalyzer가 프롬프트에 정확히 반영한다.
+    StrategyDiagnosis diagnose(AlertManagerWebhookRequest.Alert alert, Instant time);
 }

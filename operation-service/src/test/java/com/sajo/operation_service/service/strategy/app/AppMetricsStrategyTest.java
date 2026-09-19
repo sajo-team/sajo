@@ -3,6 +3,7 @@ package com.sajo.operation_service.service.strategy.app;
 import com.sajo.operation_service.client.PrometheusQueryResult;
 import com.sajo.operation_service.controller.dto.request.AlertManagerWebhookRequest;
 import com.sajo.operation_service.service.diagnostics.app.DiagnosticsService;
+import com.sajo.operation_service.service.strategy.StrategyDiagnosis;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -52,9 +53,10 @@ class AppMetricsStrategyTest {
         );
         when(diagnosticsService.collect("user-service", time)).thenReturn(metrics);
 
-        Map<String, PrometheusQueryResult> result = strategy.diagnose(alert, time);
+        StrategyDiagnosis result = strategy.diagnose(alert, time);
 
-        assertThat(result).isEqualTo(metrics);
+        assertThat(result.metrics()).isEqualTo(metrics);
+        assertThat(result.queryTime()).isEqualTo(time);
     }
 
     @Test

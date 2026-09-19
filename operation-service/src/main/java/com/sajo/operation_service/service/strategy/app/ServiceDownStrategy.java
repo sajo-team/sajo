@@ -2,6 +2,7 @@ package com.sajo.operation_service.service.strategy.app;
 import com.sajo.operation_service.service.AlertNames;
 import com.sajo.operation_service.service.strategy.AlertDiagnosisStrategy;
 import com.sajo.operation_service.service.strategy.DownAlertLookback;
+import com.sajo.operation_service.service.strategy.StrategyDiagnosis;
 
 import com.sajo.operation_service.client.PrometheusQueryResult;
 import com.sajo.operation_service.controller.dto.request.AlertManagerWebhookRequest;
@@ -27,8 +28,9 @@ public class ServiceDownStrategy implements AlertDiagnosisStrategy {
     }
 
     @Override
-    public Map<String, PrometheusQueryResult> diagnose(AlertManagerWebhookRequest.Alert alert, Instant time) {
+    public StrategyDiagnosis diagnose(AlertManagerWebhookRequest.Alert alert, Instant time) {
         String application = ApplicationLabels.require(alert);
-        return diagnosticsService.collect(application, time.minus(DownAlertLookback.VALUE));
+        Instant queryTime = time.minus(DownAlertLookback.VALUE);
+        return new StrategyDiagnosis(queryTime, diagnosticsService.collect(application, queryTime));
     }
 }

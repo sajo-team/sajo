@@ -20,6 +20,7 @@ import com.sajo.operation_service.service.strategy.postgres.PostgresConnectionHi
 import com.sajo.operation_service.service.strategy.redis.RedisConnectionDownStrategy;
 import com.sajo.operation_service.service.strategy.redis.RedisMemoryHighStrategy;
 import com.sajo.operation_service.service.strategy.app.ServiceDownStrategy;
+import com.sajo.operation_service.service.strategy.StrategyDiagnosis;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -101,7 +102,8 @@ class AlertAnalyzerTest {
         when(hostDiagnosticsService.collect(alert.startsAt())).thenReturn(Map.of("호스트 CPU 사용률(0~1)", dummy));
         when(dependencyMappingService.collect("trading-service", alert.startsAt()))
                 .thenReturn(Map.of("[의존 대상: postgres] Postgres 커넥션 사용률(0~1)", dummy));
-        when(appMetricsStrategy.diagnose(alert, alert.startsAt())).thenReturn(Map.of("CPU 사용률(0~1)", dummy));
+        when(appMetricsStrategy.diagnose(alert, alert.startsAt()))
+                .thenReturn(new StrategyDiagnosis(alert.startsAt(), Map.of("CPU 사용률(0~1)", dummy)));
         when(chatClient.prompt().system(anyString()).user(anyString()).call().content())
                 .thenReturn("분석 결과 텍스트");
 
@@ -225,7 +227,8 @@ class AlertAnalyzerTest {
                 "alertname", "HighCpuUsage", "application", "trading-service"
         ));
 
-        when(appMetricsStrategy.diagnose(alert, alert.startsAt())).thenReturn(Map.of());
+        when(appMetricsStrategy.diagnose(alert, alert.startsAt()))
+                .thenReturn(new StrategyDiagnosis(alert.startsAt(), Map.of()));
         when(hostDiagnosticsService.collect(any(Instant.class)))
                 .thenThrow(new RuntimeException("Prometheus 타임아웃"));
 
@@ -245,7 +248,7 @@ class AlertAnalyzerTest {
 
         when(hostDiagnosticsService.collect(any(Instant.class))).thenReturn(Map.of());
         when(dependencyMappingService.collect(anyString(), any(Instant.class))).thenReturn(Map.of());
-        when(appMetricsStrategy.diagnose(any(), any())).thenReturn(Map.of());
+        when(appMetricsStrategy.diagnose(any(), any())).thenReturn(new StrategyDiagnosis(alert.startsAt(), Map.of()));
         when(chatClient.prompt().system(anyString()).user(anyString()).call().content())
                 .thenThrow(new RuntimeException("OpenAI API error"));
 

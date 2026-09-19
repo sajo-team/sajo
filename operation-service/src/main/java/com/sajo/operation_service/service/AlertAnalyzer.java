@@ -5,6 +5,7 @@ import com.sajo.operation_service.controller.dto.request.AlertManagerWebhookRequ
 import com.sajo.operation_service.service.diagnostics.dependency.DependencyMappingService;
 import com.sajo.operation_service.service.diagnostics.host.HostDiagnosticsService;
 import com.sajo.operation_service.service.strategy.AlertDiagnosisStrategy;
+import com.sajo.operation_service.service.strategy.StrategyDiagnosis;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
@@ -77,19 +78,20 @@ public class AlertAnalyzer {
 
         Instant time = alert.startsAt();
 
-        // 1. 알람 종류별 own snapshot - 알람을 실제로 울리게 한 지표
-        Map<String, PrometheusQueryResult> metrics = new LinkedHashMap<>();
-        metrics.putAll(strategy.diagnose(alert, time));
+        // 1. 알람 종류별 own snapshot - 알람을 실제로 울리게 한 지표. lookback을 적용하는 전략은
+        // 실제 조회 시각이 time과 다를 수 있어서(diagnosis.queryTime()), 아래 2/3과 분리해서 다룬다.
+        StrategyDiagnosis diagnosis = strategy.diagnose(alert, time);
 
-        // 2. 호스트 스냅샷 - 항상 공통
-        metrics.putAll(hostDiagnosticsService.collect(time));
+        // 2. 호스트 스냅샷 - 항상 공통, 항상 time(발생 시각) 기준
+        Map<String, PrometheusQueryResult> hostAndDependencyMetrics = new LinkedHashMap<>();
+        hostAndDependencyMetrics.putAll(hostDiagnosticsService.collect(time));
 
-        // 3. 의존관계 스냅샷 - 참고 정보
+        // 3. 의존관계 스냅샷 - 참고 정보, 항상 time(발생 시각) 기준
         if (target != null) {
-            metrics.putAll(dependencyMappingService.collect(target, time));
+            hostAndDependencyMetrics.putAll(dependencyMappingService.collect(target, time));
         }
 
-        String userPrompt = createUserPrompt(alert, metrics);
+        String userPrompt = createUserPrompt(alert, diagnosis, hostAndDependencyMetrics);
         log.debug("LLM에 보낼 프롬프트. alertname={}\n{}", alertname, userPrompt);
 
         String response = chatClient.prompt()
@@ -101,11 +103,11 @@ public class AlertAnalyzer {
         return Optional.ofNullable(response);
     }
 
-    private String createUserPrompt(AlertManagerWebhookRequest.Alert alert, Map<String, PrometheusQueryResult> metrics) {
-        String metricsText = metrics.entrySet().stream()
-                .map(entry -> "[" + entry.getKey() + "]\n" + entry.getValue().toPromptText())
-                .collect(Collectors.joining("\n\n"));
-
+    private String createUserPrompt(
+            AlertManagerWebhookRequest.Alert alert,
+            StrategyDiagnosis diagnosis,
+            Map<String, PrometheusQueryResult> hostAndDependencyMetrics
+    ) {
         return """
                 [알람]
                 이름: %s
@@ -114,7 +116,10 @@ public class AlertAnalyzer {
                 설명: %s
                 발생 시각: %s
 
-                [진단 지표 (발생 시점 기준 조회)]
+                [알람 자체 진단 지표 (조회 시각: %s)]
+                %s
+
+                [호스트/의존관계 스냅샷 (조회 시각: %s, 알람 발생 시각과 동일)]
                 %s
                 """.formatted(
                 alert.labels().get("alertname"),
@@ -122,7 +127,16 @@ public class AlertAnalyzer {
                 alert.annotations().get("summary"),
                 alert.annotations().get("description"),
                 alert.startsAt(),
-                metricsText
+                diagnosis.queryTime(),
+                formatMetrics(diagnosis.metrics()),
+                alert.startsAt(),
+                formatMetrics(hostAndDependencyMetrics)
         );
+    }
+
+    private String formatMetrics(Map<String, PrometheusQueryResult> metrics) {
+        return metrics.entrySet().stream()
+                .map(entry -> "[" + entry.getKey() + "]\n" + entry.getValue().toPromptText())
+                .collect(Collectors.joining("\n\n"));
     }
 }

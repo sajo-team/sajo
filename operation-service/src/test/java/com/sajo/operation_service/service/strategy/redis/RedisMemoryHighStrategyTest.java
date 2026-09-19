@@ -3,6 +3,7 @@ package com.sajo.operation_service.service.strategy.redis;
 import com.sajo.operation_service.client.PrometheusQueryResult;
 import com.sajo.operation_service.controller.dto.request.AlertManagerWebhookRequest;
 import com.sajo.operation_service.service.diagnostics.redis.RedisDiagnosticsService;
+import com.sajo.operation_service.service.strategy.StrategyDiagnosis;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -39,9 +40,10 @@ class RedisMemoryHighStrategyTest {
         );
         when(redisDiagnosticsService.collect(time)).thenReturn(expected);
 
-        Map<String, PrometheusQueryResult> result = strategy.diagnose(alert, time);
+        StrategyDiagnosis result = strategy.diagnose(alert, time);
 
-        assertThat(result).isEqualTo(expected);
+        assertThat(result.metrics()).isEqualTo(expected);
+        assertThat(result.queryTime()).isEqualTo(time);
         verify(redisDiagnosticsService).collect(time);
     }
 }

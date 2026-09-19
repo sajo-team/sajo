@@ -19,8 +19,9 @@ class NoOpStrategyTest {
                 "firing", Map.of("alertname", "HighNodeCpuUsage"), Map.of(), Instant.parse("2026-09-18T03:00:00Z")
         );
 
-        Map<?, ?> result = strategy.diagnose(alert, alert.startsAt());
+        StrategyDiagnosis result = strategy.diagnose(alert, alert.startsAt());
 
-        assertThat(result).isEmpty();
+        assertThat(result.metrics()).isEmpty();
+        assertThat(result.queryTime()).isEqualTo(alert.startsAt());
     }
 }
