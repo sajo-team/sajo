@@ -1,0 +1,12 @@
+# Grafana가 시작할 때 자동으로 등록하는 Prometheus 데이터소스(#Grafana Alerting 요구사항).
+# alerting/cpu-alert.yaml의 알림 규칙이 이 데이터소스(uid: prometheus-sajo)를 참조한다.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: prometheus-sajo
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false

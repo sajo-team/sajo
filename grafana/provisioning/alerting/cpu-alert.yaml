@@ -1,0 +1,82 @@
+# Grafana 자체 Alerting 기능(Unified Alerting)으로 "호스트 CPU 사용률 50% 이상 → Slack" 알림을
+# 구성한다. monitoring/alertmanager.yml의 Prometheus Alertmanager(HighCpuUsage, 80%/95%,
+# JVM 프로세스 CPU 기준)와는 별개의 시스템이다 - 과제 요구사항이 "Grafana의 Alerting 기능"을
+# 명시하고 있어 Grafana가 직접 규칙을 평가하고 알림을 보내도록 구성했다.
+#
+# 지표는 node-exporter가 수집하는 호스트 전체 CPU(node_cpu_seconds_total)를 사용한다 - 과제가
+# 제시한 테스트 방법(브라우저 CPU 부하 테스트 사이트로 CPU를 올려서 확인)이 특정 서비스의 JVM
+# 프로세스가 아니라 호스트 전체 CPU를 올리는 방식이기 때문이다.
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: sajo-cpu-slack
+    receivers:
+      - uid: sajo-cpu-slack-receiver
+        type: slack
+        settings:
+          # docker-compose.yaml에서 grafana 컨테이너에 GRAFANA_SLACK_WEBHOOK_URL 환경변수로 주입.
+          # .env에 실제 Slack Incoming Webhook URL을 채워야 한다(레포에는 값 없이 커밋됨).
+          url: $__env{GRAFANA_SLACK_WEBHOOK_URL}
+        disableResolveMessage: false
+
+policies:
+  - orgId: 1
+    receiver: sajo-cpu-slack
+    group_by: ['grafana_folder', 'alertname']
+    routes:
+      - receiver: sajo-cpu-slack
+        object_matchers:
+          - ['alertname', '=', 'HostCpuUsageOver50']
+        group_wait: 10s
+        group_interval: 30s
+        repeat_interval: 10m
+
+groups:
+  - orgId: 1
+    name: sajo-grafana-alerts
+    folder: SAJO Alerts
+    interval: 30s
+    rules:
+      - uid: sajo-host-cpu-over-50
+        title: HostCpuUsageOver50
+        condition: threshold
+        for: 30s
+        labels:
+          severity: warning
+          source: grafana-alerting
+        annotations:
+          summary: "호스트 CPU 사용률 50% 초과"
+          description: "node-exporter 기준 호스트 CPU 사용률이 30초 이상 50%를 넘었습니다."
+        data:
+          - refId: query
+            relativeTimeRange:
+              from: 300
+              to: 0
+            datasourceUid: prometheus-sajo
+            model:
+              refId: query
+              expr: (1 - avg(rate(node_cpu_seconds_total{mode="idle"}[1m]))) * 100
+              instant: true
+              range: false
+              editorMode: code
+          - refId: threshold
+            relativeTimeRange:
+              from: 0
+              to: 0
+            datasourceUid: __expr__
+            model:
+              refId: threshold
+              type: threshold
+              expression: query
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [50]
+                  operator:
+                    type: and
+                  query:
+                    params: [query]
+                  reducer:
+                    type: last
+                    params: []
