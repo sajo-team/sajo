@@ -38,7 +38,7 @@ class KafkaBrokerDownStrategyTest {
         Instant startsAt = Instant.parse("2026-09-19T03:00:00Z");
         Instant expectedLookback = startsAt.minus(Duration.ofMinutes(2));
         AlertManagerWebhookRequest.Alert alert = new AlertManagerWebhookRequest.Alert(
-                "firing", Map.of("alertname", "KafkaBrokerDown", "application", "kafka"), Map.of(), startsAt
+                "firing", Map.of("alertname", "KafkaBrokerDown", "application", "kafka"), Map.of(), startsAt, startsAt
         );
         Map<String, PrometheusQueryResult> expected = Map.of(
                 "Kafka 브로커 수", PrometheusQueryResult.success("query", List.of())

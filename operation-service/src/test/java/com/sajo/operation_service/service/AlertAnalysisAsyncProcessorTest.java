@@ -10,7 +10,10 @@ import java.util.Map;
 import java.util.Optional;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -18,20 +21,23 @@ import static org.mockito.Mockito.when;
 class AlertAnalysisAsyncProcessorTest {
 
     private final AlertAnalyzer alertAnalyzer = mock(AlertAnalyzer.class);
-    private final AlertAnalysisAsyncProcessor processor = new AlertAnalysisAsyncProcessor(alertAnalyzer);
+    private final SlackNotifier slackNotifier = mock(SlackNotifier.class);
+    private final AlertAnalysisAsyncProcessor processor =
+            new AlertAnalysisAsyncProcessor(alertAnalyzer, slackNotifier);
 
     private AlertManagerWebhookRequest.Alert createAlert(String status, String alertname) {
         return new AlertManagerWebhookRequest.Alert(
                 status,
                 Map.of("alertname", alertname, "application", "trading-service"),
                 Map.of(),
-                Instant.parse("2026-09-17T03:00:00Z")
+                Instant.parse("2026-09-17T03:00:00Z"),
+                Instant.parse("2026-09-17T03:05:00Z")
         );
     }
 
     @Test
-    @DisplayName("firing 상태인 알람만 분석한다")
-    void process_onlyAnalyzesFiringAlerts() {
+    @DisplayName("firing 알람은 LLM 분석 후 Slack 발송하고, resolved 알람은 분석 없이 복구 알림만 보낸다")
+    void process_firingAnalyzes_resolvedNotifiesOnly() {
         AlertManagerWebhookRequest.Alert firing = createAlert("firing", "HighCpuUsage");
         AlertManagerWebhookRequest.Alert resolved = createAlert("resolved", "HighCpuUsage");
 
@@ -41,6 +47,9 @@ class AlertAnalysisAsyncProcessorTest {
 
         verify(alertAnalyzer, times(1)).analyze(any());
         verify(alertAnalyzer).analyze(firing);
+        verify(slackNotifier).notify(firing, "분석 결과");
+        verify(slackNotifier).notifyResolved(resolved);
+        verify(slackNotifier, never()).notify(eq(resolved), anyString());
     }
 
     @Test

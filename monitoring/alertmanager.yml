@@ -50,22 +50,8 @@ inhibit_rules:
       - severity="warning"
     equal: [instance, mountpoint]
 
-# Slack Incoming Webhook URL은 alertmanager.yml(git 추적됨)에 직접 못 넣음 - alertmanager 0.34.0은
-# config 내 환경변수 치환을 지원하지 않아서, api_url_file로 별도 파일(git 미추적, .gitignore 처리됨)에서 읽음
 receivers:
   - name: default
-    slack_configs:
-      - api_url_file: /etc/alertmanager/secrets/slack_webhook_url
-        channel: "#sajo-alerts"
-        send_resolved: true
-        title: '{{ .GroupLabels.alertname }} ({{ .GroupLabels.application }})'
-        # 알람 상태(firing/resolved)를 명시하지 않으면, resolved 알림도 firing 때와 완전히
-        # 똑같은 summary/description(마지막 firing 시점 값이 그대로 얼려짐)이 와서 Slack에서
-        # "새로 터진 건지 방금 해결된 건지" 구분이 안 됨
-        text: |-
-          {{ range .Alerts }}[{{ .Status | toUpper }}][{{ .Labels.severity | toUpper }}] {{ .Annotations.summary }}
-          {{ .Annotations.description }}
-          {{ end }}
     webhook_configs:
       - url: http://operation-service:8084/api/v1/operations/webhook
         send_resolved: true

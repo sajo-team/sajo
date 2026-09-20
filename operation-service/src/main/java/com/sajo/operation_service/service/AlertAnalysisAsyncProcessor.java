@@ -12,24 +12,45 @@ import org.springframework.stereotype.Service;
 public class AlertAnalysisAsyncProcessor {
 
     private final AlertAnalyzer alertAnalyzer;
+    private final SlackNotifier slackNotifier;
 
     @Async("alertAnalysisExecutor")
     public void process(AlertManagerWebhookRequest request) {
-        request.alerts().stream()
-                .filter(AlertManagerWebhookRequest.Alert::isFiring)
-                .forEach(this::analyzeOne);
+        request.alerts().forEach(this::processOne);
     }
+
+    private void processOne(AlertManagerWebhookRequest.Alert alert) {
+        if (alert.isFiring()) {
+            analyzeOne(alert);
+        } else {
+            notifyResolved(alert);
+        }
+    }
+
     private void analyzeOne(AlertManagerWebhookRequest.Alert alert) {
         try {
-            // 전략이 아직 없는 alertname은 AlertAnalyzer가 빈 Optional을 반환한다(자체적으로 로그를 남김) -
-            // 여기서는 그 경우 조용히 넘어간다.
-            alertAnalyzer.analyze(alert).ifPresent(analysis ->
-                    //TODO: 추후 슬랙 알림으로 수정
-                    log.info("알람 분석 결과. alertname={}, application={}\n{}",
-                            alert.labels().get("alertname"), alert.labels().get("application"), analysis)
-            );
+            alertAnalyzer.analyze(alert).ifPresent(analysis -> {
+                log.info("알람 분석 결과. alertname={}, application={}\n{}",
+                        alert.labels().get("alertname"),
+                        alert.labels().get("application"),
+                        analysis
+                );
+
+                slackNotifier.notify(alert, analysis);
+            });
         } catch (Exception e) {
             log.error("알람 분석 실패. alertname={}, application={}",
+                    alert.labels().get("alertname"), alert.labels().get("application"), e);
+        }
+    }
+
+    // resolved 알람은 LLM 분석을 다시 돌리지 않는다
+    // 여기서 필요한 건 "복구됐다"는 사실 전달뿐이다.
+    private void notifyResolved(AlertManagerWebhookRequest.Alert alert) {
+        try {
+            slackNotifier.notifyResolved(alert);
+        } catch (Exception e) {
+            log.error("복구 알림 발송 실패. alertname={}, application={}",
                     alert.labels().get("alertname"), alert.labels().get("application"), e);
         }
     }

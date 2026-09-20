@@ -38,7 +38,7 @@ class MongoConnectionDownStrategyTest {
         Instant startsAt = Instant.parse("2026-09-19T03:00:00Z");
         Instant expectedLookback = startsAt.minus(Duration.ofMinutes(2));
         AlertManagerWebhookRequest.Alert alert = new AlertManagerWebhookRequest.Alert(
-                "firing", Map.of("alertname", "MongoConnectionDown", "application", "mongo"), Map.of(), startsAt
+                "firing", Map.of("alertname", "MongoConnectionDown", "application", "mongo"), Map.of(), startsAt, startsAt
         );
         Map<String, PrometheusQueryResult> expected = Map.of(
                 "MongoDB 연결 상태(up)", PrometheusQueryResult.success("query", List.of())

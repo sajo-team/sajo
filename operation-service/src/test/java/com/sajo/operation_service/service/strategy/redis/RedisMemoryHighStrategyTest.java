@@ -33,7 +33,7 @@ class RedisMemoryHighStrategyTest {
     void diagnose_delegatesToRedisDiagnosticsServiceAtCurrentTime() {
         Instant time = Instant.parse("2026-09-18T03:00:00Z");
         AlertManagerWebhookRequest.Alert alert = new AlertManagerWebhookRequest.Alert(
-                "firing", Map.of("alertname", "RedisMemoryHigh", "application", "redis"), Map.of(), time
+                "firing", Map.of("alertname", "RedisMemoryHigh", "application", "redis"), Map.of(), time, time
         );
         Map<String, PrometheusQueryResult> expected = Map.of(
                 "Redis 메모리 사용률(0~1)", PrometheusQueryResult.success("query", List.of())
