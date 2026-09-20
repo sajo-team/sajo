@@ -53,6 +53,10 @@ public class SlackNotifier {
     }
 
     private String formatDuration(Duration duration) {
+
+        if (duration.isNegative()) {
+            duration = Duration.ZERO;
+        }
         long minutes = duration.toMinutes();
         long seconds = duration.minusMinutes(minutes).getSeconds();
         if (minutes > 0) {
