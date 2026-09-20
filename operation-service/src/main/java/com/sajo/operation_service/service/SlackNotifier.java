@@ -29,6 +29,14 @@ public class SlackNotifier {
         slackClient.send(SlackMessageRequest.of(COLOR_DEFAULT, message));
     }
 
+    // 전략 미등록 또는 LLM 분석 실패 시에도 알람 자체는 원본 정보로라도 전달한다 -
+    // slack_configs 제거 후 "분석 안 되면 Slack에 아예 안 뜸"이 되는 회귀를 막기 위함.
+    public void notifyWithoutAnalysis(Alert alert) {
+        String color = severityColor(alert.labels().get("severity"));
+        String message = formatMessageWithoutAnalysis(alert);
+        slackClient.send(SlackMessageRequest.of(color, message));
+    }
+
     private String severityColor(String severity) {
         if ("critical".equalsIgnoreCase(severity)) {
             return COLOR_CRITICAL;
@@ -80,6 +88,21 @@ public class SlackNotifier {
                 alert.labels().get("application"),
                 alert.annotations().get("description"),
                 analysis
+        );
+    }
+
+    private String formatMessageWithoutAnalysis(Alert alert) {
+        return """
+                %s *[%s] %s* (`%s`)
+                %s
+
+                _LLM 분석 없음 - 전략 미등록 또는 분석 실패_
+                """.formatted(
+                severityEmoji(alert.labels().get("severity")),
+                alert.labels().get("alertname"),
+                alert.annotations().get("summary"),
+                alert.labels().get("application"),
+                alert.annotations().get("description")
         );
     }
 

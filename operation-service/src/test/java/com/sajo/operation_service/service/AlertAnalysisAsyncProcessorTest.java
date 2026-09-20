@@ -53,7 +53,30 @@ class AlertAnalysisAsyncProcessorTest {
     }
 
     @Test
-    @DisplayName("알람 하나 분석이 실패해도 나머지 알람은 계속 처리한다")
+    @DisplayName("전략 미등록 등으로 분석이 없으면 raw 알림(notifyWithoutAnalysis)을 보낸다 - Slack에 아예 안 뜨는 회귀 방지")
+    void process_noAnalysis_notifiesWithoutAnalysis() {
+        AlertManagerWebhookRequest.Alert firing = createAlert("firing", "UnknownAlert");
+
+        when(alertAnalyzer.analyze(firing)).thenReturn(Optional.empty());
+
+        processor.process(new AlertManagerWebhookRequest("firing", List.of(firing)));
+
+        verify(slackNotifier).notifyWithoutAnalysis(firing);
+        verify(slackNotifier, never()).notify(eq(firing), anyString());
+    }
+
+    @Test
+    @DisplayName("전략 유무와 무관하게 resolved 알람은 항상 복구 알림을 보낸다")
+    void process_resolved_alwaysNotifies() {
+        AlertManagerWebhookRequest.Alert resolved = createAlert("resolved", "UnknownAlert");
+
+        processor.process(new AlertManagerWebhookRequest("firing", List.of(resolved)));
+
+        verify(slackNotifier).notifyResolved(resolved);
+    }
+
+    @Test
+    @DisplayName("알람 하나 분석이 실패해도 나머지 알람은 계속 처리하고, 실패한 알람도 raw 알림을 보낸다")
     void process_oneFailure_doesNotStopBatch() {
         AlertManagerWebhookRequest.Alert first = createAlert("firing", "HighCpuUsage");
         AlertManagerWebhookRequest.Alert second = createAlert("firing", "HighErrorRate");
@@ -65,5 +88,7 @@ class AlertAnalysisAsyncProcessorTest {
 
         verify(alertAnalyzer).analyze(first);
         verify(alertAnalyzer).analyze(second);
+        verify(slackNotifier).notifyWithoutAnalysis(first);
+        verify(slackNotifier).notify(second, "분석 결과");
     }
 }

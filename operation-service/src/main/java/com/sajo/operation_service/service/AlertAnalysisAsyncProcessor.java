@@ -6,6 +6,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
+import java.util.Optional;
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -28,24 +30,29 @@ public class AlertAnalysisAsyncProcessor {
     }
 
     private void analyzeOne(AlertManagerWebhookRequest.Alert alert) {
+        Optional<String> analysis;
         try {
-            alertAnalyzer.analyze(alert).ifPresent(analysis -> {
-                log.info("알람 분석 결과. alertname={}, application={}\n{}",
-                        alert.labels().get("alertname"),
-                        alert.labels().get("application"),
-                        analysis
-                );
-
-                slackNotifier.notify(alert, analysis);
-            });
+            analysis = alertAnalyzer.analyze(alert);
         } catch (Exception e) {
             log.error("알람 분석 실패. alertname={}, application={}",
                     alert.labels().get("alertname"), alert.labels().get("application"), e);
+            analysis = Optional.empty();
+        }
+
+        // 전략 미등록이든 LLM 호출 실패든, 분석이 없어도 알람 자체는 Slack에 전달한다 -
+        // slack_configs 제거 후 "분석 안 되면 Slack에 아예 안 뜸"이 되는 회귀를 막기 위함.
+        if (analysis.isPresent()) {
+            log.info("알람 분석 결과. alertname={}, application={}\n{}",
+                    alert.labels().get("alertname"),
+                    alert.labels().get("application"),
+                    analysis.get()
+            );
+            slackNotifier.notify(alert, analysis.get());
+        } else {
+            slackNotifier.notifyWithoutAnalysis(alert);
         }
     }
 
-    // resolved 알람은 LLM 분석을 다시 돌리지 않는다
-    // 여기서 필요한 건 "복구됐다"는 사실 전달뿐이다.
     private void notifyResolved(AlertManagerWebhookRequest.Alert alert) {
         try {
             slackNotifier.notifyResolved(alert);
