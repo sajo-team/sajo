@@ -37,13 +37,15 @@ class AlertWebhookControllerTest {
                       "status": "firing",
                       "labels": {"alertname": "HighCpuUsage", "application": "trading-service"},
                       "annotations": {"summary": "s", "description": "d"},
-                      "startsAt": "2026-09-17T03:00:00Z"
+                      "startsAt": "2026-09-17T03:00:00Z",
+                      "endsAt": "0001-01-01T00:00:00Z"
                     },
                     {
                       "status": "resolved",
                       "labels": {"alertname": "HighCpuUsage", "application": "trading-service"},
                       "annotations": {"summary": "s", "description": "d"},
-                      "startsAt": "2026-09-17T02:00:00Z"
+                      "startsAt": "2026-09-17T02:00:00Z",
+                      "endsAt": "2026-09-17T02:10:00Z"
                     }
                   ]
                 }

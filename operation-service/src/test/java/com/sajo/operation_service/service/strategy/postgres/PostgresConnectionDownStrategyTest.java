@@ -38,7 +38,7 @@ class PostgresConnectionDownStrategyTest {
         Instant startsAt = Instant.parse("2026-09-19T03:00:00Z");
         Instant expectedLookback = startsAt.minus(Duration.ofMinutes(2));
         AlertManagerWebhookRequest.Alert alert = new AlertManagerWebhookRequest.Alert(
-                "firing", Map.of("alertname", "PostgresConnectionDown", "application", "postgres"), Map.of(), startsAt
+                "firing", Map.of("alertname", "PostgresConnectionDown", "application", "postgres"), Map.of(), startsAt, startsAt
         );
         Map<String, PrometheusQueryResult> expected = Map.of(
                 "Postgres 연결 상태(up)", PrometheusQueryResult.success("query", List.of())

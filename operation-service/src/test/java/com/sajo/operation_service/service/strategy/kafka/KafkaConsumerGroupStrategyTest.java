@@ -33,7 +33,7 @@ class KafkaConsumerGroupStrategyTest {
     private AlertManagerWebhookRequest.Alert alertWithLabels(String alertname, Map<String, String> extraLabels, Instant startsAt) {
         Map<String, String> labels = new java.util.LinkedHashMap<>(extraLabels);
         labels.put("alertname", alertname);
-        return new AlertManagerWebhookRequest.Alert("firing", labels, Map.of(), startsAt);
+        return new AlertManagerWebhookRequest.Alert("firing", labels, Map.of(), startsAt, startsAt);
     }
 
     @Test
