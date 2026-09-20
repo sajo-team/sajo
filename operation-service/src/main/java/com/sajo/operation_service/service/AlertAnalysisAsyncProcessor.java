@@ -21,11 +21,18 @@ public class AlertAnalysisAsyncProcessor {
         request.alerts().forEach(this::processOne);
     }
 
+    // 알람 하나 처리(분석/Slack 발송 전체) 중 어디서 예외가 나든 여기서 흡수한다 - forEach 순회
+    // 중 예외가 새면 그 뒤 알람들이 조용히 누락되기 때문에, 개별 단계가 아니라 알람 단위로 감싼다.
     private void processOne(AlertManagerWebhookRequest.Alert alert) {
-        if (alert.isFiring()) {
-            analyzeOne(alert);
-        } else {
-            notifyResolved(alert);
+        try {
+            if (alert.isFiring()) {
+                analyzeOne(alert);
+            } else {
+                notifyResolved(alert);
+            }
+        } catch (Exception e) {
+            log.error("알람 처리 실패. alertname={}, application={}",
+                    alert.labels().get("alertname"), alert.labels().get("application"), e);
         }
     }
 
@@ -54,11 +61,6 @@ public class AlertAnalysisAsyncProcessor {
     }
 
     private void notifyResolved(AlertManagerWebhookRequest.Alert alert) {
-        try {
-            slackNotifier.notifyResolved(alert);
-        } catch (Exception e) {
-            log.error("복구 알림 발송 실패. alertname={}, application={}",
-                    alert.labels().get("alertname"), alert.labels().get("application"), e);
-        }
+        slackNotifier.notifyResolved(alert);
     }
 }

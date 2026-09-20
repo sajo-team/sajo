@@ -12,6 +12,7 @@ import java.util.Optional;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -90,5 +91,35 @@ class AlertAnalysisAsyncProcessorTest {
         verify(alertAnalyzer).analyze(second);
         verify(slackNotifier).notifyWithoutAnalysis(first);
         verify(slackNotifier).notify(second, "분석 결과");
+    }
+
+    @Test
+    @DisplayName("Slack 발송(notify) 중 예상 못한 예외가 나도 나머지 알람은 계속 처리한다")
+    void process_notifyThrows_doesNotStopBatch() {
+        AlertManagerWebhookRequest.Alert first = createAlert("firing", "HighCpuUsage");
+        AlertManagerWebhookRequest.Alert second = createAlert("firing", "HighErrorRate");
+
+        when(alertAnalyzer.analyze(any())).thenReturn(Optional.of("분석 결과"));
+        doThrow(new RuntimeException("잘못된 webhook URL 설정 등 예상 못한 예외"))
+                .when(slackNotifier).notify(eq(first), anyString());
+
+        processor.process(new AlertManagerWebhookRequest("firing", List.of(first, second)));
+
+        verify(slackNotifier).notify(second, "분석 결과");
+    }
+
+    @Test
+    @DisplayName("resolved 알림 발송 중 예상 못한 예외가 나도 나머지 알람은 계속 처리한다")
+    void process_notifyResolvedThrows_doesNotStopBatch() {
+        AlertManagerWebhookRequest.Alert resolved = createAlert("resolved", "HighCpuUsage");
+        AlertManagerWebhookRequest.Alert firing = createAlert("firing", "HighErrorRate");
+
+        doThrow(new RuntimeException("잘못된 webhook URL 설정 등 예상 못한 예외"))
+                .when(slackNotifier).notifyResolved(resolved);
+        when(alertAnalyzer.analyze(firing)).thenReturn(Optional.of("분석 결과"));
+
+        processor.process(new AlertManagerWebhookRequest("firing", List.of(resolved, firing)));
+
+        verify(slackNotifier).notify(firing, "분석 결과");
     }
 }
