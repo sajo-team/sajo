@@ -207,6 +207,13 @@ public class KisWebSocketClient {
      * subscribedStockCodes()를 사용하는 MarketRealtimePriceScheduler는 이 종목을 더 이상 스냅샷
      * 대상으로 보지 않게 되어 스냅샷 적재가 조용히 누락될 수 있다. 다음 재연결 시 resubscribeAll()이
      * 로컬 set 기준으로 다시 구독을 맞추므로 그 시점에는 정합성이 회복된다.</p>
+     *
+     * <p><b>이 메서드는 종목 단위로 전역(global) 구독을 해제한다. 종목별 참조 카운트(구독자 수)를
+     * 관리하지 않는다.</b> 종목 코드를 {@link java.util.Set}으로만 관리하기 때문에, 예를 들어 전략
+     * A와 B가 모두 같은 종목("005930")을 구독 중인 상태에서 A만 비활성화되어 이 메서드가 호출되면
+     * B가 여전히 활성 상태여도 해당 종목의 KIS 구독이 통째로 해제된다. 이후 전략 비활성화 로직에서
+     * 이 메서드를 직접 연결할 때는, "이 종목을 구독 중인 다른 활성 전략이 있는지"를 상위 레이어
+     * (strategy 쪽 서비스)에서 먼저 확인해 참조 카운트가 0이 될 때만 호출하도록 설계해야 한다.</p>
      */
     public void unsubscribe(String stockCode) {
         if (stockCode == null || stockCode.isBlank()) {
