@@ -3,10 +3,12 @@ package com.sajo.market_service.strategy.service.command;
 import com.sajo.common.exception.BusinessException;
 import com.sajo.market_service.strategy.controller.dto.response.StrategyActivationResponse;
 import com.sajo.market_service.strategy.domain.Strategy;
+import com.sajo.market_service.strategy.event.StrategyActivationChangedEvent;
 import com.sajo.market_service.strategy.exception.StrategyErrorCode;
 import com.sajo.market_service.strategy.repository.command.StrategyCommandRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,6 +20,7 @@ import java.util.UUID;
 public class StrategyActivationCommandService {
 
     private final StrategyCommandRepository strategyCommandRepository;
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     @Transactional
     public StrategyActivationResponse changeActivation(
@@ -41,6 +44,11 @@ public class StrategyActivationCommandService {
         } else {
             strategy.deactivate();
         }
+
+        // 커밋 후에만 WebSocket 구독/Signal 상태를 갱신하기 위해 AFTER_COMMIT 리스너로 전달
+        applicationEventPublisher.publishEvent(
+                new StrategyActivationChangedEvent(strategy.getId(), strategy.getStockCode(), Boolean.TRUE.equals(active))
+        );
 
         return StrategyActivationResponse.from(strategy);
     }
