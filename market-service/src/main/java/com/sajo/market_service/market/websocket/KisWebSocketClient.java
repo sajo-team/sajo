@@ -174,31 +174,47 @@ public class KisWebSocketClient {
         reconnectScheduler.execute(this::connect);
     }
 
-    /** 종목을 구독 대상에 추가한다. 이미 연결되어 있으면 즉시 구독 요청을 보낸다. */
+    /**
+     * 종목을 구독 대상에 추가한다. 이미 연결되어 있으면 즉시 구독 요청을 보낸다.
+     *
+     * <p>로컬 상태 갱신과 실제 전송을 {@code sendLock}으로 함께 직렬화한다. 그렇지 않으면 같은
+     * 종목에 대해 subscribe()와 unsubscribe()가 거의 동시에 호출될 때, set 반영 순서와 실제 KIS
+     * 전송 순서가 어긋나 로컬 상태와 KIS 서버 상태가 서로 다른 값으로 남을 수 있다
+     * (예: 로컬은 미구독인데 KIS에는 구독이 살아있는 상태).</p>
+     */
     public void subscribe(String stockCode) {
         if (stockCode == null || stockCode.isBlank()) {
             return;
         }
-        subscribedStockCodes.add(stockCode);
-        WebSocketSession session = currentSession.get();
-        if (session != null && session.isOpen()) {
-            sendSubscribeFrame(session, stockCode);
+        synchronized (sendLock) {
+            subscribedStockCodes.add(stockCode);
+            WebSocketSession session = currentSession.get();
+            if (session != null && session.isOpen()) {
+                sendSubscribeFrame(session, stockCode);
+            }
         }
     }
 
-    /** 종목을 구독 대상에서 제거한다. 이미 연결되어 있으면 즉시 구독 해제 요청을 보낸다. */
+    /**
+     * 종목을 구독 대상에서 제거한다. 이미 연결되어 있으면 즉시 구독 해제 요청을 보낸다.
+     *
+     * <p>subscribe()와 동일하게 {@code sendLock}으로 로컬 상태 갱신과 전송을 함께 직렬화해,
+     * 같은 종목에 대한 subscribe()/unsubscribe() 동시 호출 시 순서 역전을 방지한다.</p>
+     */
     public void unsubscribe(String stockCode) {
         if (stockCode == null || stockCode.isBlank()) {
             return;
         }
-        boolean wasSubscribed = subscribedStockCodes.remove(stockCode);
-        if (!wasSubscribed) {
-            // 구독 중이 아니었던 종목이면 KIS에 해제 요청을 보낼 필요가 없다.
-            return;
-        }
-        WebSocketSession session = currentSession.get();
-        if (session != null && session.isOpen()) {
-            sendUnsubscribeFrame(session, stockCode);
+        synchronized (sendLock) {
+            boolean wasSubscribed = subscribedStockCodes.remove(stockCode);
+            if (!wasSubscribed) {
+                // 구독 중이 아니었던 종목이면 KIS에 해제 요청을 보낼 필요가 없다.
+                return;
+            }
+            WebSocketSession session = currentSession.get();
+            if (session != null && session.isOpen()) {
+                sendUnsubscribeFrame(session, stockCode);
+            }
         }
     }
 
@@ -245,8 +261,10 @@ public class KisWebSocketClient {
     }
 
     private void resubscribeAll(WebSocketSession session) {
-        for (String stockCode : subscribedStockCodes) {
-            sendSubscribeFrame(session, stockCode);
+        synchronized (sendLock) {
+            for (String stockCode : subscribedStockCodes) {
+                sendSubscribeFrame(session, stockCode);
+            }
         }
     }
 
