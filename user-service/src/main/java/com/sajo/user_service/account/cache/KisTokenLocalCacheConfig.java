@@ -22,7 +22,8 @@ public class KisTokenLocalCacheConfig {
     @Bean
     public AsyncCache<String, KisTokenEntry> kisTokenEntryAsyncCache() {
         return Caffeine.newBuilder()
-                .maximumSize(10_000)
+                // 계좌당 키 2개(accessToken/approvalKey) 기준 5만 계좌 분량
+                .maximumSize(50_000)
                 .expireAfter(new Expiry<String, KisTokenEntry>() {
                     @Override
                     public long expireAfterCreate(String key, KisTokenEntry entry, long currentTime) {
