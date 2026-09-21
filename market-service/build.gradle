@@ -25,6 +25,9 @@ dependencies {
     implementation project(':libs:common-kafka')
     // RAG 기반 고객 응대 챗봇(#도전 과제)에 사용: OpenAI Chat/Embedding 모델 자동 구성
     implementation 'org.springframework.ai:spring-ai-starter-model-openai'
+    // VectorStore/SimpleVectorStore/SearchRequest는 spring-ai-starter-model-openai에 포함되지 않고
+    // 별도 모듈(spring-ai-vector-store)에 있어 명시적으로 추가한다.
+    implementation 'org.springframework.ai:spring-ai-vector-store'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-data-jpa-test'
     testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
