@@ -18,8 +18,9 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class KisTokenLocalCacheConfig {
 
+
     @Bean
-    public AsyncCache<String, KisTokenEntry> kisTokenLocalCache() {
+    public AsyncCache<String, KisTokenEntry> kisTokenEntryAsyncCache() {
         return Caffeine.newBuilder()
                 .maximumSize(10_000)
                 .expireAfter(new Expiry<String, KisTokenEntry>() {

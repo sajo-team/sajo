@@ -20,9 +20,9 @@ public class KisTokenLocalCache {
 
         if (existing != null) {
             try {
-                existing.join();
+                return existing.join();
             } catch (CompletionException e) {
-                throw e.getCause() instanceof RuntimeException re ? re: e;
+                throw e.getCause() instanceof RuntimeException re ? re : e;
             }
         }
         try {

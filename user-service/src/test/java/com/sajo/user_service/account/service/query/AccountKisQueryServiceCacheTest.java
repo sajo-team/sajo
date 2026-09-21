@@ -1,6 +1,9 @@
 package com.sajo.user_service.account.service.query;
 
 import com.sajo.user_service.account.cache.KisTokenCacheLock;
+import com.sajo.user_service.account.cache.KisTokenLocalCache;
+import com.sajo.user_service.account.cache.KisTokenLocalCacheConfig;
+import com.sajo.user_service.account.cache.KisTokenRemoteCache;
 import com.sajo.user_service.account.client.kis.KisOAuthClient;
 import com.sajo.user_service.account.client.kis.KisTrClient;
 import com.sajo.user_service.account.client.kis.dto.response.KisAccessTokenResponse;
@@ -17,6 +20,7 @@ import org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfigurat
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.EnabledIfDockerAvailable;
@@ -33,7 +37,8 @@ import static org.mockito.Mockito.verify;
 @Testcontainers
 @EnabledIfDockerAvailable
 @SpringBootTest(classes = {
-        AccountKisQueryService.class, KisTokenCacheQueryService.class, KisTokenCacheLock.class,
+        AccountKisQueryService.class, KisTokenCacheQueryService.class, KisTokenRemoteCache.class,
+        KisTokenLocalCache.class, KisTokenCacheLock.class, KisTokenLocalCacheConfig.class,
         DataRedisAutoConfiguration.class})
 @DisplayName("계좌 KIS 조회 - 실제 Redis 캐시 통합 테스트")
 class AccountKisQueryServiceCacheTest {
@@ -66,6 +71,7 @@ class AccountKisQueryServiceCacheTest {
         UUID userId = UUID.randomUUID();
         Account account = Account.createAccount(
                 userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
+        ReflectionTestUtils.setField(account, "id", UUID.randomUUID()); // id는 원래 DB가 채워주는 값 - 캐시 키(accountId 기준)가 실제로 쓰이므로 직접 주입
         KisAccessTokenResponse kisResponse =
                 new KisAccessTokenResponse("issued-token", "Bearer", 86400, "2026-01-01 00:00:00");
 
@@ -90,8 +96,10 @@ class AccountKisQueryServiceCacheTest {
         UUID userId2 = UUID.randomUUID();
         Account account1 = Account.createAccount(
                 userId1, "app-key-1", "secret-key-1", "11111111-11", "hashed-account-no-1", AccountType.REAL);
+        ReflectionTestUtils.setField(account1, "id", UUID.randomUUID());
         Account account2 = Account.createAccount(
                 userId2, "app-key-2", "secret-key-2", "22222222-22", "hashed-account-no-2", AccountType.REAL);
+        ReflectionTestUtils.setField(account2, "id", UUID.randomUUID());
 
         given(accountQueryService.getAccountByUserId(userId1)).willReturn(account1);
         given(accountQueryService.getAccountByUserId(userId2)).willReturn(account2);
@@ -118,6 +126,7 @@ class AccountKisQueryServiceCacheTest {
         UUID userId = UUID.randomUUID();
         Account account = Account.createAccount(
                 userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
+        ReflectionTestUtils.setField(account, "id", UUID.randomUUID());
         KisApprovalKeyResponse kisResponse = new KisApprovalKeyResponse("issued-approval-key");
 
         given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
@@ -140,6 +149,7 @@ class AccountKisQueryServiceCacheTest {
         UUID userId = UUID.randomUUID();
         Account account = Account.createAccount(
                 userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
+        ReflectionTestUtils.setField(account, "id", UUID.randomUUID());
 
         given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
         given(kisOAuthClient.getAccessToken("app-key", "secret-key", AccountType.REAL))

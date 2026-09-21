@@ -84,7 +84,7 @@ class AccountCreateFacadeTest {
         inOrder.verify(accountCommandService)
                 .createAccount(userId, "app-key", "secret-key", "12345678-01", AccountType.REAL);
         inOrder.verify(kisTokenCacheCommandService)
-                .primeKisAccessTokenCache(userId, "issued-token", 86400L);
+                .primeKisAccessTokenCache(account.getId(), "issued-token", 86400L);
         verify(kisTokenLogCommandService).recordSuccess(account.getId(), userId, KisTokenType.ACCESS_TOKEN);
     }
 

@@ -1,6 +1,9 @@
 package com.sajo.user_service.account.service.query;
 
 import com.sajo.user_service.account.cache.KisTokenCacheLock;
+import com.sajo.user_service.account.cache.KisTokenLocalCache;
+import com.sajo.user_service.account.cache.KisTokenLocalCacheConfig;
+import com.sajo.user_service.account.cache.KisTokenRemoteCache;
 import com.sajo.user_service.account.client.kis.KisOAuthClient;
 import com.sajo.user_service.account.client.kis.dto.response.KisAccessTokenResponse;
 import com.sajo.user_service.account.client.kis.dto.response.KisApprovalKeyResponse;
@@ -36,7 +39,8 @@ import static org.mockito.Mockito.verify;
 @Testcontainers
 @EnabledIfDockerAvailable
 @SpringBootTest(classes = {
-        KisTokenCacheQueryService.class, KisTokenCacheLock.class, DataRedisAutoConfiguration.class})
+        KisTokenCacheQueryService.class, KisTokenRemoteCache.class, KisTokenLocalCache.class,
+        KisTokenCacheLock.class, KisTokenLocalCacheConfig.class, DataRedisAutoConfiguration.class})
 @DisplayName("KIS 토큰 캐시 - 실제 Redis 통합 테스트")
 class KisTokenCacheQueryServiceCacheTest {
 
@@ -55,16 +59,17 @@ class KisTokenCacheQueryServiceCacheTest {
     private KisTokenLogCommandService kisTokenLogCommandService;
 
     @Test
-    @DisplayName("같은 userId로 접근토큰을 두 번 조회하면 KIS는 한 번만 호출되고 캐시된 값을 그대로 반환한다")
-    void getAccessTokenIsCachedPerUserId() {
+    @DisplayName("같은 accountId로 접근토큰을 두 번 조회하면 KIS는 한 번만 호출되고 캐시된 값을 그대로 반환한다")
+    void getAccessTokenIsCachedPerAccountId() {
         // given
         UUID userId = UUID.randomUUID();
+        UUID accountId = UUID.randomUUID();
         given(kisOAuthClient.getAccessToken("app-key", "secret-key", AccountType.REAL))
                 .willReturn(new KisAccessTokenResponse("issued-token", "Bearer", 86400, "2026-01-01 00:00:00"));
 
         // when
-        String first = kisTokenCacheQueryService.getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL);
-        String second = kisTokenCacheQueryService.getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL);
+        String first = kisTokenCacheQueryService.getAccessToken(userId, accountId, "app-key", "secret-key", AccountType.REAL);
+        String second = kisTokenCacheQueryService.getAccessToken(userId, accountId, "app-key", "secret-key", AccountType.REAL);
 
         // then
         assertThat(second).isEqualTo(first);
@@ -72,16 +77,17 @@ class KisTokenCacheQueryServiceCacheTest {
     }
 
     @Test
-    @DisplayName("같은 userId로 접속키를 두 번 조회하면 KIS는 한 번만 호출되고 캐시된 값을 그대로 반환한다")
-    void getApprovalKeyIsCachedPerUserId() {
+    @DisplayName("같은 accountId로 접속키를 두 번 조회하면 KIS는 한 번만 호출되고 캐시된 값을 그대로 반환한다")
+    void getApprovalKeyIsCachedPerAccountId() {
         // given
         UUID userId = UUID.randomUUID();
+        UUID accountId = UUID.randomUUID();
         given(kisOAuthClient.getApprovalKey("app-key", "secret-key", AccountType.REAL))
                 .willReturn(new KisApprovalKeyResponse("issued-approval-key"));
 
         // when
-        String first = kisTokenCacheQueryService.getApprovalKey(userId, null, "app-key", "secret-key", AccountType.REAL);
-        String second = kisTokenCacheQueryService.getApprovalKey(userId, null, "app-key", "secret-key", AccountType.REAL);
+        String first = kisTokenCacheQueryService.getApprovalKey(userId, accountId, "app-key", "secret-key", AccountType.REAL);
+        String second = kisTokenCacheQueryService.getApprovalKey(userId, accountId, "app-key", "secret-key", AccountType.REAL);
 
         // then
         assertThat(second).isEqualTo(first);
@@ -93,14 +99,15 @@ class KisTokenCacheQueryServiceCacheTest {
     void accessTokenAndApprovalKeyCachesAreIndependent() {
         // given
         UUID userId = UUID.randomUUID();
+        UUID accountId = UUID.randomUUID();
         given(kisOAuthClient.getAccessToken("app-key", "secret-key", AccountType.REAL))
                 .willReturn(new KisAccessTokenResponse("issued-token", "Bearer", 86400, "2026-01-01 00:00:00"));
         given(kisOAuthClient.getApprovalKey("app-key", "secret-key", AccountType.REAL))
                 .willReturn(new KisApprovalKeyResponse("issued-approval-key"));
 
         // when
-        String accessToken = kisTokenCacheQueryService.getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL);
-        String approvalKey = kisTokenCacheQueryService.getApprovalKey(userId, null, "app-key", "secret-key", AccountType.REAL);
+        String accessToken = kisTokenCacheQueryService.getAccessToken(userId, accountId, "app-key", "secret-key", AccountType.REAL);
+        String approvalKey = kisTokenCacheQueryService.getApprovalKey(userId, accountId, "app-key", "secret-key", AccountType.REAL);
 
         // then
         assertThat(accessToken).isEqualTo("issued-token");
@@ -110,11 +117,30 @@ class KisTokenCacheQueryServiceCacheTest {
     }
 
     @Test
-    @DisplayName("같은 userId에 대해 동시에 여러 요청이 몰려도 캐시 미스 시 KIS는 딱 한 번만 호출된다")
-    void getAccessToken_concurrentRequestsForSameUser_callsKisOnlyOnce() throws InterruptedException {
+    @DisplayName("서로 다른 accountId면 같은 userId라도 캐시가 섞이지 않고 각자 KIS를 호출한다")
+    void differentAccountIds_doNotShareCacheEvenWithSameUserId() {
+        // given - 계좌 삭제 후 재연동 시나리오와 동일한 조건(같은 userId, 다른 accountId)
+        UUID userId = UUID.randomUUID();
+        UUID firstAccountId = UUID.randomUUID();
+        UUID secondAccountId = UUID.randomUUID();
+        given(kisOAuthClient.getAccessToken("app-key", "secret-key", AccountType.REAL))
+                .willReturn(new KisAccessTokenResponse("issued-token", "Bearer", 86400, "2026-01-01 00:00:00"));
+
+        // when
+        kisTokenCacheQueryService.getAccessToken(userId, firstAccountId, "app-key", "secret-key", AccountType.REAL);
+        kisTokenCacheQueryService.getAccessToken(userId, secondAccountId, "app-key", "secret-key", AccountType.REAL);
+
+        // then
+        verify(kisOAuthClient, times(2)).getAccessToken("app-key", "secret-key", AccountType.REAL);
+    }
+
+    @Test
+    @DisplayName("같은 accountId에 대해 동시에 여러 요청이 몰려도 캐시 미스 시 KIS는 딱 한 번만 호출된다")
+    void getAccessToken_concurrentRequestsForSameAccount_callsKisOnlyOnce() throws InterruptedException {
         // given - KIS 호출이 순간적으로 끝나지 않게 살짝 지연을 줘서, 나머지 스레드들이 실제로
         // 락 대기(재확인 폴링) 경로를 타도록 만든다
         UUID userId = UUID.randomUUID();
+        UUID accountId = UUID.randomUUID();
         given(kisOAuthClient.getAccessToken("app-key", "secret-key", AccountType.REAL))
                 .willAnswer(invocation -> {
                     Thread.sleep(200);
@@ -136,7 +162,7 @@ class KisTokenCacheQueryServiceCacheTest {
                 try {
                     startLatch.await();
                     results.add(kisTokenCacheQueryService.getAccessToken(
-                            userId, null, "app-key", "secret-key", AccountType.REAL));
+                            userId, accountId, "app-key", "secret-key", AccountType.REAL));
                 } catch (Throwable t) {
                     failures.add(t);
                 } finally {
