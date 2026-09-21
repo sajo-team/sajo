@@ -4,6 +4,9 @@ import java.math.BigDecimal;
 
 public record BacktestExecutionResult(
         BigDecimal totalReturnRate,
-        Integer tradeCount
+        BigDecimal mdd,
+        BigDecimal winRate,
+        Integer tradeCount,
+        Integer maxConsecutiveLosses
 ) {
 }
