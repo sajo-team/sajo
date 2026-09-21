@@ -1,5 +1,6 @@
 package com.sajo.market_service.strategy.event;
 
+import com.sajo.market_service.market.config.MarketWebSocketProperties;
 import com.sajo.market_service.market.websocket.KisWebSocketClient;
 import com.sajo.market_service.strategy.repository.query.StrategyQueryRepository;
 import com.sajo.market_service.strategy.runner.StrategySubscriptionInitializer;
@@ -62,6 +63,13 @@ class StrategyWebSocketConditionalBeanTest {
         @Bean
         StrategyQueryRepository strategyQueryRepository() {
             return Mockito.mock(StrategyQueryRepository.class);
+        }
+
+        @Bean
+        MarketWebSocketProperties marketWebSocketProperties() {
+            return new MarketWebSocketProperties(
+                    false, null, null, null, null, 2.0, java.util.List.of(), null, 0
+            );
         }
     }
 }
