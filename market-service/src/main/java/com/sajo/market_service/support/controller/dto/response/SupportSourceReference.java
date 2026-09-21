@@ -1,4 +1,4 @@
-package com.sajo.market_service.support.dto.response;
+package com.sajo.market_service.support.controller.dto.response;
 
 /**
  * 답변 생성에 실제로 참조된 문서 조각(청크) 하나를 가리킨다.

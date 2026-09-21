@@ -1,4 +1,4 @@
-package com.sajo.market_service.support.dto.response;
+package com.sajo.market_service.support.controller.dto.response;
 
 import java.util.List;
 

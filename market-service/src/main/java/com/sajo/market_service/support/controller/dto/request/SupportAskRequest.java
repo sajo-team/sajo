@@ -1,4 +1,4 @@
-package com.sajo.market_service.support.dto.request;
+package com.sajo.market_service.support.controller.dto.request;
 
 import jakarta.validation.constraints.NotBlank;
 

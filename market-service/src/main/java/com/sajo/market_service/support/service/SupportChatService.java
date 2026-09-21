@@ -2,8 +2,8 @@ package com.sajo.market_service.support.service;
 
 import com.sajo.common.exception.BusinessException;
 import com.sajo.market_service.support.config.SupportRagProperties;
-import com.sajo.market_service.support.dto.response.SupportAskResponse;
-import com.sajo.market_service.support.dto.response.SupportSourceReference;
+import com.sajo.market_service.support.controller.dto.response.SupportAskResponse;
+import com.sajo.market_service.support.controller.dto.response.SupportSourceReference;
 import com.sajo.market_service.support.exception.SupportErrorCode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -11,6 +11,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -18,6 +19,7 @@ import java.util.List;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@ConditionalOnProperty(prefix = "sajo.support.rag", name = "enabled", havingValue = "true")
 public class SupportChatService {
 
     private static final int SOURCE_EXCERPT_MAX_LENGTH = 200;
@@ -48,6 +50,9 @@ public class SupportChatService {
         );
 
         if (relevantDocuments.isEmpty()) {
+            // similarityThreshold를 두지 않아 벡터 저장소에 청크가 하나라도 있으면 항상
+            // topK개가 반환된다. 즉 이 분기는 "질문과 무관함"이 아니라 SupportDocumentIngestionRunner의
+            // 문서 적재 실패(벡터 저장소가 비어 있음)를 의미한다. 자세한 설명은 SupportErrorCode 참고.
             throw new BusinessException(SupportErrorCode.NO_RELEVANT_DOCUMENT_FOUND);
         }
 

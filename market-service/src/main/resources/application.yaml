@@ -97,7 +97,10 @@ market:
 sajo:
   support:
     rag:
-      # RAG 기반 고객 응대 챗봇(#도전 과제)이 벡터화할 도메인 문서 및 검색 파라미터
+      # RAG 기반 고객 응대 챗봇(#도전 과제). OpenAI 연동 실패 시에도 market-service 전체가
+      # 죽지 않도록 @ConditionalOnProperty로 켜고 끌 수 있게 했다. 기본값 true는 기존 동작을
+      # 유지하기 위함이며, 장애 시 SUPPORT_RAG_ENABLED=false로 즉시 비활성화할 수 있다.
+      enabled: ${SUPPORT_RAG_ENABLED:true}
       document-path: classpath:support-docs/market-service-overview.md
       top-k: ${SUPPORT_RAG_TOP_K:3}
 

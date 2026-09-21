@@ -2,11 +2,12 @@ package com.sajo.market_service.support.controller;
 
 import com.sajo.common.code.GeneralResponseCode;
 import com.sajo.common.response.GeneralResponse;
-import com.sajo.market_service.support.dto.request.SupportAskRequest;
-import com.sajo.market_service.support.dto.response.SupportAskResponse;
+import com.sajo.market_service.support.controller.dto.request.SupportAskRequest;
+import com.sajo.market_service.support.controller.dto.response.SupportAskResponse;
 import com.sajo.market_service.support.service.SupportChatService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -21,6 +22,7 @@ import org.springframework.web.bind.annotation.RestController;
 @Validated
 @RequiredArgsConstructor
 @RequestMapping("/api/v1/support")
+@ConditionalOnProperty(prefix = "sajo.support.rag", name = "enabled", havingValue = "true")
 public class SupportChatController {
 
     private final SupportChatService supportChatService;

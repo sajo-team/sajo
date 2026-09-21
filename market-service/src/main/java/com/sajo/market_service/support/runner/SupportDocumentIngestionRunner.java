@@ -7,6 +7,7 @@ import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Component;
@@ -37,6 +38,7 @@ import java.util.regex.Pattern;
 @Slf4j
 @Component
 @RequiredArgsConstructor
+@ConditionalOnProperty(prefix = "sajo.support.rag", name = "enabled", havingValue = "true")
 public class SupportDocumentIngestionRunner implements ApplicationRunner {
 
     private static final Pattern SECTION_HEADING_PATTERN = Pattern.compile("(?m)^##\\s+(.+)$");
@@ -45,19 +47,32 @@ public class SupportDocumentIngestionRunner implements ApplicationRunner {
     private final VectorStore vectorStore;
     private final SupportRagProperties properties;
 
+    /**
+     * RAG는 도전 과제 성격의 부가 기능이라, 문서 로딩/임베딩 실패가 market-service 전체의
+     * 기동 실패로 이어져서는 안 된다({@link ApplicationRunner#run}에서 예외가 전파되면 Spring
+     * 컨텍스트 초기화 자체가 중단된다). 그래서 여기서는 예외를 삼키고 로그만 남긴다 — 그 결과
+     * 벡터 저장소가 빈 상태로 남으면 {@code SupportChatService}가 매 질문마다
+     * {@code NO_RELEVANT_DOCUMENT_FOUND}를 반환하게 되지만, 이는 애플리케이션 전체 다운보다는
+     * 훨씬 낫다.
+     */
     @Override
-    public void run(ApplicationArguments args) throws IOException {
-        Resource resource = resourceLoader.getResource(properties.documentPath());
-        String markdown;
-        try (InputStream inputStream = resource.getInputStream()) {
-            markdown = StreamUtils.copyToString(inputStream, StandardCharsets.UTF_8);
+    public void run(ApplicationArguments args) {
+        try {
+            Resource resource = resourceLoader.getResource(properties.documentPath());
+            String markdown;
+            try (InputStream inputStream = resource.getInputStream()) {
+                markdown = StreamUtils.copyToString(inputStream, StandardCharsets.UTF_8);
+            }
+
+            String documentTitle = extractDocumentTitle(markdown, resource.getFilename());
+            List<Document> chunks = splitIntoSectionChunks(markdown, documentTitle);
+
+            vectorStore.add(chunks);
+            log.info("RAG 도메인 문서 적재 완료. documentTitle={}, chunkCount={}", documentTitle, chunks.size());
+        } catch (IOException | RuntimeException exception) {
+            log.error("RAG 도메인 문서 적재에 실패했습니다. 벡터 저장소가 비어 있는 상태로 기동을 계속합니다. "
+                    + "documentPath={}", properties.documentPath(), exception);
         }
-
-        String documentTitle = extractDocumentTitle(markdown, resource.getFilename());
-        List<Document> chunks = splitIntoSectionChunks(markdown, documentTitle);
-
-        vectorStore.add(chunks);
-        log.info("RAG 도메인 문서 적재 완료. documentTitle={}, chunkCount={}", documentTitle, chunks.size());
     }
 
     private String extractDocumentTitle(String markdown, String fallbackFilename) {

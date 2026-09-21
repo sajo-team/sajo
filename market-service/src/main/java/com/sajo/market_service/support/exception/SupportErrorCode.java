@@ -15,6 +15,15 @@ public enum SupportErrorCode implements ErrorCode {
             "질문 내용은 비어 있을 수 없습니다"
     ),
 
+    /**
+     * 주의: 이름과 달리 "질문이 문서 내용과 무관함"을 감지해서 던지는 예외가 아니다.
+     * {@code SearchRequest}에 similarityThreshold를 두지 않아 유사도 점수와 무관하게 항상
+     * topK개의 문서를 반환하므로, 벡터 저장소에 청크가 하나라도 있으면 이 예외는 절대 발생하지
+     * 않는다. 실제로는 {@code SupportDocumentIngestionRunner}의 문서 적재가 실패해 벡터 저장소가
+     * 비어 있는 경우에만 발생한다("질문과 무관한 질문"에 대한 응답은 LLM 시스템 프롬프트가
+     * "문서에서 관련 내용을 찾지 못했습니다"로 자연어 처리한다). 실제 유사도 기반 무관 질문 감지가
+     * 필요해지면 similarityThreshold를 도입하고 그때 이 예외의 트리거 조건을 다시 검토해야 한다.
+     */
     NO_RELEVANT_DOCUMENT_FOUND(
             HttpStatus.NOT_FOUND,
             "SUPPORT_0002",
