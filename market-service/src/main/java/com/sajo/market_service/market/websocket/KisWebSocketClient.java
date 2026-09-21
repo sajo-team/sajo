@@ -200,6 +200,13 @@ public class KisWebSocketClient {
      *
      * <p>subscribe()와 동일하게 {@code sendLock}으로 로컬 상태 갱신과 전송을 함께 직렬화해,
      * 같은 종목에 대한 subscribe()/unsubscribe() 동시 호출 시 순서 역전을 방지한다.</p>
+     *
+     * <p><b>알려진 한계:</b> 로컬 상태(subscribedStockCodes에서 제거)는 먼저 반영되고, 그 이후
+     * 실제 전송(sendUnsubscribeFrame)이 IOException으로 실패해도 로컬 상태는 롤백하지 않는다.
+     * 세션이 열려 있는 채로 전송만 일시적으로 실패한 경우, KIS 서버 측 구독은 계속 살아있는데
+     * subscribedStockCodes()를 사용하는 MarketRealtimePriceScheduler는 이 종목을 더 이상 스냅샷
+     * 대상으로 보지 않게 되어 스냅샷 적재가 조용히 누락될 수 있다. 다음 재연결 시 resubscribeAll()이
+     * 로컬 set 기준으로 다시 구독을 맞추므로 그 시점에는 정합성이 회복된다.</p>
      */
     public void unsubscribe(String stockCode) {
         if (stockCode == null || stockCode.isBlank()) {
@@ -260,11 +267,20 @@ public class KisWebSocketClient {
         return UUID.fromString(configuredUserId.trim());
     }
 
+    /**
+     * 재연결 시 구독 목록 전체를 다시 구독한다.
+     *
+     * <p>루프 전체를 sendLock으로 묶지 않는다. 종목이 많을 때 재연결 직후 subscribe()/unsubscribe()
+     * (예: 전략 비활성화로 인한 긴급 해제)가 이 루프가 끝날 때까지 블로킹되는 것을 피하기 위해서다.
+     * sendSubscribeFrame()이 프레임 전송 자체는 여전히 sendLock으로 직렬화하므로, 동시에 실행 중인
+     * subscribe()/unsubscribe()와 이 루프의 항목이 뒤섞여 전송될 수는 있지만(예: 재연결 도중 다른
+     * 스레드가 특정 종목을 unsubscribe()해서 로컬 set과 이 루프가 참조하는 스냅샷이 일부 어긋나는
+     * 경우), 그 결과로 생기는 불일치는 다음 재연결 시 로컬 set 기준으로 다시 resubscribeAll()이
+     * 수행되며 자연히 해소된다.</p>
+     */
     private void resubscribeAll(WebSocketSession session) {
-        synchronized (sendLock) {
-            for (String stockCode : subscribedStockCodes) {
-                sendSubscribeFrame(session, stockCode);
-            }
+        for (String stockCode : subscribedStockCodes) {
+            sendSubscribeFrame(session, stockCode);
         }
     }
 
