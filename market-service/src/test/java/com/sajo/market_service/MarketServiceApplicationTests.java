@@ -12,7 +12,16 @@ import org.springframework.test.context.TestPropertySource;
 // application-test.yaml의 값보다 우선순위가 높다. 로컬 개발 환경에 SUPPORT_RAG_ENABLED=true가
 // 설정돼 있어도(.env 등) 이 컨텍스트 로딩 테스트가 OpenAI 자격 증명 없이 항상 통과해야 하므로,
 // @TestPropertySource(OS 환경변수보다 우선순위가 높음)로 명시적으로 꺼둔다.
-@TestPropertySource(properties = "sajo.support.rag.enabled=false")
+//
+// 같은 이유로 spring.ai.model.chat/embedding도 명시적으로 none으로 고정한다. 로컬 .env에
+// SPRING_AI_CHAT_MODEL=openai / SPRING_AI_EMBEDDING_MODEL=openai가 들어 있고, 그 값이
+// 쉘 환경변수로 노출돼 있으면(OS 환경변수가 application.yaml의 ${..:none} 기본값보다 우선하므로)
+// 컨텍스트 로딩 시 OpenAI 자동구성이 여전히 활성화되어 API 키 없이 빈 생성이 실패한다.
+@TestPropertySource(properties = {
+		"sajo.support.rag.enabled=false",
+		"spring.ai.model.chat=none",
+		"spring.ai.model.embedding=none"
+})
 class MarketServiceApplicationTests {
 
 	@Test
