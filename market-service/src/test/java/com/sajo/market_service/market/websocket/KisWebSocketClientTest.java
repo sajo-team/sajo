@@ -319,6 +319,16 @@ class KisWebSocketClientTest {
         }
     }
 
+    // WebSocketHandler.afterConnectionEstablished()는 checked Exception을 선언하지만, Runnable
+    // 람다(executor.submit) 안에서는 checked Exception을 그대로 던질 수 없어 unchecked로 감싼다.
+    private static void invokeAfterConnectionEstablishedUnchecked(WebSocketHandler handler, WebSocketSession session) {
+        try {
+            handler.afterConnectionEstablished(session);
+        } catch (Exception exception) {
+            throw new IllegalStateException("afterConnectionEstablished 호출 중 예외가 발생했습니다.", exception);
+        }
+    }
+
     @Test
     void concurrentResubscribeAllAndUnsubscribeForSameStockCodeNeverResendsAfterRemoval() throws Exception {
         stubSuccessfulCredentials();
@@ -351,7 +361,7 @@ class KisWebSocketClientTest {
                 ready.countDown();
                 awaitUninterruptibly(start);
                 for (int i = 0; i < iterationsPerThread; i++) {
-                    handler.afterConnectionEstablished(session);
+                    invokeAfterConnectionEstablishedUnchecked(handler, session);
                 }
             });
             ready.await();
