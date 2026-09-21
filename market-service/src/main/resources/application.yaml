@@ -97,10 +97,11 @@ market:
 sajo:
   support:
     rag:
-      # RAG 기반 고객 응대 챗봇(#도전 과제). OpenAI 연동 실패 시에도 market-service 전체가
-      # 죽지 않도록 @ConditionalOnProperty로 켜고 끌 수 있게 했다. 기본값 true는 기존 동작을
-      # 유지하기 위함이며, 장애 시 SUPPORT_RAG_ENABLED=false로 즉시 비활성화할 수 있다.
-      enabled: ${SUPPORT_RAG_ENABLED:true}
+      # RAG 기반 고객 응대 챗봇(#도전 과제). market.websocket.enabled 등 이 프로젝트의 다른
+      # 외부 연동 플래그와 동일하게 기본값은 false다 - OPENAI_API_KEY 없이 전체 테스트/컨텍스트
+      # 로딩이 항상 가능해야 하고(테스트 프로필에도 OpenAI 자격 증명을 요구하지 않는다),
+      # 이 기능을 실제로 쓰려면 .env에서 SUPPORT_RAG_ENABLED=true로 명시적으로 켜야 한다.
+      enabled: ${SUPPORT_RAG_ENABLED:false}
       document-path: classpath:support-docs/market-service-overview.md
       top-k: ${SUPPORT_RAG_TOP_K:3}
 

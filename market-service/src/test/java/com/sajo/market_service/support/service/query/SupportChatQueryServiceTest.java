@@ -8,6 +8,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentMatchers;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.document.Document;
@@ -75,8 +76,9 @@ class SupportChatQueryServiceTest {
         Document document = new Document("본문", Map.of("documentTitle", "개요", "sectionTitle", "개요"));
         when(vectorStore.similaritySearch(any(org.springframework.ai.vectorstore.SearchRequest.class)))
                 .thenReturn(List.of(document));
-        Consumer<ChatClient.PromptUserSpec> anyUserPrompt = any();
-        when(chatClient.prompt().system(anyString()).user(anyUserPrompt).call().content())
+        when(chatClient.prompt().system(anyString())
+                .user(ArgumentMatchers.<Consumer<ChatClient.PromptUserSpec>>any())
+                .call().content())
                 .thenThrow(new RuntimeException("OpenAI chat completion timeout"));
 
         assertThatThrownBy(() -> service.ask(USER_ID, "현재가는 어떻게 조회하나요?"))
@@ -92,8 +94,9 @@ class SupportChatQueryServiceTest {
         Document document = new Document(longBody, Map.of("documentTitle", "개요", "sectionTitle", "1. 소개"));
         when(vectorStore.similaritySearch(any(org.springframework.ai.vectorstore.SearchRequest.class)))
                 .thenReturn(List.of(document));
-        Consumer<ChatClient.PromptUserSpec> anyUserPrompt = any();
-        when(chatClient.prompt().system(anyString()).user(anyUserPrompt).call().content())
+        when(chatClient.prompt().system(anyString())
+                .user(ArgumentMatchers.<Consumer<ChatClient.PromptUserSpec>>any())
+                .call().content())
                 .thenReturn("답변입니다.");
 
         SupportAskResponse response = service.ask(USER_ID, "질문");
