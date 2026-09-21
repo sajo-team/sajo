@@ -344,6 +344,8 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       INTERNAL_API_SECRET: ${INTERNAL_API_SECRET}
+      # RAG 기반 고객 응대 챗봇(도전 과제)이 사용하는 OpenAI API 키
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
     ports:
       - "127.0.0.1:8082:8082"
     networks:

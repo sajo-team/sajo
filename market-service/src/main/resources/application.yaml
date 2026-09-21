@@ -46,6 +46,10 @@ spring:
     consumer:
       group-id: market-consumer-group
 
+  ai:
+    openai:
+      api-key: ${OPENAI_API_KEY:}
+
 management:
   endpoints:
     web:
@@ -84,6 +88,12 @@ market:
     realtime-price-snapshot-cron: "${MARKET_WEBSOCKET_REALTIME_PRICE_SNAPSHOT_CRON:0 * * * * *}"
 
 sajo:
+  support:
+    rag:
+      # RAG 기반 고객 응대 챗봇(#도전 과제)이 벡터화할 도메인 문서 및 검색 파라미터
+      document-path: classpath:support-docs/market-service-overview.md
+      top-k: ${SUPPORT_RAG_TOP_K:3}
+
   scheduler:
     enabled: ${MARKET_SCHEDULER_ENABLED:false}
     system-user-id: ${MARKET_SCHEDULER_SYSTEM_USER_ID:}
