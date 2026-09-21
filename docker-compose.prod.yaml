@@ -10,6 +10,7 @@ volumes:
   prometheus-data:
   grafana-data:
   loki-data:
+  alloy-data:
 
 services:
   postgres:
@@ -224,6 +225,21 @@ services:
       - sajo-net
     restart: unless-stopped
 
+  docker-socket-proxy:
+    image: tecnativa/docker-socket-proxy:latest
+    container_name: sajo-docker-socket-proxy
+    environment:
+      # 컨테이너 목록/로그 조회만 허용 (읽기 전용). 컨테이너 생성/실행/삭제 등
+      # 쓰기성 API(POST)는 전부 차단해서, alloy가 뚫려도 도커 소켓으로 호스트를
+      # 장악하는 경로를 막는다.
+      CONTAINERS: 1
+      POST: 0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - sajo-net
+    restart: unless-stopped
+
   alloy:
     image: grafana/alloy:latest
     container_name: sajo-alloy
@@ -234,13 +250,15 @@ services:
       - /etc/alloy/config.alloy
     volumes:
       - ./monitoring/alloy-config.alloy:/etc/alloy/config.alloy:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloy-data:/var/lib/alloy/data
     ports:
       - "127.0.0.1:12345:12345"
     networks:
       - sajo-net
     depends_on:
       loki:
+        condition: service_started
+      docker-socket-proxy:
         condition: service_started
     restart: unless-stopped
 
