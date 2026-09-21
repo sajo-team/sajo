@@ -320,6 +320,63 @@ class KisWebSocketClientTest {
     }
 
     @Test
+    void concurrentResubscribeAllAndUnsubscribeForSameStockCodeNeverResendsAfterRemoval() throws Exception {
+        stubSuccessfulCredentials();
+        WebSocketSession session = openSession();
+        given(webSocketClient.execute(any(WebSocketHandler.class), anyString()))
+                .willReturn(CompletableFuture.completedFuture(session));
+
+        // 최초 target-stock-codes로 "005930"을 구독한 상태에서 시작한다.
+        KisWebSocketClient client = client(List.of("005930"));
+        client.connect();
+        WebSocketHandler handler = capturedHandler();
+        handler.afterConnectionEstablished(session);
+
+        // resubscribeAll()은 private이라 직접 호출할 수 없으므로, 같은 코드 경로를 타는
+        // afterConnectionEstablished()를 재연결 콜백처럼 반복 호출해 unsubscribe()와 경합시킨다.
+        // resubscribeAll()이 "구독 여부 재확인 + 전송"을 sendLock으로 원자화하지 않으면, 이미
+        // unsubscribe()가 로컬 set에서 제거하고 해제 프레임을 보낸 뒤에도 이 루프가 stale한 목록을
+        // 근거로 구독 프레임을 다시 보내 KIS 서버 측 상태를 되살릴 수 있다.
+        int iterationsPerThread = 200;
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<?> unsubscribing = executor.submit(() -> {
+                ready.countDown();
+                awaitUninterruptibly(start);
+                client.unsubscribe("005930");
+            });
+            Future<?> reconnecting = executor.submit(() -> {
+                ready.countDown();
+                awaitUninterruptibly(start);
+                for (int i = 0; i < iterationsPerThread; i++) {
+                    handler.afterConnectionEstablished(session);
+                }
+            });
+            ready.await();
+            start.countDown();
+            unsubscribing.get(5, TimeUnit.SECONDS);
+            reconnecting.get(5, TimeUnit.SECONDS);
+        } finally {
+            executor.shutdownNow();
+        }
+
+        // unsubscribe()가 완료된 이후에 트리거된 resubscribeAll()은 모두 이 종목을 건너뛰어야 하므로,
+        // 최종적으로는 로컬 상태와 마지막으로 실제 전송된 프레임이 항상 일치해야 한다.
+        assertThat(client.subscribedStockCodes()).isEmpty();
+
+        ArgumentCaptor<TextMessage> messageCaptor = ArgumentCaptor.forClass(TextMessage.class);
+        verify(session, atLeastOnce()).sendMessage(messageCaptor.capture());
+        List<TextMessage> sentMessages = messageCaptor.getAllValues();
+        String lastSentPayload = sentMessages.get(sentMessages.size() - 1).getPayload();
+
+        // unsubscribe()가 로컬 set에서 제거를 완료한 뒤에는 resubscribeAll()이 이 종목을 다시
+        // 전송하지 않으므로, 마지막으로 전송된 프레임은 반드시 해제(tr_type=2) 프레임이어야 한다.
+        assertThat(lastSentPayload).contains("\"tr_type\":\"2\"");
+    }
+
+    @Test
     void handshakeCallThrowingSynchronouslySchedulesReconnect() {
         stubSuccessfulCredentials();
         given(webSocketClient.execute(any(WebSocketHandler.class), anyString()))

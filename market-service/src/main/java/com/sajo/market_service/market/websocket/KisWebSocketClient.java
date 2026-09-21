@@ -270,17 +270,25 @@ public class KisWebSocketClient {
     /**
      * 재연결 시 구독 목록 전체를 다시 구독한다.
      *
-     * <p>루프 전체를 sendLock으로 묶지 않는다. 종목이 많을 때 재연결 직후 subscribe()/unsubscribe()
-     * (예: 전략 비활성화로 인한 긴급 해제)가 이 루프가 끝날 때까지 블로킹되는 것을 피하기 위해서다.
-     * sendSubscribeFrame()이 프레임 전송 자체는 여전히 sendLock으로 직렬화하므로, 동시에 실행 중인
-     * subscribe()/unsubscribe()와 이 루프의 항목이 뒤섞여 전송될 수는 있지만(예: 재연결 도중 다른
-     * 스레드가 특정 종목을 unsubscribe()해서 로컬 set과 이 루프가 참조하는 스냅샷이 일부 어긋나는
-     * 경우), 그 결과로 생기는 불일치는 다음 재연결 시 로컬 set 기준으로 다시 resubscribeAll()이
-     * 수행되며 자연히 해소된다.</p>
+     * <p>루프 전체가 아니라 종목 하나당 하나의 sendLock 블록으로 처리한다. 루프 전체를 하나의
+     * sendLock으로 묶으면 종목이 많을 때 재연결 직후 subscribe()/unsubscribe()(예: 전략 비활성화로
+     * 인한 긴급 해제)가 이 루프가 끝날 때까지 블로킹된다.</p>
+     *
+     * <p>다만 "아직 구독 중인지 재확인"과 "전송"을 같은 sendLock 블록 안에서 함께 수행한다. 그렇지
+     * 않으면 이 루프가 어떤 종목을 순회하는 도중 다른 스레드가 그 종목을 unsubscribe()로 로컬
+     * set에서 제거하고 해제 프레임까지 먼저 보낸 경우에도, 이 루프는 이미 읽어 둔(제거되기 전)
+     * 종목을 그대로 재구독해버려 KIS 서버에는 구독이 되살아나는데 로컬 subscribedStockCodes에는
+     * 없는 상태가 될 수 있다. 전송 직전에 sendLock 안에서 다시 한 번 구독 여부를 확인하면,
+     * unsubscribe()의 "제거+전송" 원자 블록과 순서가 뒤섞이더라도 이미 제거된 종목을 재전송하지
+     * 않는다.</p>
      */
     private void resubscribeAll(WebSocketSession session) {
         for (String stockCode : subscribedStockCodes) {
-            sendSubscribeFrame(session, stockCode);
+            synchronized (sendLock) {
+                if (subscribedStockCodes.contains(stockCode)) {
+                    sendSubscribeFrame(session, stockCode);
+                }
+            }
         }
     }
 
