@@ -9,6 +9,7 @@ volumes:
   redis-data:
   prometheus-data:
   grafana-data:
+  loki-data:
 
 services:
   postgres:
@@ -201,6 +202,48 @@ services:
       - sajo-net
     restart: unless-stopped
 
+  zipkin:
+    image: openzipkin/zipkin:latest
+    container_name: sajo-zipkin
+    ports:
+      - "127.0.0.1:9411:9411"
+    networks:
+      - sajo-net
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:latest
+    container_name: sajo-loki
+    command: ["-config.file=/etc/loki/loki-config.yaml"]
+    volumes:
+      - ./monitoring/loki-config.yaml:/etc/loki/loki-config.yaml:ro
+      - loki-data:/loki
+    ports:
+      - "127.0.0.1:3100:3100"
+    networks:
+      - sajo-net
+    restart: unless-stopped
+
+  alloy:
+    image: grafana/alloy:latest
+    container_name: sajo-alloy
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    volumes:
+      - ./monitoring/alloy-config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      - "127.0.0.1:12345:12345"
+    networks:
+      - sajo-net
+    depends_on:
+      loki:
+        condition: service_started
+    restart: unless-stopped
+
   grafana:
     image: grafana/grafana:latest
     container_name: sajo-grafana
@@ -209,10 +252,14 @@ services:
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
     volumes:
       - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
     ports:
       - "127.0.0.1:3000:3000"
     networks:
       - sajo-net
+    depends_on:
+      loki:
+        condition: service_started
     restart: unless-stopped
 
   discovery-service:
