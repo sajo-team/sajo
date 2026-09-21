@@ -34,6 +34,17 @@ public enum SupportErrorCode implements ErrorCode {
             HttpStatus.BAD_GATEWAY,
             "SUPPORT_0003",
             "챗봇 응답 생성에 실패했습니다"
+    ),
+
+    /**
+     * vectorStore.similaritySearch() 호출(임베딩 API 호출 포함)이 실패한 경우. LLM 호출 실패와
+     * 마찬가지로 외부 AI 서비스 호출 실패이므로 동일하게 BAD_GATEWAY로 매핑해 GlobalExceptionHandler의
+     * 일반 500(INTERNAL_SERVER_ERROR)으로 새어나가지 않도록 한다.
+     */
+    DOCUMENT_SEARCH_FAILED(
+            HttpStatus.BAD_GATEWAY,
+            "SUPPORT_0004",
+            "관련 문서 검색에 실패했습니다"
     );
 
     private final HttpStatus status;

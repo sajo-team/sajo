@@ -1,4 +1,4 @@
-package com.sajo.market_service.support.service;
+package com.sajo.market_service.support.service.query;
 
 import com.sajo.common.exception.BusinessException;
 import com.sajo.market_service.support.config.SupportRagProperties;
@@ -15,12 +15,13 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.UUID;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 @ConditionalOnProperty(prefix = "sajo.support.rag", name = "enabled", havingValue = "true")
-public class SupportChatService {
+public class SupportChatQueryService {
 
     private static final int SOURCE_EXCERPT_MAX_LENGTH = 200;
 
@@ -41,13 +42,13 @@ public class SupportChatService {
     private final ChatClient chatClient;
     private final SupportRagProperties properties;
 
-    public SupportAskResponse ask(String question) {
-        List<Document> relevantDocuments = vectorStore.similaritySearch(
-                SearchRequest.builder()
-                        .query(question)
-                        .topK(properties.topK())
-                        .build()
-        );
+    public SupportAskResponse ask(UUID userId, String question) {
+        // 호출마다 OpenAI 비용이 발생하는 API라, 누가 얼마나 호출했는지 추적할 수 있도록
+        // userId를 감사 로그로 남긴다(질문 원문은 개인정보/민감 정보가 섞일 수 있어 로그에는
+        // 남기지 않는다).
+        log.info("RAG 챗봇 질의 요청. userId={}", userId);
+
+        List<Document> relevantDocuments = searchRelevantDocuments(question);
 
         if (relevantDocuments.isEmpty()) {
             // similarityThreshold를 두지 않아 벡터 저장소에 청크가 하나라도 있으면 항상
@@ -61,6 +62,23 @@ public class SupportChatService {
         List<SupportSourceReference> sources = toSourceReferences(relevantDocuments);
 
         return new SupportAskResponse(answer, sources);
+    }
+
+    private List<Document> searchRelevantDocuments(String question) {
+        try {
+            return vectorStore.similaritySearch(
+                    SearchRequest.builder()
+                            .query(question)
+                            .topK(properties.topK())
+                            .build()
+            );
+        } catch (RuntimeException exception) {
+            // similaritySearch()는 내부적으로 임베딩 API(OpenAI)를 호출한다. LLM 호출 실패와
+            // 동일한 성격의 외부 AI 호출 실패이므로, 여기서도 잡아서 도메인 예외로 변환해야
+            // GlobalExceptionHandler의 일반 500(INTERNAL_SERVER_ERROR)으로 새어나가지 않는다.
+            log.warn("관련 문서 검색에 실패했습니다. question={}", question, exception);
+            throw new BusinessException(SupportErrorCode.DOCUMENT_SEARCH_FAILED);
+        }
     }
 
     private String buildContext(List<Document> documents) {
