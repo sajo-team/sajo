@@ -36,11 +36,9 @@ public class StrategyEvaluationService {
     private static final Duration PROCESSING_TTL = Duration.ofMinutes(5);
     private static final Duration COMPLETED_TTL = Duration.ofDays(1);
     private static final Duration SIGNAL_STATE_TTL = Duration.ofDays(7);
-    /**
-     * 선점(PROCESSING) 상태의 TTL. {@link TradingSignalProducer}가 최대 10초까지 블로킹하므로 정상
-     * 처리 시간을 넉넉히 덮으면서도, 애플리케이션이 완료/해제 없이 죽었을 때 상태가 영구히 잠기지
-     * 않도록 짧게 잡는다.
-     */
+
+//    선점(PROCESSING) 상태의 TTL. {@link TradingSignalProducer}가 최대 10초까지 블로킹하므로
+//    정상 처리 시간을 넉넉히 덮으면서도, 애플리케이션이 완료/해제 없이 죽었을 때 상태가 영구히 잠기지 않도록 짧게 잡는다.
     private static final Duration SIGNAL_CLAIM_TTL = Duration.ofSeconds(30);
 
     public void evaluate(StrategyEvaluationRequest request) {
@@ -173,9 +171,9 @@ public class StrategyEvaluationService {
 
         boolean completed = signalStateStore.complete(signalStateKey, claimToken, signalType.name(), SIGNAL_STATE_TTL);
         if (!completed) {
-            // Signal은 이미 Kafka로 발행됐지만 로컬 상태 반영에는 실패한 상황(PROCESSING TTL 만료 후
-            // 다른 요청이 재선점한 경우 등)이라 중복 발행 가능성이 남는다. Redis-Kafka 간 원자성은
-            // 별도 문제이며, 완전한 해결은 Outbox/멱등 Producer-Consumer 도입이 필요하다(후속 과제).
+            // Signal은 이미 Kafka로 발행됐지만 로컬 상태 반영에는 실패한 상황(PROCESSING TTL 만료 후 다른 요청이 재선점한 경우 등)이라
+            // 중복 발행 가능성이 남는다. Redis-Kafka 간 원자성은 별도 문제
+            // TODO: Outbox/멱등 Producer-Consumer 도입이 필요
             log.warn("Signal 완료 처리에 실패했습니다(다른 요청이 상태를 재선점했을 수 있음). strategyId={}", strategy.getId());
         }
 
