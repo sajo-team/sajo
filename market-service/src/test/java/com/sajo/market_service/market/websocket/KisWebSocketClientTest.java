@@ -206,6 +206,54 @@ class KisWebSocketClientTest {
     }
 
     @Test
+    void unsubscribeAfterConnectionEstablishedSendsUnregisterFrameAndRemovesStockCode() throws Exception {
+        stubSuccessfulCredentials();
+        WebSocketSession session = openSession();
+        given(webSocketClient.execute(any(WebSocketHandler.class), anyString()))
+                .willReturn(CompletableFuture.completedFuture(session));
+
+        KisWebSocketClient client = client(List.of("000660"));
+        client.connect();
+        capturedHandler().afterConnectionEstablished(session);
+
+        ArgumentCaptor<TextMessage> messageCaptor = ArgumentCaptor.forClass(TextMessage.class);
+
+        client.unsubscribe("000660");
+
+        // resubscribeAll()이 연결 시점에 이미 1건, unsubscribe()가 추가로 1건을 보낸다.
+        verify(session, times(2)).sendMessage(messageCaptor.capture());
+        String unsubscribePayload = messageCaptor.getAllValues().get(1).getPayload();
+        assertThat(unsubscribePayload).contains("\"tr_type\":\"2\"");
+        assertThat(client.subscribedStockCodes()).isEmpty();
+    }
+
+    @Test
+    void unsubscribeStockCodeNotCurrentlySubscribedDoesNothing() throws Exception {
+        stubSuccessfulCredentials();
+        WebSocketSession session = openSession();
+        given(webSocketClient.execute(any(WebSocketHandler.class), anyString()))
+                .willReturn(CompletableFuture.completedFuture(session));
+
+        KisWebSocketClient client = client(List.of());
+        client.connect();
+        capturedHandler().afterConnectionEstablished(session);
+
+        client.unsubscribe("999999");
+
+        verify(session, never()).sendMessage(any(TextMessage.class));
+        assertThat(client.subscribedStockCodes()).isEmpty();
+    }
+
+    @Test
+    void unsubscribeBeforeConnectionEstablishedOnlyUpdatesLocalStateWithoutSendingFrame() {
+        KisWebSocketClient client = client(List.of("005930"));
+
+        client.unsubscribe("005930");
+
+        assertThat(client.subscribedStockCodes()).isEmpty();
+    }
+
+    @Test
     void handshakeCallThrowingSynchronouslySchedulesReconnect() {
         stubSuccessfulCredentials();
         given(webSocketClient.execute(any(WebSocketHandler.class), anyString()))

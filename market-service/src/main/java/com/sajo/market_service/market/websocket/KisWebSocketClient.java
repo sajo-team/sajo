@@ -186,6 +186,22 @@ public class KisWebSocketClient {
         }
     }
 
+    /** 종목을 구독 대상에서 제거한다. 이미 연결되어 있으면 즉시 구독 해제 요청을 보낸다. */
+    public void unsubscribe(String stockCode) {
+        if (stockCode == null || stockCode.isBlank()) {
+            return;
+        }
+        boolean wasSubscribed = subscribedStockCodes.remove(stockCode);
+        if (!wasSubscribed) {
+            // 구독 중이 아니었던 종목이면 KIS에 해제 요청을 보낼 필요가 없다.
+            return;
+        }
+        WebSocketSession session = currentSession.get();
+        if (session != null && session.isOpen()) {
+            sendUnsubscribeFrame(session, stockCode);
+        }
+    }
+
     /** 구독 중인 종목 코드 스냅샷. MarketRealtimePriceScheduler가 1분 스냅샷 대상 결정에 사용한다. */
     public Set<String> subscribedStockCodes() {
         return Set.copyOf(subscribedStockCodes);
@@ -251,12 +267,36 @@ public class KisWebSocketClient {
         }
     }
 
+    /**
+     * subscribe()/unsubscribe() 모두 동일한 sendLock으로 전송을 직렬화해 sendSubscribeFrame()과
+     * 같은 세션에 대한 동시 텍스트 전송 문제를 피한다.
+     */
+    private void sendUnsubscribeFrame(WebSocketSession session, String stockCode) {
+        synchronized (sendLock) {
+            try {
+                session.sendMessage(new TextMessage(buildUnsubscribePayload(stockCode)));
+                log.info("KIS WebSocket 종목 구독 해제 요청을 보냈습니다. stockCode={}", stockCode);
+            } catch (IOException exception) {
+                log.warn("KIS WebSocket 종목 구독 해제 요청 전송에 실패했습니다. stockCode={}, exceptionType={}",
+                        stockCode, exception.getClass().getSimpleName());
+            }
+        }
+    }
+
     private String buildSubscribePayload(String stockCode) {
         try {
             String s = objectMapper.writeValueAsString(KisSubscribeRequest.of(currentApprovalKey, stockCode));
             return s;
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("KIS WebSocket 구독 메시지 직렬화에 실패했습니다.", exception);
+        }
+    }
+
+    private String buildUnsubscribePayload(String stockCode) {
+        try {
+            return objectMapper.writeValueAsString(KisSubscribeRequest.unsubscribeOf(currentApprovalKey, stockCode));
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("KIS WebSocket 구독 해제 메시지 직렬화에 실패했습니다.", exception);
         }
     }
 
