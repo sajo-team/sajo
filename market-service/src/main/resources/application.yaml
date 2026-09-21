@@ -47,6 +47,13 @@ spring:
       group-id: market-consumer-group
 
   ai:
+    model:
+      # Spring AI는 여러 provider 스타터가 classpath에 함께 있을 수 있어, 명시적으로 지정하지
+      # 않으면 chat/embedding 모델 자동구성이 기본값(none)으로 비활성화된다. api-key가 있어도
+      # 이 값이 없으면 ChatClient/EmbeddingModel 빈이 생성되지 않아 SupportChatService/
+      # SupportRagConfig 기동이 실패한다.
+      chat: openai
+      embedding: openai
     openai:
       api-key: ${OPENAI_API_KEY:}
 

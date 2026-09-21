@@ -1,5 +1,6 @@
 package com.sajo.market_service.support.config;
 
+import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.vectorstore.SimpleVectorStore;
 import org.springframework.ai.vectorstore.VectorStore;
@@ -23,5 +24,14 @@ public class SupportRagConfig {
     @Bean
     public VectorStore supportVectorStore(EmbeddingModel embeddingModel) {
         return SimpleVectorStore.builder(embeddingModel).build();
+    }
+
+    // Spring AI 자동구성은 ChatClient.Builder만 제공하고, 실제 사용할 ChatClient 빈은
+    // 애플리케이션에서 직접 만들어야 한다(여러 개의 서로 다른 설정을 가진 ChatClient가
+    // 있을 수 있기 때문). SupportChatService가 ChatClient를 그대로 주입받아 쓰므로 여기서
+    // 기본 설정 그대로 build()한 빈을 하나 등록한다.
+    @Bean
+    public ChatClient supportChatClient(ChatClient.Builder chatClientBuilder) {
+        return chatClientBuilder.build();
     }
 }
