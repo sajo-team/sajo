@@ -289,6 +289,10 @@ services:
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      # grafana/provisioning/alerting/cpu-alert.yaml의 $__env{GRAFANA_SLACK_WEBHOOK_URL}이
+      # 이 값을 읽는다 (Grafana Alerting - CPU 50% 이상 시 Slack 알림). prod에서
+      # provisioning 마운트를 처음 켜면서 이 값도 같이 맞춰준다 (dev와 동일하게).
+      GRAFANA_SLACK_WEBHOOK_URL: ${GRAFANA_SLACK_WEBHOOK_URL}
     volumes:
       - grafana-data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
