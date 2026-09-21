@@ -57,6 +57,17 @@ spring:
       # 기본값 none이면 Spring AI가 이 자동구성 자체를 건너뛴다.
       chat: ${SPRING_AI_CHAT_MODEL:none}
       embedding: ${SPRING_AI_EMBEDDING_MODEL:none}
+      # chat/embedding만 명시했다고 안전한 게 아니다. classpath에 openai 스타터가 "하나만"
+      # 있으면 Spring AI는 provider가 모호하지 않다고 판단해 image/audio(speech, transcription)/
+      # moderation 셀렉터까지도 명시적으로 지정하지 않은 경우 전부 자동으로 "openai"로 잡아,
+      # 해당 자동구성들도 컨텍스트 기동 시 각자의 OpenAi*Model 빈을 무조건 생성한다(실제로
+      # openAiSdkAudioSpeechModel 빈 생성에서 API 키 부재로 컨텍스트 로딩이 실패했다). 이 앱은
+      # 채팅/임베딩(RAG) 외에는 이 모델 타입들을 전혀 쓰지 않으므로 항상 none으로 고정한다.
+      image: none
+      moderation: none
+      audio:
+        speech: none
+        transcription: none
     openai:
       api-key: ${OPENAI_API_KEY:}
 
