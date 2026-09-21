@@ -247,12 +247,6 @@ services:
     networks:
       - sajo-net
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:3100/ready || exit 1"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-      start_period: 10s
 
   docker-socket-proxy:
     image: tecnativa/docker-socket-proxy:latest
@@ -263,6 +257,10 @@ services:
       # 장악하는 경로를 막는다.
       CONTAINERS: 1
       POST: 0
+      # alloy(discovery.docker)가 컨테이너별 네트워크 정보를 조회하는 데 필요
+      # (컨테이너 목록만으론 부족하고 /networks 조회가 있어야 타겟이 생성됨).
+      # 네트워크 이름/서브넷 등 구성 정보만 노출되고, POST가 막혀있어 읽기 전용.
+      NETWORKS: 1
       # healthcheck용 /_ping 확인을 위해 명시적으로 켜둔다.
       PING: 1
     volumes:
@@ -295,7 +293,7 @@ services:
       - docker-proxy-net  # docker-socket-proxy로 컨테이너 조회
     depends_on:
       loki:
-        condition: service_healthy
+        condition: service_started
       docker-socket-proxy:
         condition: service_healthy
     restart: unless-stopped
@@ -307,8 +305,11 @@ services:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
       # grafana/provisioning/alerting/cpu-alert.yaml의 $__env{GRAFANA_SLACK_WEBHOOK_URL}이
-      # 이 값을 읽는다 (Grafana Alerting - CPU 50% 이상 시 Slack 알림)
-      GRAFANA_SLACK_WEBHOOK_URL: ${GRAFANA_SLACK_WEBHOOK_URL}
+      # 이 값을 읽는다 (Grafana Alerting - CPU 50% 이상 시 Slack 알림). 별도
+      # 시크릿을 새로 안 만들고, operation-service가 쓰는 SLACK_WEBHOOK_URL을
+      # 그대로 재사용해 같은 슬랙 채널로 보낸다 (컨테이너 안에서 보이는 변수
+      # 이름만 GRAFANA_SLACK_WEBHOOK_URL로 바꿔서 넘겨주는 것).
+      GRAFANA_SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL}
     volumes:
       - grafana-data:/var/lib/grafana
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
@@ -320,7 +321,7 @@ services:
       prometheus:
         condition: service_started
       loki:
-        condition: service_healthy
+        condition: service_started
     restart: unless-stopped
 
   discovery-service:
