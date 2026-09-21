@@ -192,7 +192,6 @@ services:
     container_name: sajo-alertmanager
     volumes:
       - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
-      - ./monitoring/secrets/slack_webhook_url:/etc/alertmanager/secrets/slack_webhook_url:ro
       - ./monitoring/secrets/operation_webhook_secret:/etc/alertmanager/secrets/operation_webhook_secret:ro
     ports:
       - "127.0.0.1:9093:9093"
@@ -225,12 +224,19 @@ services:
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      # grafana/provisioning/alerting/cpu-alert.yaml의 $__env{GRAFANA_SLACK_WEBHOOK_URL}이
+      # 이 값을 읽는다 (Grafana Alerting - CPU 50% 이상 시 Slack 알림)
+      GRAFANA_SLACK_WEBHOOK_URL: ${GRAFANA_SLACK_WEBHOOK_URL}
     volumes:
       - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
     ports:
       - "127.0.0.1:3000:3000"
     networks:
       - sajo-net
+    depends_on:
+      prometheus:
+        condition: service_started
     restart: unless-stopped
 
   discovery-service:
@@ -391,6 +397,7 @@ services:
       SPRING_PROFILES_ACTIVE: prod
       CONFIG_SERVER_URL: http://config-server:8888
       OPENAI_API_KEY: ${OPENAI_API_KEY}
+      SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL}
     volumes:
       - ./monitoring/secrets/operation_webhook_secret:/etc/operation-service/secrets/webhook_secret:ro
     ports:

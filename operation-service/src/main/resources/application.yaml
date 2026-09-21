@@ -31,6 +31,11 @@ sajo:
     # Alertmanager와 operation-service 컨테이너에 같은 파일을 마운트해서 공유 시크릿으로 씀
     # (alertmanager.yml의 webhook_configs.http_config.authorization.credentials_file과 짝)
     secret-file-path: /etc/operation-service/secrets/webhook_secret
+  slack:
+    webhook-url: ${SLACK_WEBHOOK_URL}
+    rest-client:
+      connect-timeout-ms: ${SLACK_CONNECT_TIMEOUT_MS:2000}
+      read-timeout-ms: ${SLACK_READ_TIMEOUT_MS:5000}
 
 management:
   endpoints:

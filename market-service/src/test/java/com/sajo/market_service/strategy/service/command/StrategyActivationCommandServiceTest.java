@@ -4,6 +4,7 @@ import com.sajo.common.exception.BusinessException;
 import com.sajo.market_service.strategy.controller.dto.response.StrategyActivationResponse;
 import com.sajo.market_service.strategy.domain.Strategy;
 import com.sajo.market_service.strategy.domain.StrategyStatus;
+import com.sajo.market_service.strategy.event.StrategyActivationChangedEvent;
 import com.sajo.market_service.strategy.exception.StrategyErrorCode;
 import com.sajo.market_service.strategy.repository.command.StrategyCommandRepository;
 import org.junit.jupiter.api.DisplayName;
@@ -11,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import java.math.BigDecimal;
 import java.util.Optional;
@@ -19,12 +21,16 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 class StrategyActivationCommandServiceTest {
 
     @Mock
     private StrategyCommandRepository strategyCommandRepository;
+
+    @Mock
+    private ApplicationEventPublisher applicationEventPublisher;
 
     @Test
     @DisplayName("INACTIVE 전략을 활성화하면 ACTIVE 상태가 된다")
@@ -34,7 +40,7 @@ class StrategyActivationCommandServiceTest {
         UUID strategyId = UUID.randomUUID();
         Strategy strategy = createStrategy(userId);
         StrategyActivationCommandService service =
-                new StrategyActivationCommandService(strategyCommandRepository);
+                new StrategyActivationCommandService(strategyCommandRepository, applicationEventPublisher);
 
         given(strategyCommandRepository.findByIdAndDeletedAtIsNull(strategyId))
                 .willReturn(Optional.of(strategy));
@@ -53,6 +59,9 @@ class StrategyActivationCommandServiceTest {
         assertThat(response.activatedAt()).isNotNull();
         assertThat(strategy.getStatus()).isEqualTo(StrategyStatus.ACTIVE);
         assertThat(strategy.getActivatedAt()).isNotNull();
+        verify(applicationEventPublisher).publishEvent(
+                new StrategyActivationChangedEvent(strategy.getId(), strategy.getStockCode(), true)
+        );
     }
 
     @Test
@@ -64,7 +73,7 @@ class StrategyActivationCommandServiceTest {
         Strategy strategy = createStrategy(userId);
         strategy.activate();
         StrategyActivationCommandService service =
-                new StrategyActivationCommandService(strategyCommandRepository);
+                new StrategyActivationCommandService(strategyCommandRepository, applicationEventPublisher);
 
         given(strategyCommandRepository.findByIdAndDeletedAtIsNull(strategyId))
                 .willReturn(Optional.of(strategy));
@@ -83,6 +92,9 @@ class StrategyActivationCommandServiceTest {
         assertThat(response.activatedAt()).isNull();
         assertThat(strategy.getStatus()).isEqualTo(StrategyStatus.INACTIVE);
         assertThat(strategy.getActivatedAt()).isNull();
+        verify(applicationEventPublisher).publishEvent(
+                new StrategyActivationChangedEvent(strategy.getId(), strategy.getStockCode(), false)
+        );
     }
 
     @Test
@@ -92,7 +104,7 @@ class StrategyActivationCommandServiceTest {
         UUID userId = UUID.randomUUID();
         UUID strategyId = UUID.randomUUID();
         StrategyActivationCommandService service =
-                new StrategyActivationCommandService(strategyCommandRepository);
+                new StrategyActivationCommandService(strategyCommandRepository, applicationEventPublisher);
 
         given(strategyCommandRepository.findByIdAndDeletedAtIsNull(strategyId))
                 .willReturn(Optional.empty());
@@ -147,7 +159,7 @@ class StrategyActivationCommandServiceTest {
                 null
         );
         StrategyActivationCommandService service =
-                new StrategyActivationCommandService(strategyCommandRepository);
+                new StrategyActivationCommandService(strategyCommandRepository, applicationEventPublisher);
 
         given(strategyCommandRepository.findByIdAndDeletedAtIsNull(strategyId))
                 .willReturn(Optional.of(strategy));
@@ -176,7 +188,7 @@ class StrategyActivationCommandServiceTest {
         UUID strategyId = UUID.randomUUID();
         Strategy strategy = createStrategy(ownerId);
         StrategyActivationCommandService service =
-                new StrategyActivationCommandService(strategyCommandRepository);
+                new StrategyActivationCommandService(strategyCommandRepository, applicationEventPublisher);
 
         given(strategyCommandRepository.findByIdAndDeletedAtIsNull(strategyId))
                 .willReturn(Optional.of(strategy));

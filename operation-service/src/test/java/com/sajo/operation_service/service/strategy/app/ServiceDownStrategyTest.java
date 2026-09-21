@@ -40,7 +40,7 @@ class ServiceDownStrategyTest {
         Instant startsAt = Instant.parse("2026-09-19T03:00:00Z");
         Instant expectedLookback = startsAt.minus(Duration.ofMinutes(2));
         AlertManagerWebhookRequest.Alert alert = new AlertManagerWebhookRequest.Alert(
-                "firing", Map.of("alertname", "ServiceDown", "application", "trading-service"), Map.of(), startsAt
+                "firing", Map.of("alertname", "ServiceDown", "application", "trading-service"), Map.of(), startsAt, startsAt
         );
         Map<String, PrometheusQueryResult> expected = Map.of(
                 "CPU 사용률(0~1)", PrometheusQueryResult.success("query", List.of())
@@ -61,7 +61,7 @@ class ServiceDownStrategyTest {
     void diagnose_missingApplicationLabel_throwsWithoutQuerying() {
         Instant startsAt = Instant.parse("2026-09-19T03:00:00Z");
         AlertManagerWebhookRequest.Alert alert = new AlertManagerWebhookRequest.Alert(
-                "firing", Map.of("alertname", "ServiceDown"), Map.of(), startsAt
+                "firing", Map.of("alertname", "ServiceDown"), Map.of(), startsAt, startsAt
         );
 
         assertThatThrownBy(() -> strategy.diagnose(alert, startsAt))

@@ -34,4 +34,12 @@ public interface StrategyQueryRepository extends JpaRepository<Strategy, UUID> {
     Optional<Strategy> findByIdAndDeletedAtIsNull(UUID id);
 
     List<Strategy> findAllByStockCodeAndStatusAndDeletedAtIsNull(String stockCode, StrategyStatus status);
+
+    @Query("""
+        select distinct s.stockCode
+        from Strategy s
+        where s.status = :status
+            and s.deletedAt is null
+    """)
+    List<String> findDistinctStockCodesByStatusAndDeletedAtIsNull(@Param("status") StrategyStatus status);
 }

@@ -17,6 +17,10 @@ import org.springframework.web.socket.client.WebSocketClient;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -28,6 +32,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
@@ -203,6 +208,182 @@ class KisWebSocketClientTest {
 
         verify(session).sendMessage(any(TextMessage.class));
         assertThat(client.subscribedStockCodes()).containsExactly("000660");
+    }
+
+    @Test
+    void unsubscribeAfterConnectionEstablishedSendsUnregisterFrameAndRemovesStockCode() throws Exception {
+        stubSuccessfulCredentials();
+        WebSocketSession session = openSession();
+        given(webSocketClient.execute(any(WebSocketHandler.class), anyString()))
+                .willReturn(CompletableFuture.completedFuture(session));
+
+        KisWebSocketClient client = client(List.of("000660"));
+        client.connect();
+        capturedHandler().afterConnectionEstablished(session);
+
+        ArgumentCaptor<TextMessage> messageCaptor = ArgumentCaptor.forClass(TextMessage.class);
+
+        client.unsubscribe("000660");
+
+        // resubscribeAll()이 연결 시점에 이미 1건, unsubscribe()가 추가로 1건을 보낸다.
+        verify(session, times(2)).sendMessage(messageCaptor.capture());
+        String unsubscribePayload = messageCaptor.getAllValues().get(1).getPayload();
+        assertThat(unsubscribePayload).contains("\"tr_type\":\"2\"");
+        assertThat(client.subscribedStockCodes()).isEmpty();
+    }
+
+    @Test
+    void unsubscribeStockCodeNotCurrentlySubscribedDoesNothing() throws Exception {
+        stubSuccessfulCredentials();
+        WebSocketSession session = openSession();
+        given(webSocketClient.execute(any(WebSocketHandler.class), anyString()))
+                .willReturn(CompletableFuture.completedFuture(session));
+
+        KisWebSocketClient client = client(List.of());
+        client.connect();
+        capturedHandler().afterConnectionEstablished(session);
+
+        client.unsubscribe("999999");
+
+        verify(session, never()).sendMessage(any(TextMessage.class));
+        assertThat(client.subscribedStockCodes()).isEmpty();
+    }
+
+    @Test
+    void unsubscribeBeforeConnectionEstablishedOnlyUpdatesLocalStateWithoutSendingFrame() {
+        KisWebSocketClient client = client(List.of("005930"));
+
+        client.unsubscribe("005930");
+
+        assertThat(client.subscribedStockCodes()).isEmpty();
+    }
+
+    @Test
+    void concurrentSubscribeAndUnsubscribeForSameStockCodeKeepsLocalStateConsistentWithLastSentFrame()
+            throws Exception {
+        stubSuccessfulCredentials();
+        WebSocketSession session = openSession();
+        given(webSocketClient.execute(any(WebSocketHandler.class), anyString()))
+                .willReturn(CompletableFuture.completedFuture(session));
+
+        KisWebSocketClient client = client(List.of());
+        client.connect();
+        capturedHandler().afterConnectionEstablished(session);
+
+        // subscribe()/unsubscribe()가 sendLock으로 상태 갱신+전송을 원자적으로 직렬화하는지 검증한다.
+        // 두 스레드가 같은 종목에 대해 반복적으로 subscribe/unsubscribe를 경합시킨 뒤, 로컬 상태가
+        // 실제로 마지막에 전송된 프레임(tr_type)과 항상 일치하는지 확인한다. 직렬화가 깨지면 이
+        // 불변조건이 흔들려 테스트가 flaky하게(또는 항상) 실패하게 된다.
+        int iterationsPerThread = 200;
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<?> subscribing = executor.submit(() -> {
+                ready.countDown();
+                awaitUninterruptibly(start);
+                for (int i = 0; i < iterationsPerThread; i++) {
+                    client.subscribe("005930");
+                }
+            });
+            Future<?> unsubscribing = executor.submit(() -> {
+                ready.countDown();
+                awaitUninterruptibly(start);
+                for (int i = 0; i < iterationsPerThread; i++) {
+                    client.unsubscribe("005930");
+                }
+            });
+            ready.await();
+            start.countDown();
+            subscribing.get(5, TimeUnit.SECONDS);
+            unsubscribing.get(5, TimeUnit.SECONDS);
+        } finally {
+            executor.shutdownNow();
+        }
+
+        ArgumentCaptor<TextMessage> messageCaptor = ArgumentCaptor.forClass(TextMessage.class);
+        verify(session, atLeastOnce()).sendMessage(messageCaptor.capture());
+        List<TextMessage> sentMessages = messageCaptor.getAllValues();
+        String lastSentPayload = sentMessages.get(sentMessages.size() - 1).getPayload();
+        boolean lastFrameWasSubscribe = lastSentPayload.contains("\"tr_type\":\"1\"");
+
+        assertThat(client.subscribedStockCodes().contains("005930")).isEqualTo(lastFrameWasSubscribe);
+    }
+
+    private static void awaitUninterruptibly(CountDownLatch latch) {
+        try {
+            latch.await();
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("테스트 스레드가 대기 중 인터럽트되었습니다.", exception);
+        }
+    }
+
+    // WebSocketHandler.afterConnectionEstablished()는 checked Exception을 선언하지만, Runnable
+    // 람다(executor.submit) 안에서는 checked Exception을 그대로 던질 수 없어 unchecked로 감싼다.
+    private static void invokeAfterConnectionEstablishedUnchecked(WebSocketHandler handler, WebSocketSession session) {
+        try {
+            handler.afterConnectionEstablished(session);
+        } catch (Exception exception) {
+            throw new IllegalStateException("afterConnectionEstablished 호출 중 예외가 발생했습니다.", exception);
+        }
+    }
+
+    @Test
+    void concurrentResubscribeAllAndUnsubscribeForSameStockCodeNeverResendsAfterRemoval() throws Exception {
+        stubSuccessfulCredentials();
+        WebSocketSession session = openSession();
+        given(webSocketClient.execute(any(WebSocketHandler.class), anyString()))
+                .willReturn(CompletableFuture.completedFuture(session));
+
+        // 최초 target-stock-codes로 "005930"을 구독한 상태에서 시작한다.
+        KisWebSocketClient client = client(List.of("005930"));
+        client.connect();
+        WebSocketHandler handler = capturedHandler();
+        handler.afterConnectionEstablished(session);
+
+        // resubscribeAll()은 private이라 직접 호출할 수 없으므로, 같은 코드 경로를 타는
+        // afterConnectionEstablished()를 재연결 콜백처럼 반복 호출해 unsubscribe()와 경합시킨다.
+        // resubscribeAll()이 "구독 여부 재확인 + 전송"을 sendLock으로 원자화하지 않으면, 이미
+        // unsubscribe()가 로컬 set에서 제거하고 해제 프레임을 보낸 뒤에도 이 루프가 stale한 목록을
+        // 근거로 구독 프레임을 다시 보내 KIS 서버 측 상태를 되살릴 수 있다.
+        int iterationsPerThread = 200;
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<?> unsubscribing = executor.submit(() -> {
+                ready.countDown();
+                awaitUninterruptibly(start);
+                client.unsubscribe("005930");
+            });
+            Future<?> reconnecting = executor.submit(() -> {
+                ready.countDown();
+                awaitUninterruptibly(start);
+                for (int i = 0; i < iterationsPerThread; i++) {
+                    invokeAfterConnectionEstablishedUnchecked(handler, session);
+                }
+            });
+            ready.await();
+            start.countDown();
+            unsubscribing.get(5, TimeUnit.SECONDS);
+            reconnecting.get(5, TimeUnit.SECONDS);
+        } finally {
+            executor.shutdownNow();
+        }
+
+        // unsubscribe()가 완료된 이후에 트리거된 resubscribeAll()은 모두 이 종목을 건너뛰어야 하므로,
+        // 최종적으로는 로컬 상태와 마지막으로 실제 전송된 프레임이 항상 일치해야 한다.
+        assertThat(client.subscribedStockCodes()).isEmpty();
+
+        ArgumentCaptor<TextMessage> messageCaptor = ArgumentCaptor.forClass(TextMessage.class);
+        verify(session, atLeastOnce()).sendMessage(messageCaptor.capture());
+        List<TextMessage> sentMessages = messageCaptor.getAllValues();
+        String lastSentPayload = sentMessages.get(sentMessages.size() - 1).getPayload();
+
+        // unsubscribe()가 로컬 set에서 제거를 완료한 뒤에는 resubscribeAll()이 이 종목을 다시
+        // 전송하지 않으므로, 마지막으로 전송된 프레임은 반드시 해제(tr_type=2) 프레임이어야 한다.
+        assertThat(lastSentPayload).contains("\"tr_type\":\"2\"");
     }
 
     @Test

@@ -22,7 +22,8 @@ public record AlertManagerWebhookRequest(
             @NotBlank String status,                  // 이 알람 하나의 상태("firing"/"resolved")
             @NotNull Map<String, String> labels,       // alertname, application 등 - rules.yml의 labels + Prometheus 스크랩 라벨
             @NotNull Map<String, String> annotations,  // summary, description - rules.yml에 적어둔 그 텍스트
-            @NotNull Instant startsAt                  // 이 알람이 firing 시작한 시각 - PrometheusClient 조회 시점으로 그대로 씀
+            @NotNull Instant startsAt,                 // 이 알람이 firing 시작한 시각 - PrometheusClient 조회 시점으로 그대로 씀
+            @NotNull Instant endsAt                     // 알람 resolved된 시각
     ) {
         public boolean isFiring() {
             return "firing".equals(status);

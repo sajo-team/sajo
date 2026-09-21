@@ -174,15 +174,61 @@ public class KisWebSocketClient {
         reconnectScheduler.execute(this::connect);
     }
 
-    /** 종목을 구독 대상에 추가한다. 이미 연결되어 있으면 즉시 구독 요청을 보낸다. */
+    /**
+     * 종목을 구독 대상에 추가한다. 이미 연결되어 있으면 즉시 구독 요청을 보낸다.
+     *
+     * <p>로컬 상태 갱신과 실제 전송을 {@code sendLock}으로 함께 직렬화한다. 그렇지 않으면 같은
+     * 종목에 대해 subscribe()와 unsubscribe()가 거의 동시에 호출될 때, set 반영 순서와 실제 KIS
+     * 전송 순서가 어긋나 로컬 상태와 KIS 서버 상태가 서로 다른 값으로 남을 수 있다
+     * (예: 로컬은 미구독인데 KIS에는 구독이 살아있는 상태).</p>
+     */
     public void subscribe(String stockCode) {
         if (stockCode == null || stockCode.isBlank()) {
             return;
         }
-        subscribedStockCodes.add(stockCode);
-        WebSocketSession session = currentSession.get();
-        if (session != null && session.isOpen()) {
-            sendSubscribeFrame(session, stockCode);
+        synchronized (sendLock) {
+            subscribedStockCodes.add(stockCode);
+            WebSocketSession session = currentSession.get();
+            if (session != null && session.isOpen()) {
+                sendSubscribeFrame(session, stockCode);
+            }
+        }
+    }
+
+    /**
+     * 종목을 구독 대상에서 제거한다. 이미 연결되어 있으면 즉시 구독 해제 요청을 보낸다.
+     *
+     * <p>subscribe()와 동일하게 {@code sendLock}으로 로컬 상태 갱신과 전송을 함께 직렬화해,
+     * 같은 종목에 대한 subscribe()/unsubscribe() 동시 호출 시 순서 역전을 방지한다.</p>
+     *
+     * <p><b>알려진 한계:</b> 로컬 상태(subscribedStockCodes에서 제거)는 먼저 반영되고, 그 이후
+     * 실제 전송(sendUnsubscribeFrame)이 IOException으로 실패해도 로컬 상태는 롤백하지 않는다.
+     * 세션이 열려 있는 채로 전송만 일시적으로 실패한 경우, KIS 서버 측 구독은 계속 살아있는데
+     * subscribedStockCodes()를 사용하는 MarketRealtimePriceScheduler는 이 종목을 더 이상 스냅샷
+     * 대상으로 보지 않게 되어 스냅샷 적재가 조용히 누락될 수 있다. 다음 재연결 시 resubscribeAll()이
+     * 로컬 set 기준으로 다시 구독을 맞추므로 그 시점에는 정합성이 회복된다.</p>
+     *
+     * <p><b>이 메서드는 종목 단위로 전역(global) 구독을 해제한다. 종목별 참조 카운트(구독자 수)를
+     * 관리하지 않는다.</b> 종목 코드를 {@link java.util.Set}으로만 관리하기 때문에, 예를 들어 전략
+     * A와 B가 모두 같은 종목("005930")을 구독 중인 상태에서 A만 비활성화되어 이 메서드가 호출되면
+     * B가 여전히 활성 상태여도 해당 종목의 KIS 구독이 통째로 해제된다. 이후 전략 비활성화 로직에서
+     * 이 메서드를 직접 연결할 때는, "이 종목을 구독 중인 다른 활성 전략이 있는지"를 상위 레이어
+     * (strategy 쪽 서비스)에서 먼저 확인해 참조 카운트가 0이 될 때만 호출하도록 설계해야 한다.</p>
+     */
+    public void unsubscribe(String stockCode) {
+        if (stockCode == null || stockCode.isBlank()) {
+            return;
+        }
+        synchronized (sendLock) {
+            boolean wasSubscribed = subscribedStockCodes.remove(stockCode);
+            if (!wasSubscribed) {
+                // 구독 중이 아니었던 종목이면 KIS에 해제 요청을 보낼 필요가 없다.
+                return;
+            }
+            WebSocketSession session = currentSession.get();
+            if (session != null && session.isOpen()) {
+                sendUnsubscribeFrame(session, stockCode);
+            }
         }
     }
 
@@ -228,9 +274,28 @@ public class KisWebSocketClient {
         return UUID.fromString(configuredUserId.trim());
     }
 
+    /**
+     * 재연결 시 구독 목록 전체를 다시 구독한다.
+     *
+     * <p>루프 전체가 아니라 종목 하나당 하나의 sendLock 블록으로 처리한다. 루프 전체를 하나의
+     * sendLock으로 묶으면 종목이 많을 때 재연결 직후 subscribe()/unsubscribe()(예: 전략 비활성화로
+     * 인한 긴급 해제)가 이 루프가 끝날 때까지 블로킹된다.</p>
+     *
+     * <p>다만 "아직 구독 중인지 재확인"과 "전송"을 같은 sendLock 블록 안에서 함께 수행한다. 그렇지
+     * 않으면 이 루프가 어떤 종목을 순회하는 도중 다른 스레드가 그 종목을 unsubscribe()로 로컬
+     * set에서 제거하고 해제 프레임까지 먼저 보낸 경우에도, 이 루프는 이미 읽어 둔(제거되기 전)
+     * 종목을 그대로 재구독해버려 KIS 서버에는 구독이 되살아나는데 로컬 subscribedStockCodes에는
+     * 없는 상태가 될 수 있다. 전송 직전에 sendLock 안에서 다시 한 번 구독 여부를 확인하면,
+     * unsubscribe()의 "제거+전송" 원자 블록과 순서가 뒤섞이더라도 이미 제거된 종목을 재전송하지
+     * 않는다.</p>
+     */
     private void resubscribeAll(WebSocketSession session) {
         for (String stockCode : subscribedStockCodes) {
-            sendSubscribeFrame(session, stockCode);
+            synchronized (sendLock) {
+                if (subscribedStockCodes.contains(stockCode)) {
+                    sendSubscribeFrame(session, stockCode);
+                }
+            }
         }
     }
 
@@ -251,12 +316,36 @@ public class KisWebSocketClient {
         }
     }
 
+    /**
+     * subscribe()/unsubscribe() 모두 동일한 sendLock으로 전송을 직렬화해 sendSubscribeFrame()과
+     * 같은 세션에 대한 동시 텍스트 전송 문제를 피한다.
+     */
+    private void sendUnsubscribeFrame(WebSocketSession session, String stockCode) {
+        synchronized (sendLock) {
+            try {
+                session.sendMessage(new TextMessage(buildUnsubscribePayload(stockCode)));
+                log.info("KIS WebSocket 종목 구독 해제 요청을 보냈습니다. stockCode={}", stockCode);
+            } catch (IOException exception) {
+                log.warn("KIS WebSocket 종목 구독 해제 요청 전송에 실패했습니다. stockCode={}, exceptionType={}",
+                        stockCode, exception.getClass().getSimpleName());
+            }
+        }
+    }
+
     private String buildSubscribePayload(String stockCode) {
         try {
             String s = objectMapper.writeValueAsString(KisSubscribeRequest.of(currentApprovalKey, stockCode));
             return s;
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("KIS WebSocket 구독 메시지 직렬화에 실패했습니다.", exception);
+        }
+    }
+
+    private String buildUnsubscribePayload(String stockCode) {
+        try {
+            return objectMapper.writeValueAsString(KisSubscribeRequest.unsubscribeOf(currentApprovalKey, stockCode));
+        } catch (JsonProcessingException exception) {
+            throw new IllegalStateException("KIS WebSocket 구독 해제 메시지 직렬화에 실패했습니다.", exception);
         }
     }
 
