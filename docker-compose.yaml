@@ -1,6 +1,12 @@
 networks:
   sajo-net:
     driver: bridge
+  # alloy <-> docker-socket-proxy 전용 네트워크. 다른 마이크로서비스는 여기 붙지
+  # 않으므로, docker-socket-proxy에는 alloy만 접근할 수 있다.
+  # internal: true라서 이 네트워크에 붙은 컨테이너는 외부(인터넷)로도 못 나간다.
+  docker-proxy-net:
+    driver: bridge
+    internal: true
 
 volumes:
   postgres-data:
@@ -262,7 +268,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     networks:
-      - sajo-net
+      - docker-proxy-net
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:2375/_ping || exit 1"]
@@ -285,7 +291,8 @@ services:
     ports:
       - "127.0.0.1:12345:12345"
     networks:
-      - sajo-net
+      - sajo-net          # loki로 로그 전송
+      - docker-proxy-net  # docker-socket-proxy로 컨테이너 조회
     depends_on:
       loki:
         condition: service_healthy
