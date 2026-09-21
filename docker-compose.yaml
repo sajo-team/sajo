@@ -331,6 +331,7 @@ services:
     container_name: discovery-service
     environment:
       SPRING_PROFILES_ACTIVE: prod
+      TRACING_SAMPLING_PROBABILITY: "1.0"
     ports:
       - "127.0.0.1:8761:8761"
     networks:
@@ -350,6 +351,7 @@ services:
     container_name: config-server
     environment:
       SPRING_PROFILES_ACTIVE: prod
+      TRACING_SAMPLING_PROBABILITY: "1.0"
       GITHUB_USERNAME: ${GITHUB_USERNAME}
       GITHUB_TOKEN: ${GITHUB_TOKEN}
       ENCRYPT_KEY: ${ENCRYPT_KEY}
@@ -375,6 +377,7 @@ services:
     container_name: gateway
     environment:
       SPRING_PROFILES_ACTIVE: prod
+      TRACING_SAMPLING_PROBABILITY: "1.0"
       CONFIG_SERVER_URL: http://config-server:8888
       JWT_SECRET: ${JWT_SECRET}
     ports:
@@ -395,6 +398,7 @@ services:
     container_name: user-service
     environment:
       SPRING_PROFILES_ACTIVE: prod
+      TRACING_SAMPLING_PROBABILITY: "1.0"
       CONFIG_SERVER_URL: http://config-server:8888
       DB_PASSWORD: ${DB_PASSWORD}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -425,6 +429,7 @@ services:
     container_name: market-service
     environment:
       SPRING_PROFILES_ACTIVE: prod
+      TRACING_SAMPLING_PROBABILITY: "1.0"
       CONFIG_SERVER_URL: http://config-server:8888
       DB_PASSWORD: ${DB_PASSWORD}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -451,6 +456,7 @@ services:
     container_name: trading-service
     environment:
       SPRING_PROFILES_ACTIVE: prod
+      TRACING_SAMPLING_PROBABILITY: "1.0"
       CONFIG_SERVER_URL: http://config-server:8888
       DB_PASSWORD: ${DB_PASSWORD}
       MONGO_PASSWORD: ${MONGO_PASSWORD}
@@ -480,6 +486,7 @@ services:
     container_name: operation-service
     environment:
       SPRING_PROFILES_ACTIVE: prod
+      TRACING_SAMPLING_PROBABILITY: "1.0"
       CONFIG_SERVER_URL: http://config-server:8888
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL}
