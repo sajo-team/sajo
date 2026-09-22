@@ -43,6 +43,9 @@ class AccountDeleteFacadeTest {
     private KisTokenCacheCommandService cacheCommandService;
 
     @Mock
+    private AccountCreationKisTokenCacheService accountCreationKisTokenCacheService;
+
+    @Mock
     private AccountCommandService accountCommandService;
 
     @Mock
@@ -56,8 +59,8 @@ class AccountDeleteFacadeTest {
     @BeforeEach
     void setUp() {
         accountDeleteFacade = new AccountDeleteFacade(
-                kisOAuthClient, cacheQueryService, cacheCommandService, accountCommandService,
-                kisTokenLogCommandService, tradingFeignClient);
+                kisOAuthClient, cacheQueryService, cacheCommandService, accountCreationKisTokenCacheService,
+                accountCommandService, kisTokenLogCommandService, tradingFeignClient);
     }
 
     private void givenNoActiveTrading(UUID userId) {
@@ -85,6 +88,7 @@ class AccountDeleteFacadeTest {
         // then
         verify(kisOAuthClient).revokeAccessToken("app-key", "secret-key", "cached-token", AccountType.REAL);
         verify(cacheCommandService).evictKisTokenCaches(account.getId());
+        verify(accountCreationKisTokenCacheService).evict(userId, "app-key", "secret-key");
         verify(kisTokenLogCommandService).recordRevokeSuccess(account.getId(), userId);
     }
 
@@ -104,6 +108,7 @@ class AccountDeleteFacadeTest {
         // then
         verifyNoInteractions(kisOAuthClient);
         verify(cacheCommandService).evictKisTokenCaches(account.getId());
+        verify(accountCreationKisTokenCacheService).evict(userId, "app-key", "secret-key");
         verifyNoInteractions(kisTokenLogCommandService);
     }
 
@@ -130,6 +135,7 @@ class AccountDeleteFacadeTest {
         verifyNoInteractions(kisOAuthClient);
         verifyNoInteractions(cacheQueryService);
         verifyNoInteractions(cacheCommandService);
+        verifyNoInteractions(accountCreationKisTokenCacheService);
         verifyNoInteractions(kisTokenLogCommandService);
     }
 
@@ -153,6 +159,7 @@ class AccountDeleteFacadeTest {
         verifyNoInteractions(kisOAuthClient);
         verifyNoInteractions(cacheQueryService);
         verifyNoInteractions(cacheCommandService);
+        verifyNoInteractions(accountCreationKisTokenCacheService);
         verifyNoInteractions(kisTokenLogCommandService);
     }
 
@@ -172,6 +179,7 @@ class AccountDeleteFacadeTest {
         assertThatCode(() -> accountDeleteFacade.deleteAccount(userId)).doesNotThrowAnyException();
 
         verify(cacheCommandService).evictKisTokenCaches(account.getId());
+        verify(accountCreationKisTokenCacheService).evict(userId, "app-key", "secret-key");
         verify(kisTokenLogCommandService).recordRevokeFail(eq(account.getId()), eq(userId), isNull(), any());
     }
 
@@ -191,6 +199,7 @@ class AccountDeleteFacadeTest {
 
         verifyNoInteractions(kisOAuthClient);
         verify(cacheCommandService).evictKisTokenCaches(account.getId());
+        verify(accountCreationKisTokenCacheService).evict(userId, "app-key", "secret-key");
         verifyNoInteractions(kisTokenLogCommandService);
     }
 
@@ -210,6 +219,26 @@ class AccountDeleteFacadeTest {
         assertThatCode(() -> accountDeleteFacade.deleteAccount(userId)).doesNotThrowAnyException();
 
         verify(accountCommandService).deleteAccount(userId);
+        verify(accountCreationKisTokenCacheService).evict(userId, "app-key", "secret-key");
+    }
+
+    @Test
+    @DisplayName("계좌 생성용 KIS 토큰 캐시 제거가 실패해도 예외 없이 정상 종료한다")
+    void deleteAccountSucceedsEvenWhenAccountCreationCacheEvictFails() {
+        // given
+        UUID userId = UUID.randomUUID();
+        givenNoActiveTrading(userId);
+        Account account = account(userId);
+        given(accountCommandService.deleteAccount(userId)).willReturn(account);
+        given(cacheQueryService.peekAccessToken(account.getId())).willReturn(Optional.empty());
+        willThrow(new RuntimeException("Redis 연결 실패"))
+                .given(accountCreationKisTokenCacheService).evict(userId, "app-key", "secret-key");
+
+        // when & then
+        assertThatCode(() -> accountDeleteFacade.deleteAccount(userId)).doesNotThrowAnyException();
+
+        verify(accountCommandService).deleteAccount(userId);
+        verify(cacheCommandService).evictKisTokenCaches(account.getId());
     }
 
     @Test
@@ -235,6 +264,7 @@ class AccountDeleteFacadeTest {
         verifyNoInteractions(kisOAuthClient);
         verifyNoInteractions(cacheQueryService);
         verifyNoInteractions(cacheCommandService);
+        verifyNoInteractions(accountCreationKisTokenCacheService);
         verifyNoInteractions(kisTokenLogCommandService);
     }
 
@@ -257,6 +287,7 @@ class AccountDeleteFacadeTest {
         verifyNoInteractions(kisOAuthClient);
         verifyNoInteractions(cacheQueryService);
         verifyNoInteractions(cacheCommandService);
+        verifyNoInteractions(accountCreationKisTokenCacheService);
         verifyNoInteractions(kisTokenLogCommandService);
     }
 
@@ -280,6 +311,7 @@ class AccountDeleteFacadeTest {
         verifyNoInteractions(kisOAuthClient);
         verifyNoInteractions(cacheQueryService);
         verifyNoInteractions(cacheCommandService);
+        verifyNoInteractions(accountCreationKisTokenCacheService);
         verifyNoInteractions(kisTokenLogCommandService);
     }
 }

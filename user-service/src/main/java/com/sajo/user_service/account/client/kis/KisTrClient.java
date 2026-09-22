@@ -24,6 +24,9 @@ public class KisTrClient extends AbstractKisClient {
     private static final String ORDERABLE_AMOUNT_TR_ID_REAL = "TTTC8908R";
     private static final String ORDERABLE_AMOUNT_TR_ID_VIRTUAL = "VTTC8908R";
 
+    // 계좌번호(CANO)가 KIS에 존재하지 않거나 형식이 잘못된 경우 매수가능조회가 공통으로 내려주는 코드
+    private static final String INVALID_ACCOUNT_NO_MSG_CD = "OPSQ2000";
+
     public KisTrClient(RestClient.Builder restClientBuilder, KisApiProperties properties) {
         super(restClientBuilder, properties);
     }
@@ -119,6 +122,9 @@ public class KisTrClient extends AbstractKisClient {
             log.warn("KIS 매수가능조회 실패. msg_cd={}, msg1={}", response.msg_cd(), response.msg1());
             if (isRateLimitCode(response.msg_cd())) {
                 throw new BusinessException(AccountErrorCode.KIS_RATE_LIMITED);
+            }
+            if (INVALID_ACCOUNT_NO_MSG_CD.equals(response.msg_cd())) {
+                throw new BusinessException(AccountErrorCode.INVALID_ACCOUNT_NO);
             }
             throw new BusinessException(AccountErrorCode.KIS_ORDERABLE_AMOUNT_INQUIRY_FAILED);
         }

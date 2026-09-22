@@ -452,6 +452,32 @@ class KisTrClientTest {
     }
 
     @Test
+    @DisplayName("매수가능조회 - HTTP 200이어도 msg_cd가 OPSQ2000(계좌번호 오류)이면 "
+            + "KIS_ORDERABLE_AMOUNT_INQUIRY_FAILED가 아닌 INVALID_ACCOUNT_NO 예외를 던진다")
+    void inquireOrderableAmountFailsWithInvalidAccountNoWhenMsgCdIsOpsq2000() {
+        // given
+        setUp();
+        server.expect(requestTo("https://kis.example/uapi/domestic-stock/v1/trading/inquire-psbl-order"
+                        + "?CANO=12345678&ACNT_PRDT_CD=01&PDNO=&ORD_UNPR=&ORD_DVSN=00"
+                        + "&CMA_EVLU_AMT_ICLD_YN=N&OVRS_ICLD_YN=N"))
+                .andRespond(withSuccess("""
+                        {"rt_cd":"2","msg_cd":"OPSQ2000","msg1":"ERROR : INPUT INVALID_CHECK_ACNO"}
+                        """, MediaType.APPLICATION_JSON));
+
+        // when & then
+        assertThatThrownBy(() -> client.inquireOrderableAmount(
+                "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.VIRTUAL, "", "", "00"))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(AccountErrorCode.INVALID_ACCOUNT_NO);
+                });
+
+        server.verify();
+    }
+
+    @Test
     @DisplayName("매수가능조회 - 5xx 응답이면 KIS_ORDERABLE_AMOUNT_INQUIRY_FAILED 예외를 던진다")
     void inquireOrderableAmountFailsWithHttp5xx() {
         // given

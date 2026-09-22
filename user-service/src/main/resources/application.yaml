@@ -28,6 +28,14 @@ spring:
             connect-timeout: 2000
             read-timeout: 3000
 
+sajo:
+  redis:
+    cache:
+      ttl:
+        # 계좌 생성 중 KIS 토큰 캐시 - accountNo만 틀려 재시도할 때 KIS 접근토큰 발급
+        # 1분당 1회 제한에 매번 걸리지 않도록 그 쿨다운(60초)보다 여유 있게 잡음
+        account-creation-token: 70s
+
 resilience4j:
   circuitbreaker:
     configs:
