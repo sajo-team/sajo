@@ -38,6 +38,9 @@ jobs:
           --health-timeout 3s
           --health-retries 10
 
+    env:
+      EUREKA_CLIENT_ENABLED: "false"
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
