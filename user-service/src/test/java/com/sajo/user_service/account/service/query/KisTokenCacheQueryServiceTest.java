@@ -2,7 +2,10 @@ package com.sajo.user_service.account.service.query;
 
 import com.sajo.common.exception.BusinessException;
 import com.sajo.user_service.account.cache.KisTokenCacheKeys;
-import com.sajo.user_service.account.cache.KisTokenCacheLock;
+import com.sajo.user_service.account.cache.KisTokenEntry;
+import com.sajo.user_service.account.cache.KisTokenLocalCache;
+import com.sajo.user_service.account.cache.KisTokenRemoteCache;
+import com.sajo.user_service.account.cache.RedisUnavailableException;
 import com.sajo.user_service.account.client.kis.KisOAuthClient;
 import com.sajo.user_service.account.client.kis.dto.response.KisAccessTokenResponse;
 import com.sajo.user_service.account.client.kis.dto.response.KisApprovalKeyResponse;
@@ -18,13 +21,11 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.redis.RedisConnectionFailureException;
-import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.redis.core.ValueOperations;
 
 import java.time.Duration;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.function.Supplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -35,10 +36,14 @@ import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
+// KisTokenCacheQueryService는 이제 L1(KisTokenLocalCache)/L2(KisTokenRemoteCache) 조합을
+// 오케스트레이션하는 순수 흐름만 갖고 있다. 그래서 이 테스트는 localCache.getOrLoad가 항상
+// loader(=loadFromRemoteOrKis)를 그대로 실행하게 스텁해서 "L1은 항상 미스"인 상태로 두고,
+// L2(remoteCache) 이후의 흐름(분산락/fail-open/이력 기록)만 검증한다. L1 자체의 동작
+// (single-flight, 만료, 실패 재시도)은 KisTokenLocalCacheTest에서 별도로 검증한다.
 @ExtendWith(MockitoExtension.class)
 class KisTokenCacheQueryServiceTest {
 
@@ -49,50 +54,55 @@ class KisTokenCacheQueryServiceTest {
     private KisTokenLogCommandService kisTokenLogCommandService;
 
     @Mock
-    private StringRedisTemplate redisTemplate;
+    private KisTokenLocalCache localCache;
 
     @Mock
-    private ValueOperations<String, String> valueOperations;
-
-    @Mock
-    private KisTokenCacheLock kisTokenCacheLock;
+    private KisTokenRemoteCache remoteCache;
 
     private KisTokenCacheQueryService kisTokenCacheQueryService;
 
     @BeforeEach
+    @SuppressWarnings("unchecked")
     void setUp() {
         kisTokenCacheQueryService = new KisTokenCacheQueryService(
-                kisOAuthClient, kisTokenLogCommandService, redisTemplate, kisTokenCacheLock);
+                kisOAuthClient, kisTokenLogCommandService, localCache, remoteCache);
+
+        // L1은 항상 미스로 취급하고, 넘겨받은 loader를 그대로 실행한 결과를 반환한다.
+        // peekAccessToken 테스트들은 이 스텁을 안 쓰므로 lenient로 strict-stubbing 오탐을 막는다.
+        org.mockito.Mockito.lenient().when(localCache.getOrLoad(anyString(), any())).thenAnswer(invocation -> {
+            Supplier<KisTokenEntry> loader = invocation.getArgument(1);
+            return loader.get();
+        });
     }
 
     @Test
-    @DisplayName("캐시에 값이 있으면 KIS 호출 없이 그 값을 반환한다")
-    void getAccessToken_cacheHit_returnsCachedValueWithoutCallingKis() {
+    @DisplayName("L2(Redis) 캐시에 값이 있으면 KIS 호출/분산락 없이 그 값을 반환한다")
+    void getAccessToken_remoteCacheHit_returnsCachedValueWithoutCallingKis() {
         // given
         UUID userId = UUID.randomUUID();
-        String key = KisTokenCacheKeys.accessToken(userId);
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        given(valueOperations.get(key)).willReturn("cached-token");
+        UUID accountId = UUID.randomUUID();
+        String key = KisTokenCacheKeys.accessToken(accountId);
+        given(remoteCache.get(key)).willReturn(Optional.of(new KisTokenEntry("cached-token", Duration.ofHours(1))));
 
         // when
-        String result = kisTokenCacheQueryService.getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL);
+        String result = kisTokenCacheQueryService.getAccessToken(userId, accountId, "app-key", "secret-key", AccountType.REAL);
 
         // then
         assertThat(result).isEqualTo("cached-token");
         verifyNoInteractions(kisOAuthClient);
-        verifyNoInteractions(kisTokenCacheLock);
+        verify(remoteCache, never()).tryLock(any(), any());
     }
 
     @Test
-    @DisplayName("캐시 미스 시 락을 잡고 KIS를 호출해 값을 캐시에 저장한 뒤 반환하고, 락은 반드시 해제한다")
-    void getAccessToken_cacheMiss_fetchesFromKisAndCaches() {
+    @DisplayName("L2 캐시 미스 시 락을 잡고 KIS를 호출해 값을 저장한 뒤 반환하고, 락은 반드시 해제한다")
+    void getAccessToken_remoteCacheMiss_fetchesFromKisAndCaches() {
         // given
         UUID userId = UUID.randomUUID();
         UUID accountId = UUID.randomUUID();
-        String key = KisTokenCacheKeys.accessToken(userId);
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        given(valueOperations.get(key)).willReturn(null);
-        given(kisTokenCacheLock.tryLock(eq(key), anyString(), any(Duration.class))).willReturn(true);
+        String key = KisTokenCacheKeys.accessToken(accountId);
+        given(remoteCache.get(key)).willReturn(Optional.empty());
+        given(remoteCache.tryLock(eq(key), anyString())).willReturn(true);
+        given(remoteCache.recentFailure(key)).willReturn(Optional.empty());
         given(kisOAuthClient.getAccessToken("app-key", "secret-key", AccountType.REAL))
                 .willReturn(new KisAccessTokenResponse("issued-token", "Bearer", 86400, "2026-01-01 00:00:00"));
 
@@ -101,48 +111,48 @@ class KisTokenCacheQueryServiceTest {
 
         // then
         assertThat(result).isEqualTo("issued-token");
-        verify(valueOperations).set(eq(key), eq("issued-token"), any(Duration.class));
+        verify(remoteCache).save(eq(key), eq(new KisTokenEntry("issued-token", Duration.ofSeconds(86400 - 60))));
         verify(kisTokenLogCommandService).recordSuccess(accountId, userId, KisTokenType.ACCESS_TOKEN);
-        // 캐시 저장 직후 조기 해제 + finally 안전망까지 2번 불림 (Lua compare-and-delete라 중복 호출은 무해함)
-        verify(kisTokenCacheLock, times(2)).unlock(eq(key), anyString());
+        // 저장 직후 콜백으로 한 번, 호출부 finally 안전망으로 한 번 - 총 2번 (중복 해제는 무해함)
+        verify(remoteCache, org.mockito.Mockito.times(2)).unlock(eq(key), anyString());
     }
 
     @Test
-    @DisplayName("락은 캐시 저장 직후 바로 풀리고, DB 이력 기록(부가 작업)은 그 이후에 일어난다")
+    @DisplayName("락이 실제로 보호해야 하는 작업(저장/해제)이 끝난 뒤에야 DB 이력 기록(부가 작업)이 일어난다")
     void getAccessToken_releasesLockBeforeRecordingSuccess() {
         // given
         UUID userId = UUID.randomUUID();
         UUID accountId = UUID.randomUUID();
-        String key = KisTokenCacheKeys.accessToken(userId);
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        given(valueOperations.get(key)).willReturn(null);
-        given(kisTokenCacheLock.tryLock(eq(key), anyString(), any(Duration.class))).willReturn(true);
+        String key = KisTokenCacheKeys.accessToken(accountId);
+        given(remoteCache.get(key)).willReturn(Optional.empty());
+        given(remoteCache.tryLock(eq(key), anyString())).willReturn(true);
+        given(remoteCache.recentFailure(key)).willReturn(Optional.empty());
         given(kisOAuthClient.getAccessToken("app-key", "secret-key", AccountType.REAL))
                 .willReturn(new KisAccessTokenResponse("issued-token", "Bearer", 86400, "2026-01-01 00:00:00"));
 
         // when
         kisTokenCacheQueryService.getAccessToken(userId, accountId, "app-key", "secret-key", AccountType.REAL);
 
-        // then - 캐시 저장 -> 락 해제 -> (락과 무관한 부가 작업인) DB 기록 순서여야 락 보유 시간이 최소화된다
-        InOrder inOrder = inOrder(valueOperations, kisTokenCacheLock, kisTokenLogCommandService);
-        inOrder.verify(valueOperations).set(eq(key), eq("issued-token"), any(Duration.class));
-        inOrder.verify(kisTokenCacheLock).unlock(eq(key), anyString());
+        // then
+        InOrder inOrder = inOrder(remoteCache, kisTokenLogCommandService);
+        inOrder.verify(remoteCache).save(eq(key), any());
+        inOrder.verify(remoteCache).unlock(eq(key), anyString());
         inOrder.verify(kisTokenLogCommandService).recordSuccess(accountId, userId, KisTokenType.ACCESS_TOKEN);
     }
 
     @Test
-    @DisplayName("KIS 호출이 실패하면 실패 이력을 남기고 예외를 그대로 전파하며, 락은 반드시 해제한다")
-    void getAccessToken_kisFails_recordsFailureAndPropagatesAndUnlocks() {
+    @DisplayName("KIS 호출이 실패하면 실패 마커를 남기고 실패 이력을 기록하며 예외를 그대로 전파하고, 락은 반드시 해제한다")
+    void getAccessToken_kisFails_marksFailureRecordsAndPropagatesAndUnlocks() {
         // given
         UUID userId = UUID.randomUUID();
         UUID accountId = UUID.randomUUID();
-        String key = KisTokenCacheKeys.accessToken(userId);
+        String key = KisTokenCacheKeys.accessToken(accountId);
         KisBusinessException kisException =
                 new KisBusinessException(AccountErrorCode.INVALID_KIS_CREDENTIALS, "EGW00123", "유효하지 않은 앱키입니다.");
 
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        given(valueOperations.get(key)).willReturn(null);
-        given(kisTokenCacheLock.tryLock(eq(key), anyString(), any(Duration.class))).willReturn(true);
+        given(remoteCache.get(key)).willReturn(Optional.empty());
+        given(remoteCache.tryLock(eq(key), anyString())).willReturn(true);
+        given(remoteCache.recentFailure(key)).willReturn(Optional.empty());
         given(kisOAuthClient.getAccessToken("app-key", "secret-key", AccountType.REAL)).willThrow(kisException);
 
         // when & then
@@ -150,54 +160,27 @@ class KisTokenCacheQueryServiceTest {
                 kisTokenCacheQueryService.getAccessToken(userId, accountId, "app-key", "secret-key", AccountType.REAL))
                 .isSameAs(kisException);
 
+        verify(remoteCache).markRecentFailure(key, AccountErrorCode.INVALID_KIS_CREDENTIALS);
         verify(kisTokenLogCommandService)
                 .recordFail(accountId, userId, KisTokenType.ACCESS_TOKEN, "EGW00123", "유효하지 않은 앱키입니다.");
-        // 실패 시에도 조기 해제 + finally 안전망까지 2번 불림
-        verify(kisTokenCacheLock, times(2)).unlock(eq(key), anyString());
-        // 실제 토큰 값은 캐시에 안 남지만, 실패 마커(key:recent-failure)는 남으므로 set() 자체는 호출됨
-        verify(valueOperations, never()).set(eq(key), any(), any(Duration.class));
-        // rate limit이 아닌 일반 실패는 짧은 억제 시간(1초) - 일시적일 수 있으니 재시도 기회를 오래 막지 않음
-        verify(valueOperations).set(eq(key + ":recent-failure"), eq("INVALID_KIS_CREDENTIALS"), eq(Duration.ofSeconds(1)));
+        verify(remoteCache, never()).save(any(), any());
+        verify(remoteCache, org.mockito.Mockito.times(2)).unlock(eq(key), anyString());
     }
 
     @Test
-    @DisplayName("rate limit으로 실패하면, 확정적으로 한동안 계속 실패할 것이므로 훨씬 긴 시간 동안 억제한다")
-    void getAccessToken_rateLimited_marksRecentFailureWithLongerTtl() {
+    @DisplayName("직전 락 홀더가 방금 실패해 실패 마커가 남아있으면, KIS 호출 없이 그 종류 그대로 즉시 실패한다")
+    void getAccessToken_recentFailureMarkerExists_failsFastWithoutCallingKis() {
         // given
         UUID userId = UUID.randomUUID();
         UUID accountId = UUID.randomUUID();
-        String key = KisTokenCacheKeys.accessToken(userId);
-        KisBusinessException rateLimitException =
-                new KisBusinessException(AccountErrorCode.KIS_RATE_LIMITED, "EGW00133", "접근토큰 발급 제한");
-
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        given(valueOperations.get(key)).willReturn(null);
-        given(kisTokenCacheLock.tryLock(eq(key), anyString(), any(Duration.class))).willReturn(true);
-        given(kisOAuthClient.getAccessToken("app-key", "secret-key", AccountType.REAL)).willThrow(rateLimitException);
+        String key = KisTokenCacheKeys.accessToken(accountId);
+        given(remoteCache.get(key)).willReturn(Optional.empty());
+        given(remoteCache.tryLock(eq(key), anyString())).willReturn(true);
+        given(remoteCache.recentFailure(key)).willReturn(Optional.of(AccountErrorCode.KIS_RATE_LIMITED));
 
         // when & then
         assertThatThrownBy(() ->
                 kisTokenCacheQueryService.getAccessToken(userId, accountId, "app-key", "secret-key", AccountType.REAL))
-                .isSameAs(rateLimitException);
-
-        // KIS OAuth rate limit(1분당 1회)은 확정적으로 한동안 계속 실패하므로 55초까지 억제해도 손해가 없음
-        verify(valueOperations).set(eq(key + ":recent-failure"), eq("KIS_RATE_LIMITED"), eq(Duration.ofSeconds(55)));
-    }
-
-    @Test
-    @DisplayName("직전 락 홀더가 방금 실패해 실패 마커가 남아있으면, KIS 호출 없이 즉시 실패한다")
-    void getAccessToken_recentFailureMarkerExists_failsFastWithoutCallingKis() {
-        // given
-        UUID userId = UUID.randomUUID();
-        String key = KisTokenCacheKeys.accessToken(userId);
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        given(valueOperations.get(key)).willReturn(null);
-        given(kisTokenCacheLock.tryLock(eq(key), anyString(), any(Duration.class))).willReturn(true);
-        given(valueOperations.get(key + ":recent-failure")).willReturn(AccountErrorCode.KIS_RATE_LIMITED.name());
-
-        // when & then - 마커에 저장된 원래 실패 종류(KIS_RATE_LIMITED)를 그대로 재현해야 한다
-        assertThatThrownBy(() ->
-                kisTokenCacheQueryService.getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(exception -> {
                     BusinessException businessException = (BusinessException) exception;
@@ -205,7 +188,7 @@ class KisTokenCacheQueryServiceTest {
                 });
 
         verifyNoInteractions(kisOAuthClient);
-        verify(kisTokenCacheLock).unlock(eq(key), anyString());
+        verify(remoteCache).unlock(eq(key), anyString());
     }
 
     @Test
@@ -213,15 +196,15 @@ class KisTokenCacheQueryServiceTest {
     void getAccessToken_lockNotAcquired_returnsValueFilledByAnotherHolder() {
         // given
         UUID userId = UUID.randomUUID();
-        String key = KisTokenCacheKeys.accessToken(userId);
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        given(valueOperations.get(key))
-                .willReturn(null)               // 최초 조회
-                .willReturn("filled-by-other"); // 락 못 잡고 대기 중 재확인
-        given(kisTokenCacheLock.tryLock(eq(key), anyString(), any(Duration.class))).willReturn(false);
+        UUID accountId = UUID.randomUUID();
+        String key = KisTokenCacheKeys.accessToken(accountId);
+        given(remoteCache.get(key))
+                .willReturn(Optional.empty()) // 최초 조회
+                .willReturn(Optional.of(new KisTokenEntry("filled-by-other", Duration.ofHours(1)))); // 대기 중 재확인
+        given(remoteCache.tryLock(eq(key), anyString())).willReturn(false);
 
         // when
-        String result = kisTokenCacheQueryService.getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL);
+        String result = kisTokenCacheQueryService.getAccessToken(userId, accountId, "app-key", "secret-key", AccountType.REAL);
 
         // then
         assertThat(result).isEqualTo("filled-by-other");
@@ -231,16 +214,16 @@ class KisTokenCacheQueryServiceTest {
     @Test
     @DisplayName("락을 계속 못 잡고 캐시도 안 채워지면 타임아웃 예외를 던진다")
     void getAccessToken_lockNeverAcquired_throwsTimeoutException() {
-        // given - LOCK_WAIT_TIMEOUT(12s) 다 채우는 실제 대기가 일어나 다른 테스트보다 느리다
+        // given - KisTokenCacheLock.WAIT_TIMEOUT(42s)을 다 채우는 실제 대기가 일어나 다른 테스트보다 느리다
         UUID userId = UUID.randomUUID();
-        String key = KisTokenCacheKeys.accessToken(userId);
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        given(valueOperations.get(key)).willReturn(null);
-        given(kisTokenCacheLock.tryLock(eq(key), anyString(), any(Duration.class))).willReturn(false);
+        UUID accountId = UUID.randomUUID();
+        String key = KisTokenCacheKeys.accessToken(accountId);
+        given(remoteCache.get(key)).willReturn(Optional.empty());
+        given(remoteCache.tryLock(eq(key), anyString())).willReturn(false);
 
         // when & then
         assertThatThrownBy(() ->
-                kisTokenCacheQueryService.getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL))
+                kisTokenCacheQueryService.getAccessToken(userId, accountId, "app-key", "secret-key", AccountType.REAL))
                 .isInstanceOf(BusinessException.class)
                 .satisfies(exception -> {
                     BusinessException businessException = (BusinessException) exception;
@@ -252,14 +235,13 @@ class KisTokenCacheQueryServiceTest {
     }
 
     @Test
-    @DisplayName("초기 캐시 조회 시 Redis 장애가 나면 락 없이 바로 KIS를 직접 호출한다 (fail-open)")
-    void getAccessToken_initialLookupRedisFails_fallsOpenToKis() {
+    @DisplayName("초기 조회에서 Redis 장애가 나면 락 없이 바로 KIS를 직접 호출한다 (fail-open)")
+    void getAccessToken_initialLookupRedisUnavailable_fallsOpenToKis() {
         // given
         UUID userId = UUID.randomUUID();
         UUID accountId = UUID.randomUUID();
-        String key = KisTokenCacheKeys.accessToken(userId);
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        given(valueOperations.get(key)).willThrow(new RedisConnectionFailureException("연결 실패"));
+        String key = KisTokenCacheKeys.accessToken(accountId);
+        given(remoteCache.get(key)).willThrow(new RedisUnavailableException(new RuntimeException("연결 실패")));
         given(kisOAuthClient.getAccessToken("app-key", "secret-key", AccountType.REAL))
                 .willReturn(new KisAccessTokenResponse("issued-token", "Bearer", 86400, "2026-01-01 00:00:00"));
 
@@ -268,49 +250,29 @@ class KisTokenCacheQueryServiceTest {
 
         // then
         assertThat(result).isEqualTo("issued-token");
-        verifyNoInteractions(kisTokenCacheLock);
+        verify(remoteCache, never()).tryLock(any(), any());
+        verify(remoteCache, never()).unlock(any(), any());
     }
 
     @Test
-    @DisplayName("락 획득 시 Redis 장애가 나면 락 없이 바로 KIS를 직접 호출한다 (fail-open)")
-    void getAccessToken_tryLockRedisFails_fallsOpenToKis() {
+    @DisplayName("락 획득 시도에서 Redis 장애가 나면 락 없이 바로 KIS를 직접 호출한다 (fail-open)")
+    void getAccessToken_tryLockRedisUnavailable_fallsOpenToKis() {
         // given
         UUID userId = UUID.randomUUID();
-        String key = KisTokenCacheKeys.accessToken(userId);
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        given(valueOperations.get(key)).willReturn(null);
-        given(kisTokenCacheLock.tryLock(eq(key), anyString(), any(Duration.class)))
-                .willThrow(new RedisConnectionFailureException("연결 실패"));
+        UUID accountId = UUID.randomUUID();
+        String key = KisTokenCacheKeys.accessToken(accountId);
+        given(remoteCache.get(key)).willReturn(Optional.empty());
+        given(remoteCache.tryLock(eq(key), anyString()))
+                .willThrow(new RedisUnavailableException(new RuntimeException("연결 실패")));
         given(kisOAuthClient.getAccessToken("app-key", "secret-key", AccountType.REAL))
                 .willReturn(new KisAccessTokenResponse("issued-token", "Bearer", 86400, "2026-01-01 00:00:00"));
 
         // when
-        String result = kisTokenCacheQueryService.getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL);
+        String result = kisTokenCacheQueryService.getAccessToken(userId, accountId, "app-key", "secret-key", AccountType.REAL);
 
         // then
         assertThat(result).isEqualTo("issued-token");
-        verify(kisTokenCacheLock, never()).unlock(any(), any());
-    }
-
-    @Test
-    @DisplayName("캐시 저장 시 Redis 장애가 나도 발급받은 토큰은 정상 반환한다")
-    void getAccessToken_cacheSaveFails_stillReturnsToken() {
-        // given
-        UUID userId = UUID.randomUUID();
-        String key = KisTokenCacheKeys.accessToken(userId);
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        given(valueOperations.get(key)).willReturn(null);
-        given(kisTokenCacheLock.tryLock(eq(key), anyString(), any(Duration.class))).willReturn(true);
-        given(kisOAuthClient.getAccessToken("app-key", "secret-key", AccountType.REAL))
-                .willReturn(new KisAccessTokenResponse("issued-token", "Bearer", 86400, "2026-01-01 00:00:00"));
-        willThrow(new RedisConnectionFailureException("연결 실패"))
-                .given(valueOperations).set(eq(key), eq("issued-token"), any(Duration.class));
-
-        // when
-        String result = kisTokenCacheQueryService.getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL);
-
-        // then
-        assertThat(result).isEqualTo("issued-token");
+        verify(remoteCache, never()).unlock(any(), any());
     }
 
     @Test
@@ -318,31 +280,32 @@ class KisTokenCacheQueryServiceTest {
     void getAccessToken_expiresInTooSmall_skipsCaching() {
         // given
         UUID userId = UUID.randomUUID();
-        String key = KisTokenCacheKeys.accessToken(userId);
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        given(valueOperations.get(key)).willReturn(null);
-        given(kisTokenCacheLock.tryLock(eq(key), anyString(), any(Duration.class))).willReturn(true);
+        UUID accountId = UUID.randomUUID();
+        String key = KisTokenCacheKeys.accessToken(accountId);
+        given(remoteCache.get(key)).willReturn(Optional.empty());
+        given(remoteCache.tryLock(eq(key), anyString())).willReturn(true);
+        given(remoteCache.recentFailure(key)).willReturn(Optional.empty());
         given(kisOAuthClient.getAccessToken("app-key", "secret-key", AccountType.REAL))
                 .willReturn(new KisAccessTokenResponse("issued-token", "Bearer", 30, "2026-01-01 00:00:00"));
 
         // when
-        String result = kisTokenCacheQueryService.getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL);
+        String result = kisTokenCacheQueryService.getAccessToken(userId, accountId, "app-key", "secret-key", AccountType.REAL);
 
-        // then
+        // then - save 자체는 KisTokenRemoteCache.save 내부에서 ttl==0이면 저장을 건너뛴다 (여기선 호출까지만 확인)
         assertThat(result).isEqualTo("issued-token");
-        verify(valueOperations, never()).set(any(), any(), any(Duration.class));
+        verify(remoteCache).save(eq(key), eq(new KisTokenEntry("issued-token", Duration.ZERO)));
     }
 
     @Test
-    @DisplayName("접속키도 동일한 락+캐시 흐름을 탄다 - 캐시 미스 시 KIS 호출 후 저장한다")
-    void getApprovalKey_cacheMiss_fetchesFromKisAndCaches() {
+    @DisplayName("접속키도 동일한 흐름을 탄다 - L2 미스 시 KIS 호출 후 저장한다")
+    void getApprovalKey_remoteCacheMiss_fetchesFromKisAndCaches() {
         // given
         UUID userId = UUID.randomUUID();
         UUID accountId = UUID.randomUUID();
-        String key = KisTokenCacheKeys.approvalKey(userId);
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        given(valueOperations.get(key)).willReturn(null);
-        given(kisTokenCacheLock.tryLock(eq(key), anyString(), any(Duration.class))).willReturn(true);
+        String key = KisTokenCacheKeys.approvalKey(accountId);
+        given(remoteCache.get(key)).willReturn(Optional.empty());
+        given(remoteCache.tryLock(eq(key), anyString())).willReturn(true);
+        given(remoteCache.recentFailure(key)).willReturn(Optional.empty());
         given(kisOAuthClient.getApprovalKey("app-key", "secret-key", AccountType.REAL))
                 .willReturn(new KisApprovalKeyResponse("issued-approval-key"));
 
@@ -351,60 +314,68 @@ class KisTokenCacheQueryServiceTest {
 
         // then
         assertThat(result).isEqualTo("issued-approval-key");
-        verify(valueOperations).set(eq(key), eq("issued-approval-key"), any(Duration.class));
         verify(kisTokenLogCommandService).recordSuccess(accountId, userId, KisTokenType.APPROVAL_KEY);
     }
 
     @Test
-    @DisplayName("접속키 발급이 실패하면 실패 이력을 남기고 예외를 그대로 전파한다")
-    void getApprovalKey_kisFails_recordsFailureAndPropagates() {
+    @DisplayName("L1(로컬)에 값이 있으면 그 값을 담은 Optional을 반환하고 L2는 조회하지 않는다")
+    void peekAccessToken_localCacheHit_returnsWithoutTouchingRemote() {
         // given
-        UUID userId = UUID.randomUUID();
         UUID accountId = UUID.randomUUID();
-        String key = KisTokenCacheKeys.approvalKey(userId);
-        KisBusinessException kisException =
-                new KisBusinessException(AccountErrorCode.KIS_TOKEN_ISSUE_FAILED, "EGW00001", "발급 실패");
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        given(valueOperations.get(key)).willReturn(null);
-        given(kisTokenCacheLock.tryLock(eq(key), anyString(), any(Duration.class))).willReturn(true);
-        given(kisOAuthClient.getApprovalKey("app-key", "secret-key", AccountType.REAL)).willThrow(kisException);
-
-        // when & then
-        assertThatThrownBy(() ->
-                kisTokenCacheQueryService.getApprovalKey(userId, accountId, "app-key", "secret-key", AccountType.REAL))
-                .isSameAs(kisException);
-
-        verify(kisTokenLogCommandService)
-                .recordFail(accountId, userId, KisTokenType.APPROVAL_KEY, "EGW00001", "발급 실패");
-    }
-
-    @Test
-    @DisplayName("접근토큰 캐시에 값이 있으면 그 값을 담은 Optional을 반환한다")
-    void peekAccessToken_returnsCachedValue() {
-        // given
-        UUID userId = UUID.randomUUID();
-        String key = KisTokenCacheKeys.accessToken(userId);
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        given(valueOperations.get(key)).willReturn("cached-token");
+        String key = KisTokenCacheKeys.accessToken(accountId);
+        given(localCache.peek(key)).willReturn(Optional.of("local-token"));
 
         // when
-        Optional<String> result = kisTokenCacheQueryService.peekAccessToken(userId);
+        Optional<String> result = kisTokenCacheQueryService.peekAccessToken(accountId);
 
         // then
-        assertThat(result).contains("cached-token");
+        assertThat(result).contains("local-token");
+        verifyNoInteractions(remoteCache);
     }
 
     @Test
-    @DisplayName("접근토큰 캐시가 비어있으면 빈 Optional을 반환한다")
-    void peekAccessToken_returnsEmptyWhenCacheMiss() {
+    @DisplayName("L1이 비어있으면 L2(Redis)를 조회해서 반환한다")
+    void peekAccessToken_localCacheMiss_fallsBackToRemote() {
         // given
-        UUID userId = UUID.randomUUID();
-        String key = KisTokenCacheKeys.accessToken(userId);
-        given(redisTemplate.opsForValue()).willReturn(valueOperations);
-        given(valueOperations.get(key)).willReturn(null);
+        UUID accountId = UUID.randomUUID();
+        String key = KisTokenCacheKeys.accessToken(accountId);
+        given(localCache.peek(key)).willReturn(Optional.empty());
+        given(remoteCache.get(key)).willReturn(Optional.of(new KisTokenEntry("remote-token", Duration.ofHours(1))));
 
         // when
-        Optional<String> result = kisTokenCacheQueryService.peekAccessToken(userId);
+        Optional<String> result = kisTokenCacheQueryService.peekAccessToken(accountId);
+
+        // then
+        assertThat(result).contains("remote-token");
+    }
+
+    @Test
+    @DisplayName("L1/L2 둘 다 비어있으면 빈 Optional을 반환한다")
+    void peekAccessToken_bothCachesMiss_returnsEmpty() {
+        // given
+        UUID accountId = UUID.randomUUID();
+        String key = KisTokenCacheKeys.accessToken(accountId);
+        given(localCache.peek(key)).willReturn(Optional.empty());
+        given(remoteCache.get(key)).willReturn(Optional.empty());
+
+        // when
+        Optional<String> result = kisTokenCacheQueryService.peekAccessToken(accountId);
+
+        // then
+        assertThat(result).isEmpty();
+    }
+
+    @Test
+    @DisplayName("L2 조회 중 Redis 장애가 나도 예외 없이 빈 Optional을 반환한다")
+    void peekAccessToken_remoteCacheUnavailable_returnsEmpty() {
+        // given
+        UUID accountId = UUID.randomUUID();
+        String key = KisTokenCacheKeys.accessToken(accountId);
+        given(localCache.peek(key)).willReturn(Optional.empty());
+        given(remoteCache.get(key)).willThrow(new RedisUnavailableException(new RuntimeException("타임아웃")));
+
+        // when
+        Optional<String> result = kisTokenCacheQueryService.peekAccessToken(accountId);
 
         // then
         assertThat(result).isEmpty();

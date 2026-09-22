@@ -15,6 +15,7 @@ import com.sajo.trading_service.trading.exception.TradingErrorCode;
 import com.sajo.trading_service.trading.repository.command.AutoTradingCommandRepository;
 import com.sajo.trading_service.trading.repository.command.TradingLimitCommandRepository;
 import com.sajo.trading_service.trading.repository.query.OrderQueryRepository;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -564,7 +565,7 @@ class AutoTradingCommandServiceTest {
     }
 
     @Test
-    @DisplayName("활성 전략이고 공통 한도가 존재하면 자동매매 활성화 트랜잭션을 실행한다")
+    @DisplayName("공통 한도가 존재하면 자동매매 활성화 트랜잭션을 실행한다")
     void activateAutoTrading() {
         // given
         UUID userId = UUID.randomUUID();
@@ -603,15 +604,6 @@ class AutoTradingCommandServiceTest {
         given(tradingLimitCommandRepository.existsByUserId(userId))
                 .willReturn(true);
 
-        given(strategyClient.getStrategy(strategyId))
-                .willReturn(
-                        new StrategyClientResponse(
-                                strategyId,
-                                userId,
-                                StrategyStatus.ACTIVE
-                        )
-                );
-
         given(autoTradingUpdateTransactionService.update(
                 userId,
                 autoTradingId,
@@ -630,9 +622,6 @@ class AutoTradingCommandServiceTest {
         assertThat(response.enabled())
                 .isTrue();
 
-        verify(strategyClient)
-                .getStrategy(strategyId);
-
         verify(autoTradingUpdateTransactionService)
                 .update(
                         userId,
@@ -641,6 +630,10 @@ class AutoTradingCommandServiceTest {
                 );
     }
 
+    // TODO: #307 - 전략 활성화 상태(StrategyStatus) 검증 로직이
+    // AutoTradingCommandService.updateAutoTrading()에서 주석 처리되어 비활성화됨.
+    // 로직 복원 시 @Disabled 제거.
+    @Disabled("전략 활성화 상태 검증 로직 임시 비활성화 (#307)")
     @Test
     @DisplayName("비활성 전략은 자동매매를 활성화할 수 없다")
     void activateAutoTradingWithInactiveStrategy() {
@@ -704,6 +697,7 @@ class AutoTradingCommandServiceTest {
                 .isFalse();
     }
 
+    @Disabled("전략 활성화 상태 검증 로직 임시 비활성화 (#307)")
     @Test
     @DisplayName("삭제된 전략은 자동매매를 활성화할 수 없다")
     void activateAutoTradingWithDeletedStrategy() {
@@ -859,15 +853,6 @@ class AutoTradingCommandServiceTest {
         given(tradingLimitCommandRepository.existsByUserId(userId))
                 .willReturn(true);
 
-        given(strategyClient.getStrategy(strategyId))
-                .willReturn(
-                        new StrategyClientResponse(
-                                strategyId,
-                                userId,
-                                StrategyStatus.ACTIVE
-                        )
-                );
-
         given(autoTradingUpdateTransactionService.update(
                 userId,
                 autoTradingId,
@@ -890,9 +875,6 @@ class AutoTradingCommandServiceTest {
 
         verify(tradingLimitCommandRepository)
                 .existsByUserId(userId);
-
-        verify(strategyClient)
-                .getStrategy(strategyId);
 
         verify(autoTradingUpdateTransactionService)
                 .update(
