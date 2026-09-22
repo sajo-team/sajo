@@ -43,6 +43,10 @@ spring:
             uri: lb://market-service
             predicates:
               - Path=/api/v1/admin/strategy-evaluation-failures/**
+          - id: market-service-support
+            uri: lb://market-service
+            predicates:
+              - Path=/api/v1/support/**
 
           - id: trading-service-trading-limits
             uri: lb://trading-service

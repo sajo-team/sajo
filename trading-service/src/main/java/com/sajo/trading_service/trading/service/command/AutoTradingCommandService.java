@@ -84,16 +84,16 @@ public class AutoTradingCommandService {
                 );
             }
 
-            StrategyClientResponse strategy =
-                    getStrategyOrThrow(
-                            autoTrading.getStrategyId()
-                    );
-
-            if (strategy.status() != StrategyStatus.ACTIVE) {
-                throw new BusinessException(
-                        TradingErrorCode.STRATEGY_NOT_ACTIVE
-                );
-            }
+//            StrategyClientResponse strategy =
+//                    getStrategyOrThrow(
+//                            autoTrading.getStrategyId()
+//                    );
+//
+//            if (strategy.status() != StrategyStatus.ACTIVE) {
+//                throw new BusinessException(
+//                        TradingErrorCode.STRATEGY_NOT_ACTIVE
+//                );
+//            }
         }
 
         return autoTradingUpdateTransactionService.update(

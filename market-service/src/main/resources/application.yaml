@@ -46,6 +46,31 @@ spring:
     consumer:
       group-id: market-consumer-group
 
+  ai:
+    model:
+      # sajo.support.rag.enabled(SupportRagConfig 등)와 별개로, Spring AI의 OpenAI 자동구성은
+      # 이 값이 "openai"이기만 하면 SupportRagConfig가 켜져 있는지와 무관하게 컨텍스트 기동 시
+      # OpenAiChatModel/OpenAiEmbeddingModel 빈을 무조건 즉시 생성하고, 그 생성 과정에서
+      # api-key가 비어 있으면 즉시 예외를 던진다(OPENAI_API_KEY 없이 테스트를 돌릴 때 바로
+      # 이 문제가 났었다 - sajo.support.rag.enabled를 false로 꺼도 소용없었던 이유).
+      # 그래서 이 값 자체도 SUPPORT_RAG_ENABLED와 함께 켜는 별도 플래그로 명시적으로 관리한다.
+      # 기본값 none이면 Spring AI가 이 자동구성 자체를 건너뛴다.
+      chat: ${SPRING_AI_CHAT_MODEL:none}
+      embedding: ${SPRING_AI_EMBEDDING_MODEL:none}
+      # chat/embedding만 명시했다고 안전한 게 아니다. classpath에 openai 스타터가 "하나만"
+      # 있으면 Spring AI는 provider가 모호하지 않다고 판단해 image/audio(speech, transcription)/
+      # moderation 셀렉터까지도 명시적으로 지정하지 않은 경우 전부 자동으로 "openai"로 잡아,
+      # 해당 자동구성들도 컨텍스트 기동 시 각자의 OpenAi*Model 빈을 무조건 생성한다(실제로
+      # openAiSdkAudioSpeechModel 빈 생성에서 API 키 부재로 컨텍스트 로딩이 실패했다). 이 앱은
+      # 채팅/임베딩(RAG) 외에는 이 모델 타입들을 전혀 쓰지 않으므로 항상 none으로 고정한다.
+      image: none
+      moderation: none
+      audio:
+        speech: none
+        transcription: none
+    openai:
+      api-key: ${OPENAI_API_KEY:}
+
 management:
   endpoints:
     web:
@@ -84,6 +109,16 @@ market:
     realtime-price-snapshot-cron: "${MARKET_WEBSOCKET_REALTIME_PRICE_SNAPSHOT_CRON:0 * * * * *}"
 
 sajo:
+  support:
+    rag:
+      # RAG 기반 고객 응대 챗봇(#도전 과제). market.websocket.enabled 등 이 프로젝트의 다른
+      # 외부 연동 플래그와 동일하게 기본값은 false다 - OPENAI_API_KEY 없이 전체 테스트/컨텍스트
+      # 로딩이 항상 가능해야 하고(테스트 프로필에도 OpenAI 자격 증명을 요구하지 않는다),
+      # 이 기능을 실제로 쓰려면 .env에서 SUPPORT_RAG_ENABLED=true로 명시적으로 켜야 한다.
+      enabled: ${SUPPORT_RAG_ENABLED:false}
+      document-path: classpath:support-docs/market-service-overview.md
+      top-k: ${SUPPORT_RAG_TOP_K:3}
+
   scheduler:
     enabled: ${MARKET_SCHEDULER_ENABLED:false}
     system-user-id: ${MARKET_SCHEDULER_SYSTEM_USER_ID:}

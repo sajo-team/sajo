@@ -8,6 +8,9 @@ public final class KisTokenCacheTtl {
     // 캐시 만료를 KIS 실제 만료보다 앞당겨서, 만료 직전 토큰을 유효하다고 잘못 캐싱하는 것 방지
     private static final long SAFETY_MARGIN_SECONDS = 60;
 
+    // KIS 문서 기준 approval key(웹소켓 접속키) 유효기간은 24시간 - expires_in 같은 응답 필드가 없어 고정값 사용
+    public static final Duration APPROVAL_KEY_TTL = Duration.ofHours(23);
+
     private KisTokenCacheTtl() {
     }
 

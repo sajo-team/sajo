@@ -63,7 +63,7 @@ public class AccountDeleteFacade {
         // 폐기 시도 자체가 없었던 경우(token 미보유, 또는 캐시 조회 자체의 실패)는 기록하지 않는다 -
         Optional<String> token;
         try {
-            token = cacheQueryService.peekAccessToken(userId);
+            token = cacheQueryService.peekAccessToken(account.getId());
         } catch (Exception e) {
             log.warn("계좌 삭제 시 캐시된 토큰 조회 실패. userId={}", userId, e);
             token = Optional.empty();
@@ -84,9 +84,9 @@ public class AccountDeleteFacade {
             }
         }
 
-        // redis 캐시만 제거 - KIS는 접속키 폐기 API가 없어 실제 무효화는 안 됨.
+        // 캐시(Redis+로컬)만 제거 - KIS는 접속키 폐기 API가 없어 실제 무효화는 안 됨.
         try {
-            cacheCommandService.evictKisTokenCaches(userId);
+            cacheCommandService.evictKisTokenCaches(account.getId());
         } catch (Exception e) {
             log.warn("계좌 삭제 시 KIS 토큰 캐시 제거 실패. userId={}", userId, e);
         }
