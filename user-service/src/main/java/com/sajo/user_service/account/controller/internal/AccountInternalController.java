@@ -1,6 +1,7 @@
 package com.sajo.user_service.account.controller.internal;
 
 import com.sajo.user_service.account.controller.dto.response.AccessTokenResponse;
+import com.sajo.user_service.account.controller.dto.response.AccountHoldingPositionResponse;
 import com.sajo.user_service.account.controller.dto.response.AccountOrderInfoResponse;
 import com.sajo.user_service.account.controller.dto.response.ApprovalKeyResponse;
 import com.sajo.user_service.account.controller.dto.response.OrderableAmountResponse;
@@ -52,6 +53,14 @@ public class AccountInternalController {
             @PathVariable String stockCode
     ) {
         return accountKisQueryService.getSellableQuantity(userId, stockCode);
+    }
+
+    @GetMapping("/accounts/{userId}/holdings/{stockCode}/position")
+    public AccountHoldingPositionResponse getHoldingPosition(
+            @PathVariable UUID userId,
+            @PathVariable String stockCode
+    ) {
+        return accountKisQueryService.getHoldingPosition(userId, stockCode);
     }
 
 }

@@ -33,7 +33,9 @@ public enum AccountErrorCode implements ErrorCode {
 
     KIS_TOKEN_CACHE_LOCK_TIMEOUT(HttpStatus.SERVICE_UNAVAILABLE, "ACCOUNT_0013", "KIS 토큰 조회가 지연되고 있습니다. 잠시 후 다시 시도해주세요"),
 
-    TRADING_STATUS_CHECK_FAILED(HttpStatus.SERVICE_UNAVAILABLE, "ACCOUNT_0014", "거래 상태 확인에 실패해 계좌를 삭제할 수 없습니다. 잠시 후 다시 시도해주세요");
+    TRADING_STATUS_CHECK_FAILED(HttpStatus.SERVICE_UNAVAILABLE, "ACCOUNT_0014", "거래 상태 확인에 실패해 계좌를 삭제할 수 없습니다. 잠시 후 다시 시도해주세요"),
+
+    ACCOUNT_HOLDING_NOT_FOUND(HttpStatus.NOT_FOUND, "ACCOUNT_0015", "해당 종목을 보유하고 있지 않습니다");
 
     private final HttpStatus status;
     private final String errorCode;
