@@ -88,7 +88,7 @@ class AccountDeleteFacadeTest {
         // then
         verify(kisOAuthClient).revokeAccessToken("app-key", "secret-key", "cached-token", AccountType.REAL);
         verify(cacheCommandService).evictKisTokenCaches(account.getId());
-        verify(accountCreationKisTokenCacheService).evict(userId, "app-key", "secret-key");
+        verify(accountCreationKisTokenCacheService).evict(userId, "app-key", "secret-key", AccountType.REAL);
         verify(kisTokenLogCommandService).recordRevokeSuccess(account.getId(), userId);
     }
 
@@ -108,7 +108,7 @@ class AccountDeleteFacadeTest {
         // then
         verifyNoInteractions(kisOAuthClient);
         verify(cacheCommandService).evictKisTokenCaches(account.getId());
-        verify(accountCreationKisTokenCacheService).evict(userId, "app-key", "secret-key");
+        verify(accountCreationKisTokenCacheService).evict(userId, "app-key", "secret-key", AccountType.REAL);
         verifyNoInteractions(kisTokenLogCommandService);
     }
 
@@ -179,7 +179,7 @@ class AccountDeleteFacadeTest {
         assertThatCode(() -> accountDeleteFacade.deleteAccount(userId)).doesNotThrowAnyException();
 
         verify(cacheCommandService).evictKisTokenCaches(account.getId());
-        verify(accountCreationKisTokenCacheService).evict(userId, "app-key", "secret-key");
+        verify(accountCreationKisTokenCacheService).evict(userId, "app-key", "secret-key", AccountType.REAL);
         verify(kisTokenLogCommandService).recordRevokeFail(eq(account.getId()), eq(userId), isNull(), any());
     }
 
@@ -199,7 +199,7 @@ class AccountDeleteFacadeTest {
 
         verifyNoInteractions(kisOAuthClient);
         verify(cacheCommandService).evictKisTokenCaches(account.getId());
-        verify(accountCreationKisTokenCacheService).evict(userId, "app-key", "secret-key");
+        verify(accountCreationKisTokenCacheService).evict(userId, "app-key", "secret-key", AccountType.REAL);
         verifyNoInteractions(kisTokenLogCommandService);
     }
 
@@ -219,7 +219,7 @@ class AccountDeleteFacadeTest {
         assertThatCode(() -> accountDeleteFacade.deleteAccount(userId)).doesNotThrowAnyException();
 
         verify(accountCommandService).deleteAccount(userId);
-        verify(accountCreationKisTokenCacheService).evict(userId, "app-key", "secret-key");
+        verify(accountCreationKisTokenCacheService).evict(userId, "app-key", "secret-key", AccountType.REAL);
     }
 
     @Test
@@ -232,7 +232,7 @@ class AccountDeleteFacadeTest {
         given(accountCommandService.deleteAccount(userId)).willReturn(account);
         given(cacheQueryService.peekAccessToken(account.getId())).willReturn(Optional.empty());
         willThrow(new RuntimeException("Redis 연결 실패"))
-                .given(accountCreationKisTokenCacheService).evict(userId, "app-key", "secret-key");
+                .given(accountCreationKisTokenCacheService).evict(userId, "app-key", "secret-key", AccountType.REAL);
 
         // when & then
         assertThatCode(() -> accountDeleteFacade.deleteAccount(userId)).doesNotThrowAnyException();

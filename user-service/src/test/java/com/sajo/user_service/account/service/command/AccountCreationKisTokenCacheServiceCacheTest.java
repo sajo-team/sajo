@@ -54,8 +54,9 @@ class AccountCreationKisTokenCacheServiceCacheTest {
     private CacheManager cacheManager;
 
     // @Cacheable의 key SpEL과 반드시 동일한 계산이어야 한다 - 캐시 상태를 직접 확인하기 위한 용도.
-    private static String cacheKey(UUID userId, String appKey, String secretKey) {
-        return userId + ":" + AccountCreationKisTokenCacheService.hashCredentials(appKey, secretKey);
+    private static String cacheKey(UUID userId, String appKey, String secretKey, AccountType accountType) {
+        return userId + ":" + accountType + ":"
+                + AccountCreationKisTokenCacheService.hashCredentials(appKey, secretKey);
     }
 
     // Testcontainers로 갓 띄운 Redis에 대해 Lettuce 커넥션이 자리잡기 전 초반 몇 개 명령에서
@@ -115,6 +116,30 @@ class AccountCreationKisTokenCacheServiceCacheTest {
     }
 
     @Test
+    @DisplayName("같은 userId/appKey/secretKey여도 accountType(REAL/VIRTUAL)이 다르면 캐시를 공유하지 않는다 "
+            + "(REAL/VIRTUAL은 서로 다른 KIS 서버가 발급한 토큰이라 섞이면 안 됨)")
+    void getAccessTokenMissesCacheWhenAccountTypeDiffers() {
+        // given
+        UUID userId = UUID.randomUUID();
+        given(kisOAuthClient.getAccessToken("app-key", "secret-key", AccountType.REAL))
+                .willReturn(new KisAccessTokenResponse("real-token", "Bearer", 86400, "2026-01-01 00:00:00"));
+        given(kisOAuthClient.getAccessToken("app-key", "secret-key", AccountType.VIRTUAL))
+                .willReturn(new KisAccessTokenResponse("virtual-token", "Bearer", 86400, "2026-01-01 00:00:00"));
+
+        // when
+        KisAccessTokenResponse real =
+                accountCreationKisTokenCacheService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL);
+        KisAccessTokenResponse virtual = accountCreationKisTokenCacheService.getAccessToken(
+                userId, "app-key", "secret-key", AccountType.VIRTUAL);
+
+        // then
+        assertThat(real.access_token()).isEqualTo("real-token");
+        assertThat(virtual.access_token()).isEqualTo("virtual-token");
+        verify(kisOAuthClient, times(1)).getAccessToken("app-key", "secret-key", AccountType.REAL);
+        verify(kisOAuthClient, times(1)).getAccessToken("app-key", "secret-key", AccountType.VIRTUAL);
+    }
+
+    @Test
     @DisplayName("userId가 다르면 같은 appKey/secretKey여도 캐시를 공유하지 않는다")
     void getAccessTokenIsCachedPerDistinctUserId() {
         // given
@@ -142,12 +167,12 @@ class AccountCreationKisTokenCacheServiceCacheTest {
         accountCreationKisTokenCacheService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL);
 
         Cache cache = cacheManager.getCache("account-creation-token");
-        String key = cacheKey(userId, "app-key", "secret-key");
+        String key = cacheKey(userId, "app-key", "secret-key", AccountType.REAL);
         assertThat(cache).isNotNull();
         assertThat(cache.get(key)).as("evict 전에는 캐시에 값이 있어야 함").isNotNull();
 
         // when
-        accountCreationKisTokenCacheService.evict(userId, "app-key", "secret-key");
+        accountCreationKisTokenCacheService.evict(userId, "app-key", "secret-key", AccountType.REAL);
 
         // then
         assertThat(cache.get(key)).as("evict 후에는 캐시가 비어있어야 함").isNull();
@@ -161,7 +186,7 @@ class AccountCreationKisTokenCacheServiceCacheTest {
         given(kisOAuthClient.getAccessToken("app-key", "secret-key", AccountType.REAL))
                 .willReturn(new KisAccessTokenResponse("issued-token", "Bearer", 86400, "2026-01-01 00:00:00"));
         accountCreationKisTokenCacheService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL);
-        accountCreationKisTokenCacheService.evict(userId, "app-key", "secret-key");
+        accountCreationKisTokenCacheService.evict(userId, "app-key", "secret-key", AccountType.REAL);
 
         // when
         accountCreationKisTokenCacheService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL);

@@ -25,10 +25,13 @@ public class AccountCreationKisTokenCacheService {
     private final KisOAuthClient kisOAuthClient;
 
 
+    // accountType(REAL/VIRTUAL)에 따라 KisOAuthClient가 서로 다른 KIS 서버를 호출해 토큰을 발급하므로,
+    // 같은 appKey/secretKey라도 accountType이 다르면 다른 토큰이다 - 키에 반드시 포함해야 한다.
     // 다중 인스턴스 환경에서는 동시 요청 가능함..
     @Cacheable(
             cacheNames = "account-creation-token",
-            key = "#userId + ':' + T(com.sajo.user_service.account.service.command.AccountCreationKisTokenCacheService)"
+            key = "#userId + ':' + #accountType + ':' "
+                    + "+ T(com.sajo.user_service.account.service.command.AccountCreationKisTokenCacheService)"
                     + ".hashCredentials(#appKey, #secretKey)",
             sync = true
     )
@@ -42,10 +45,11 @@ public class AccountCreationKisTokenCacheService {
     // 계속 재사용해 KIS로부터 "유효하지 않은 token"(EGW00121) 오류를 받게 된다.
     @CacheEvict(
             cacheNames = "account-creation-token",
-            key = "#userId + ':' + T(com.sajo.user_service.account.service.command.AccountCreationKisTokenCacheService)"
+            key = "#userId + ':' + #accountType + ':' "
+                    + "+ T(com.sajo.user_service.account.service.command.AccountCreationKisTokenCacheService)"
                     + ".hashCredentials(#appKey, #secretKey)"
     )
-    public void evict(UUID userId, String appKey, String secretKey) {
+    public void evict(UUID userId, String appKey, String secretKey, AccountType accountType) {
     }
 
     public static String hashCredentials(String appKey, String secretKey) {
