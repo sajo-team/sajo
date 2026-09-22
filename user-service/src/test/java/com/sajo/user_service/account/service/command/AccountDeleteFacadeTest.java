@@ -77,14 +77,14 @@ class AccountDeleteFacadeTest {
         givenNoActiveTrading(userId);
         Account account = account(userId);
         given(accountCommandService.deleteAccount(userId)).willReturn(account);
-        given(cacheQueryService.peekAccessToken(userId)).willReturn(Optional.of("cached-token"));
+        given(cacheQueryService.peekAccessToken(account.getId())).willReturn(Optional.of("cached-token"));
 
         // when
         accountDeleteFacade.deleteAccount(userId);
 
         // then
         verify(kisOAuthClient).revokeAccessToken("app-key", "secret-key", "cached-token", AccountType.REAL);
-        verify(cacheCommandService).evictKisTokenCaches(userId);
+        verify(cacheCommandService).evictKisTokenCaches(account.getId());
         verify(kisTokenLogCommandService).recordRevokeSuccess(account.getId(), userId);
     }
 
@@ -96,14 +96,14 @@ class AccountDeleteFacadeTest {
         givenNoActiveTrading(userId);
         Account account = account(userId);
         given(accountCommandService.deleteAccount(userId)).willReturn(account);
-        given(cacheQueryService.peekAccessToken(userId)).willReturn(Optional.empty());
+        given(cacheQueryService.peekAccessToken(account.getId())).willReturn(Optional.empty());
 
         // when
         accountDeleteFacade.deleteAccount(userId);
 
         // then
         verifyNoInteractions(kisOAuthClient);
-        verify(cacheCommandService).evictKisTokenCaches(userId);
+        verify(cacheCommandService).evictKisTokenCaches(account.getId());
         verifyNoInteractions(kisTokenLogCommandService);
     }
 
@@ -164,14 +164,14 @@ class AccountDeleteFacadeTest {
         givenNoActiveTrading(userId);
         Account account = account(userId);
         given(accountCommandService.deleteAccount(userId)).willReturn(account);
-        given(cacheQueryService.peekAccessToken(userId)).willReturn(Optional.of("cached-token"));
+        given(cacheQueryService.peekAccessToken(account.getId())).willReturn(Optional.of("cached-token"));
         willThrow(new BusinessException(AccountErrorCode.KIS_TOKEN_ISSUE_FAILED))
                 .given(kisOAuthClient).revokeAccessToken("app-key", "secret-key", "cached-token", AccountType.REAL);
 
         // when & then
         assertThatCode(() -> accountDeleteFacade.deleteAccount(userId)).doesNotThrowAnyException();
 
-        verify(cacheCommandService).evictKisTokenCaches(userId);
+        verify(cacheCommandService).evictKisTokenCaches(account.getId());
         verify(kisTokenLogCommandService).recordRevokeFail(eq(account.getId()), eq(userId), isNull(), any());
     }
 
@@ -184,13 +184,13 @@ class AccountDeleteFacadeTest {
         Account account = account(userId);
         given(accountCommandService.deleteAccount(userId)).willReturn(account);
         willThrow(new RuntimeException("Redis 타임아웃"))
-                .given(cacheQueryService).peekAccessToken(userId);
+                .given(cacheQueryService).peekAccessToken(account.getId());
 
         // when & then
         assertThatCode(() -> accountDeleteFacade.deleteAccount(userId)).doesNotThrowAnyException();
 
         verifyNoInteractions(kisOAuthClient);
-        verify(cacheCommandService).evictKisTokenCaches(userId);
+        verify(cacheCommandService).evictKisTokenCaches(account.getId());
         verifyNoInteractions(kisTokenLogCommandService);
     }
 
@@ -202,9 +202,9 @@ class AccountDeleteFacadeTest {
         givenNoActiveTrading(userId);
         Account account = account(userId);
         given(accountCommandService.deleteAccount(userId)).willReturn(account);
-        given(cacheQueryService.peekAccessToken(userId)).willReturn(Optional.empty());
+        given(cacheQueryService.peekAccessToken(account.getId())).willReturn(Optional.empty());
         willThrow(new RuntimeException("Redis 연결 실패"))
-                .given(cacheCommandService).evictKisTokenCaches(userId);
+                .given(cacheCommandService).evictKisTokenCaches(account.getId());
 
         // when & then
         assertThatCode(() -> accountDeleteFacade.deleteAccount(userId)).doesNotThrowAnyException();
