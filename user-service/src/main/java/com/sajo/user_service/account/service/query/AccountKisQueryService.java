@@ -257,7 +257,7 @@ public class AccountKisQueryService {
             if (found.isPresent()) {
                 try {
                     return AccountHoldingPositionResponse.from(found.get());
-                } catch (NumberFormatException e) {
+                } catch (NumberFormatException | NullPointerException e) {
                     log.warn("KIS 보유 포지션 응답 필드 파싱 실패. userId={}, stockCode={}", userId, stockCode, e);
                     throw new BusinessException(
                             AccountErrorCode.KIS_BALANCE_INQUIRY_FAILED, "KIS 응답 필드 파싱에 실패했습니다.");

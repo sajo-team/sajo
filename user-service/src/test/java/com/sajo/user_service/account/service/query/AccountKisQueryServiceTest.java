@@ -912,6 +912,34 @@ class AccountKisQueryServiceTest {
     }
 
     @Test
+    @DisplayName("보유 포지션 조회 - 평균매입가 필드가 null이면(NumberFormatException이 아닌 NPE) KIS_BALANCE_INQUIRY_FAILED 예외를 던진다")
+    void getHoldingPositionFailsWhenAvgPurchasePriceIsNull() {
+        // given
+        UUID userId = UUID.randomUUID();
+        Account account = Account.createAccount(
+                userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
+        KisBalanceResponse kisBalanceResponse = new KisBalanceResponse(
+                "0", "MSG_CD", "정상처리 되었습니다", null, null,
+                List.of(nullAvgPurchasePriceHolding("005930")), List.of());
+
+        given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
+        given(kisTokenCacheQueryService.getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL))
+                .willReturn("issued-token");
+        given(kisTrClient.inquireBalance(
+                "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.REAL, null, null))
+                .willReturn(new KisContinuationResult<>(kisBalanceResponse, false));
+
+        // when & then
+        assertThatThrownBy(() -> accountKisQueryService.getHoldingPosition(userId, "005930"))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(AccountErrorCode.KIS_BALANCE_INQUIRY_FAILED);
+                });
+    }
+
+    @Test
     @DisplayName("보유 포지션 조회 시 계좌가 없으면 ACCOUNT_NOT_FOUND 예외를 그대로 전파하고 KIS는 호출하지 않는다")
     void getHoldingPositionFailsWhenAccountNotFound() {
         // given
@@ -937,6 +965,17 @@ class AccountKisQueryServiceTest {
                 "10", // hldg_qty
                 "10", // ord_psbl_qty
                 "숫자아님", // pchs_avg_pric - 정상이면 BigDecimal로 변환 가능한 숫자 문자열이어야 함
+                null, "75000", "750000", "49995", "7.14",
+                null, null, null, null, null, null, null, null, null, null, null
+        );
+    }
+
+    private static KisBalanceHoldingResponse nullAvgPurchasePriceHolding(String pdno) {
+        return new KisBalanceHoldingResponse(
+                pdno, "종목명", null, null, null, null, null,
+                "10", // hldg_qty
+                "10", // ord_psbl_qty
+                null, // pchs_avg_pric - new BigDecimal(String)은 null이면 NumberFormatException이 아닌 NPE를 던짐
                 null, "75000", "750000", "49995", "7.14",
                 null, null, null, null, null, null, null, null, null, null, null
         );
