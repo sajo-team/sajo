@@ -305,6 +305,12 @@ services:
       INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:?INTERNAL_API_SECRET must be set}
       # RAG 기반 고객 응대 챗봇(도전 과제)이 사용하는 OpenAI API 키
       OPENAI_API_KEY: ${OPENAI_API_KEY}
+      # SupportChatQueryController는 sajo.support.rag.enabled(SUPPORT_RAG_ENABLED)가 true일 때만
+      # 빈으로 등록된다. SPRING_AI_CHAT_MODEL/EMBEDDING_MODEL도 "none"이 기본값이라 함께 켜지
+      # 않으면 Spring AI 자동구성 자체가 비활성 상태로 남는다(#321).
+      SUPPORT_RAG_ENABLED: ${SUPPORT_RAG_ENABLED:-false}
+      SPRING_AI_CHAT_MODEL: ${SPRING_AI_CHAT_MODEL:-none}
+      SPRING_AI_EMBEDDING_MODEL: ${SPRING_AI_EMBEDDING_MODEL:-none}
       MARKET_SCHEDULER_ENABLED: ${MARKET_SCHEDULER_ENABLED:-false}
       MARKET_SCHEDULER_SYSTEM_USER_ID: ${MARKET_SCHEDULER_SYSTEM_USER_ID:-}
       MARKET_STOCK_MASTER_SYNC_ENABLED: ${MARKET_STOCK_MASTER_SYNC_ENABLED:-false}
