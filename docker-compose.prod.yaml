@@ -210,7 +210,7 @@ services:
     restart: unless-stopped
 
   zipkin:
-    image: openzipkin/zipkin:latest
+    image: openzipkin/zipkin:3.6.1
     container_name: sajo-zipkin
     ports:
       - "127.0.0.1:9411:9411"
@@ -219,7 +219,7 @@ services:
     restart: unless-stopped
 
   loki:
-    image: grafana/loki:latest
+    image: grafana/loki:3.7.8
     container_name: sajo-loki
     command: ["-config.file=/etc/loki/loki-config.yaml"]
     volumes:
@@ -232,7 +232,7 @@ services:
     restart: unless-stopped
 
   docker-socket-proxy:
-    image: tecnativa/docker-socket-proxy:latest
+    image: tecnativa/docker-socket-proxy:v0.5.0
     container_name: sajo-docker-socket-proxy
     environment:
       # 컨테이너 목록/로그 조회만 허용 (읽기 전용). 컨테이너 생성/실행/삭제 등
@@ -259,7 +259,7 @@ services:
       start_period: 10s
 
   alloy:
-    image: grafana/alloy:latest
+    image: grafana/alloy:v1.19.2
     container_name: sajo-alloy
     command:
       - run
@@ -282,7 +282,7 @@ services:
     restart: unless-stopped
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:13.2.2
     container_name: sajo-grafana
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER}
