@@ -3,6 +3,8 @@ package com.sajo.trading_service.trading.reconciliation;
 import com.sajo.trading_service.trading.client.dto.response.KisOrderInquiryItem;
 import com.sajo.trading_service.trading.domain.Order;
 import com.sajo.trading_service.trading.domain.enums.OrderType;
+import com.sajo.trading_service.trading.validation.KisOrderPriceValidator;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.time.*;
@@ -11,7 +13,10 @@ import java.time.format.DateTimeParseException;
 import java.util.List;
 
 @Component
+@RequiredArgsConstructor
 public class KisOrderMatcher {
+
+    private final KisOrderPriceValidator kisOrderPriceValidator;
 
     private static final ZoneId KOREA_ZONE = ZoneId.of("Asia/Seoul");
 
@@ -133,7 +138,19 @@ public class KisOrderMatcher {
             long price =
                     Long.parseLong(item.orderPrice());
 
-            return order.getSignalPrice() == price;
+            /*
+             * 실제 KIS 주문은 signalPrice가 아니라 호가단위(틱)로 스냅된 가격으로 접수된다(#315).
+             * KIS가 돌려주는 체결 내역의 orderPrice도 그 스냅된 가격이므로, 매칭 기준 역시 동일해야
+             * 한다. executedOrderPrice가 기록돼 있으면(주문 접수 시점에 실제로 넣은 값) 그 값을
+             * 그대로 신뢰하고, 이 필드가 도입되기 전에 생성된 주문(null)만 signalPrice를 다시
+             * 스냅해 하위 호환을 맞춘다.
+             */
+            long expectedPrice =
+                    order.getExecutedOrderPrice() != null
+                            ? order.getExecutedOrderPrice()
+                            : kisOrderPriceValidator.snapToTickSize(order.getSignalPrice(), order.getOrderType());
+
+            return expectedPrice == price;
 
         } catch (NumberFormatException | NullPointerException e) {
             return false;

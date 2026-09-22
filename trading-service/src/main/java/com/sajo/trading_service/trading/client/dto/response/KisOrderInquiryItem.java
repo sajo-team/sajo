@@ -62,7 +62,9 @@ public record KisOrderInquiryItem(
         /**
          * 주문 단가.
          *
-         * 내부 Order.signalPrice와 비교한다.
+         * 내부 Order.executedOrderPrice(호가단위 스냅 이후 실제 접수가, #315)와 비교한다.
+         * executedOrderPrice가 없는(이 필드 도입 이전에 생성된) 주문만 signalPrice를 다시 스냅해
+         * 비교한다 — {@code KisOrderMatcher.matchesPrice} 참고.
          * KIS 응답 계약을 그대로 유지하기 위해 String으로 수신한다.
          */
         @JsonProperty("ord_unpr")

@@ -305,16 +305,32 @@ public class KisOrderCommandService {
             return;
         }
 
-        long orderPrice = order.getSignalPrice();
+        /*
+         * 신호가(signalPrice)를 호가단위(틱)에 맞도록 보정한다.
+         *
+         * KIS 실시간 체결가는 NXT 통합 이후 KRX보다 촘촘한 틱으로 체결된 가격을 내려줄 수 있어,
+         * 신호가를 그대로 주문가로 쓰면 KRX 호가단위 기준으로는 유효하지 않은 가격이 되어 거래소가
+         * 주문을 거부할 수 있다(#315). 실제 주문 접수 전에 가장 가까운 유효 틱으로 스냅한다.
+         */
+        long orderPrice = kisOrderPriceValidator.snapToTickSize(order.getSignalPrice(), order.getOrderType());
 
-//        if (!kisOrderPriceValidator.isValidTickSize(orderPrice)) {
-//            orderStatusCommandService.fail( // 호가 단위 검증
-//                    orderId,
-//                    "INVALID_ORDER_TICK_SIZE",
-//                    "주문 가격이 해당 가격대의 호가단위에 맞지 않습니다."
-//            );
-//            return;
-//        }
+        if (orderPrice != order.getSignalPrice()) {
+            log.info(
+                    "신호가가 호가단위에 맞지 않아 주문가를 보정했습니다. orderId={}, signalPrice={}, snappedOrderPrice={}",
+                    orderId,
+                    order.getSignalPrice(),
+                    orderPrice
+            );
+        }
+
+        if (!kisOrderPriceValidator.isValidTickSize(orderPrice)) {
+            orderStatusCommandService.fail( // 호가 단위 검증(스냅 이후에도 실패하면 방어적으로 차단)
+                    orderId,
+                    "INVALID_ORDER_TICK_SIZE",
+                    "주문 가격이 해당 가격대의 호가단위에 맞지 않습니다."
+            );
+            return;
+        }
 
         if (!kisOrderPriceValidator.isWithinDailyPriceLimit(
                 orderPrice,
@@ -329,6 +345,13 @@ public class KisOrderCommandService {
         }
 
         /*
+         * 검증을 통과한 실제 접수가를 기록한다(#315). signalPrice는 신호 발생 시점의 원본 값을
+         * 이력으로 보존하고, 이 시점부터는 executedOrderPrice가 "실제로 KIS에 넣은 가격"의
+         * 단일 진실 공급원(source of truth)이 된다 — 조회 응답과 재조정 매칭 모두 이 값을 본다.
+         */
+        orderStatusCommandService.recordExecutedOrderPrice(orderId, orderPrice);
+
+        /*
          * KIS 주문 요청 생성
          */
         KisOrderRequest request =
@@ -338,7 +361,7 @@ public class KisOrderCommandService {
                         order.getStockCode(),
                         "00",
                         order.getOrderQuantity().toString(),
-                        order.getSignalPrice().toString()
+                        Long.toString(orderPrice)
                 );
 
         String trId =

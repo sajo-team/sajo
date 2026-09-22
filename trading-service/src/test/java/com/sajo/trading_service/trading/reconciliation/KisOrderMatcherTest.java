@@ -3,6 +3,7 @@ package com.sajo.trading_service.trading.reconciliation;
 import com.sajo.trading_service.trading.client.dto.response.KisOrderInquiryItem;
 import com.sajo.trading_service.trading.domain.Order;
 import com.sajo.trading_service.trading.domain.enums.OrderType;
+import com.sajo.trading_service.trading.validation.KisOrderPriceValidator;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -16,7 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class KisOrderMatcherTest {
 
     private final KisOrderMatcher kisOrderMatcher =
-            new KisOrderMatcher();
+            new KisOrderMatcher(new KisOrderPriceValidator());
 
     @Test
     @DisplayName("brokerOrderNo가 존재하면 KIS 주문번호로 매칭한다")
@@ -197,6 +198,108 @@ class KisOrderMatcherTest {
 
         assertThat(result.item())
                 .isNull();
+    }
+
+    @Test
+    @DisplayName("executedOrderPrice가 기록돼 있으면 signalPrice를 다시 스냅하지 않고 그 값 그대로 매칭 기준으로 삼는다(#315)")
+    void matchesUsingExecutedOrderPriceWhenRecorded() {
+        // given
+        // signalPrice(70_050)를 스냅하면 70_000이 되지만, executedOrderPrice를 일부러 다른 값으로
+        // 지정해 매칭이 재계산이 아니라 이 필드를 그대로 쓰는지 검증한다.
+        Order order = Order.create(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "005930",
+                OrderType.BUY,
+                70_050L,
+                7
+        );
+
+        ReflectionTestUtils.setField(
+                order,
+                "createdAt",
+                Instant.parse("2026-09-06T01:00:00Z")
+        );
+
+        ReflectionTestUtils.setField(
+                order,
+                "executedOrderPrice",
+                70_200L
+        );
+
+        KisOrderInquiryItem item =
+                createItem(
+                        "0001234567",
+                        "005930",
+                        "02",
+                        "7",
+                        "70200",
+                        "20260906",
+                        "100100"
+                );
+
+        // when
+        MatchResult result =
+                kisOrderMatcher.match(
+                        order,
+                        List.of(item)
+                );
+
+        // then
+        assertThat(result.status())
+                .isEqualTo(MatchStatus.MATCHED);
+
+        assertThat(result.item())
+                .isEqualTo(item);
+    }
+
+    @Test
+    @DisplayName("executedOrderPrice가 없으면 signalPrice를 스냅한 값으로 매칭한다(구버전 주문과의 하위 호환)")
+    void matchesUsingSnappedSignalPriceWhenExecutedOrderPriceMissing() {
+        // given
+        Order order = Order.create(
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                UUID.randomUUID(),
+                "005930",
+                OrderType.BUY,
+                70_050L,
+                7
+        );
+
+        ReflectionTestUtils.setField(
+                order,
+                "createdAt",
+                Instant.parse("2026-09-06T01:00:00Z")
+        );
+
+        KisOrderInquiryItem item =
+                createItem(
+                        "0001234567",
+                        "005930",
+                        "02",
+                        "7",
+                        "70000",
+                        "20260906",
+                        "100100"
+                );
+
+        // when
+        MatchResult result =
+                kisOrderMatcher.match(
+                        order,
+                        List.of(item)
+                );
+
+        // then
+        assertThat(result.status())
+                .isEqualTo(MatchStatus.MATCHED);
+
+        assertThat(result.item())
+                .isEqualTo(item);
     }
 
     private Order createOrder() {

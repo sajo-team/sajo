@@ -46,6 +46,14 @@ public class Order extends BaseUpdatableEntity {
     @Column(name = "signal_price", nullable = false)
     private Long signalPrice;
 
+    /**
+     * 실제로 KIS에 접수된 주문가(호가단위 스냅 이후 값, #315). signalPrice는 신호 발생 시점의
+     * 원본 가격을 그대로 보존하는 이력 값이라, 스냅이 일어난 주문은 signalPrice와 이 값이 달라질 수
+     * 있다. KIS 주문 접수 직전에만 기록되므로, 그 전까지는(REQUESTED/PROCESSING 초반) null이다.
+     */
+    @Column(name = "executed_order_price")
+    private Long executedOrderPrice;
+
     @Column(name = "order_quantity", nullable = false)
     private Integer orderQuantity;
 
@@ -204,6 +212,26 @@ public class Order extends BaseUpdatableEntity {
             );
         }
         this.status = OrderStatus.PROCESSING;
+    }
+
+    /**
+     * KIS에 실제로 접수하는 주문가를 기록한다(#315). 호가단위 스냅으로 signalPrice와 달라질 수 있는
+     * 실제 접수가를 별도로 남겨, 조회/재조정에서 신호가가 아니라 이 값을 기준으로 삼을 수 있게 한다.
+     */
+    public void recordExecutedOrderPrice(long executedOrderPrice){
+        if(this.status != OrderStatus.PROCESSING){
+            throw new BusinessException(
+                    TradingErrorCode.ORDER_STATUS_CHANGE_NOT_ALLOWED
+            );
+        }
+
+        if(executedOrderPrice <= 0){
+            throw new BusinessException(
+                    TradingErrorCode.INVALID_ORDER
+            );
+        }
+
+        this.executedOrderPrice = executedOrderPrice;
     }
 
     public void retry( // Account 쪽 재시도
