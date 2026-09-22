@@ -24,13 +24,13 @@ public class AccountCreationKisTokenCacheService {
 
     private final KisOAuthClient kisOAuthClient;
 
-    // 캐시 키에 appKey/secretKey의 해시까지 포함시켜, 재시도 시 자격증명 자체가 바뀌면
-    // 자동으로 캐시 미스가 나서 옛 토큰을 잘못 재사용하지 않게 한다(값에 평문 저장은 안 함).
-    // Objects.hash()는 32bit라 충돌 가능성이 있어 SHA-256을 쓴다 - evict()와 반드시 같은 계산이어야 함.
+
+    // 다중 인스턴스 환경에서는 동시 요청 가능함..
     @Cacheable(
             cacheNames = "account-creation-token",
             key = "#userId + ':' + T(com.sajo.user_service.account.service.command.AccountCreationKisTokenCacheService)"
-                    + ".hashCredentials(#appKey, #secretKey)"
+                    + ".hashCredentials(#appKey, #secretKey)",
+            sync = true
     )
     public KisAccessTokenResponse getAccessToken(
             UUID userId, String appKey, String secretKey, AccountType accountType) {
