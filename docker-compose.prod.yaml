@@ -212,6 +212,7 @@ services:
   zipkin:
     image: openzipkin/zipkin:3.6.1
     container_name: sajo-zipkin
+    mem_limit: 512m
     ports:
       - "127.0.0.1:9411:9411"
     networks:
@@ -221,6 +222,7 @@ services:
   loki:
     image: grafana/loki:3.7.8
     container_name: sajo-loki
+    mem_limit: 512m
     command: ["-config.file=/etc/loki/loki-config.yaml"]
     volumes:
       - ./monitoring/loki-config.yaml:/etc/loki/loki-config.yaml:ro
@@ -234,6 +236,7 @@ services:
   docker-socket-proxy:
     image: tecnativa/docker-socket-proxy:v0.5.0
     container_name: sajo-docker-socket-proxy
+    mem_limit: 128m
     environment:
       # 컨테이너 목록/로그 조회만 허용 (읽기 전용). 컨테이너 생성/실행/삭제 등
       # 쓰기성 API(POST)는 전부 차단해서, alloy가 뚫려도 도커 소켓으로 호스트를
@@ -261,6 +264,7 @@ services:
   alloy:
     image: grafana/alloy:v1.19.2
     container_name: sajo-alloy
+    mem_limit: 256m
     command:
       - run
       - --server.http.listen-addr=0.0.0.0:12345
