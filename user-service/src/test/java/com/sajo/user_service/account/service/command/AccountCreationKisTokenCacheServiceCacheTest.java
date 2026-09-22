@@ -21,7 +21,6 @@ import org.testcontainers.junit.jupiter.EnabledIfDockerAvailable;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
-import java.util.Objects;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -54,10 +53,9 @@ class AccountCreationKisTokenCacheServiceCacheTest {
     @Autowired
     private CacheManager cacheManager;
 
-    // @Cacheable의 key SpEL("#userId + ':' + T(java.util.Objects).hash(#appKey, #secretKey)")과
-    // 반드시 동일한 계산이어야 한다 - 캐시 상태를 직접 확인하기 위한 용도.
+    // @Cacheable의 key SpEL과 반드시 동일한 계산이어야 한다 - 캐시 상태를 직접 확인하기 위한 용도.
     private static String cacheKey(UUID userId, String appKey, String secretKey) {
-        return userId + ":" + Objects.hash(appKey, secretKey);
+        return userId + ":" + AccountCreationKisTokenCacheService.hashCredentials(appKey, secretKey);
     }
 
     // Testcontainers로 갓 띄운 Redis에 대해 Lettuce 커넥션이 자리잡기 전 초반 몇 개 명령에서
