@@ -97,6 +97,28 @@ class AccountCreateFacadeTest {
     }
 
     @Test
+    @DisplayName("accountNo 형식이 컨트롤러 검증을 우회해 잘못 들어와도 substring 전에 형식 검증부터 "
+            + "실패시키고, 어떤 협력 객체도 호출하지 않는다")
+    void createAccountFailsWhenAccountNoFormatInvalid() {
+        // given
+        UUID userId = UUID.randomUUID();
+
+        // when & then
+        assertThatThrownBy(() -> accountCreateFacade.createAccount(
+                userId, "app-key", "secret-key", "not-a-valid-account-no", AccountType.REAL))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(AccountErrorCode.INVALID_ACCOUNT_NO_FORMAT);
+                });
+
+        verifyNoInteractions(
+                accountQueryService, accountCreationKisTokenCacheService, kisTrClient,
+                accountCommandService, kisTokenCacheCommandService, kisTokenLogCommandService);
+    }
+
+    @Test
     @DisplayName("사전 중복 체크에서 실패하면 KIS 호출도, 계좌 생성도, 캐시 채우기도 하지 않는다")
     void createAccountFailsWhenPreCheckFails() {
         // given

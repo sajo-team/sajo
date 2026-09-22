@@ -28,6 +28,9 @@ public class AccountCreateFacade {
     public Account createAccount(
             UUID userId, String appKey, String secretKey, String accountNo, AccountType accountType) {
 
+        // 0. accountNo 형식 검증
+        Account.validateAccountNoFormat(accountNo);
+
         // 1. 빠른 사전 중복 체크 - 어차피 실패할 요청이면 외부 API(KIS) 호출을 아낀다
         accountQueryService.validateCreatable(userId, accountNo);
 

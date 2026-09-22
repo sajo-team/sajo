@@ -89,7 +89,7 @@ public class Account extends BaseUpdatableEntity {
         return accountNo.substring(9, 11);
     }
 
-    private static void validateAccountNoFormat(String accountNo) {
+    public static void validateAccountNoFormat(String accountNo) {
         if (accountNo == null || !accountNo.matches(ACCOUNT_NO_PATTERN)) {
             throw new BusinessException(AccountErrorCode.INVALID_ACCOUNT_NO_FORMAT);
         }
