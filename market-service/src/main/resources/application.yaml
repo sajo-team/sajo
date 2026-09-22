@@ -116,7 +116,10 @@ sajo:
       # 로딩이 항상 가능해야 하고(테스트 프로필에도 OpenAI 자격 증명을 요구하지 않는다),
       # 이 기능을 실제로 쓰려면 .env에서 SUPPORT_RAG_ENABLED=true로 명시적으로 켜야 한다.
       enabled: ${SUPPORT_RAG_ENABLED:false}
-      document-path: classpath:support-docs/market-service-overview.md
+      # #325: 기존에는 개발자용 아키텍처 문서(market-service-overview.md)를 그대로 임베딩
+      # 소스로 써서, 고객 질문에 API 엔드포인트/헤더/DB 테이블명 같은 내부 구현이 그대로
+      # 노출되는 문제가 있었다. 사용자 관점으로 다시 쓴 FAQ 문서로 교체한다.
+      document-path: classpath:support-docs/market-service-faq.md
       top-k: ${SUPPORT_RAG_TOP_K:3}
 
   scheduler:
