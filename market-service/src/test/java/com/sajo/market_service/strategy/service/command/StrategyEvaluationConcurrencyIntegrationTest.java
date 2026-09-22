@@ -6,6 +6,7 @@ import com.sajo.market_service.strategy.domain.Strategy;
 import com.sajo.market_service.strategy.domain.StrategyStatus;
 import com.sajo.market_service.strategy.kafka.producer.TradingSignalProducer;
 import com.sajo.market_service.strategy.repository.query.StrategyQueryRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -80,7 +81,8 @@ class StrategyEvaluationConcurrencyIntegrationTest {
         TradingSignalProducer tradingSignalProducer = Mockito.mock(TradingSignalProducer.class);
 
         StrategyEvaluationService strategyEvaluationService = new StrategyEvaluationService(
-                strategyQueryRepository, tradingSignalProducer, redisTemplate, new SignalStateStore(redisTemplate)
+                strategyQueryRepository, tradingSignalProducer, redisTemplate, new SignalStateStore(redisTemplate),
+                new SimpleMeterRegistry()
         );
 
         ExecutorService executorService = Executors.newFixedThreadPool(CONCURRENT_REQUESTS);

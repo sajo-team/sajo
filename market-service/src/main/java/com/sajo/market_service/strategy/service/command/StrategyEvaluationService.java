@@ -11,6 +11,7 @@ import com.sajo.market_service.strategy.kafka.dto.TradingSignalGeneratedEvent;
 import com.sajo.market_service.strategy.kafka.dto.TradingSignalPayload;
 import com.sajo.market_service.strategy.kafka.producer.TradingSignalProducer;
 import com.sajo.market_service.strategy.repository.query.StrategyQueryRepository;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -30,9 +31,12 @@ public class StrategyEvaluationService {
     private final TradingSignalProducer tradingSignalProducer;
     private final StringRedisTemplate stringRedisTemplate;
     private final SignalStateStore signalStateStore;
+    private final MeterRegistry meterRegistry;
 
     private static final String EVALUATION_EVENT_KEY_PREFIX = "strategy:evaluation:event:";
     private static final String SIGNAL_STATE_KEY_PREFIX = "strategy:evaluation:state:";
+    private static final String SIGNAL_PUBLISHED_METRIC = "strategy_signal_published_total";
+    private static final String SIGNAL_DUPLICATE_BLOCKED_METRIC = "strategy_signal_duplicate_blocked_total";
     private static final Duration PROCESSING_TTL = Duration.ofMinutes(5);
     private static final Duration COMPLETED_TTL = Duration.ofDays(1);
     private static final Duration SIGNAL_STATE_TTL = Duration.ofDays(7);
@@ -133,6 +137,7 @@ public class StrategyEvaluationService {
         if (!signalStateStore.claim(signalStateKey, claimToken, signalType.name(), SIGNAL_CLAIM_TTL)) {
             log.debug("동일 조건 구간에서 이미 Signal을 발행했거나 다른 평가가 처리 중이라 건너뜁니다. strategyId={}, signalType={}",
                     strategy.getId(), signalType);
+            meterRegistry.counter(SIGNAL_DUPLICATE_BLOCKED_METRIC).increment();
             return;
         }
 
@@ -176,6 +181,8 @@ public class StrategyEvaluationService {
             // TODO: Outbox/멱등 Producer-Consumer 도입이 필요
             log.warn("Signal 완료 처리에 실패했습니다(다른 요청이 상태를 재선점했을 수 있음). strategyId={}", strategy.getId());
         }
+
+        meterRegistry.counter(SIGNAL_PUBLISHED_METRIC, "signalType", signalType.name()).increment();
 
         log.info(
                 "Trading Signal 발행 완료. signalId={}, strategyId={}, signalType={}",

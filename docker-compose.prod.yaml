@@ -1,6 +1,12 @@
 networks:
   sajo-net:
     driver: bridge
+  # alloy <-> docker-socket-proxy 전용 네트워크. 다른 마이크로서비스는 여기 붙지
+  # 않으므로, docker-socket-proxy에는 alloy만 접근할 수 있다.
+  # internal: true라서 이 네트워크에 붙은 컨테이너는 외부(인터넷)로도 못 나간다.
+  docker-proxy-net:
+    driver: bridge
+    internal: true
 
 volumes:
   postgres-data:
@@ -9,6 +15,8 @@ volumes:
   redis-data:
   prometheus-data:
   grafana-data:
+  loki-data:
+  alloy-data:
 
 services:
   postgres:
@@ -201,18 +209,104 @@ services:
       - sajo-net
     restart: unless-stopped
 
+  zipkin:
+    image: openzipkin/zipkin:3.6.1
+    container_name: sajo-zipkin
+    mem_limit: 512m
+    ports:
+      - "127.0.0.1:9411:9411"
+    networks:
+      - sajo-net
+    restart: unless-stopped
+
+  loki:
+    image: grafana/loki:3.7.8
+    container_name: sajo-loki
+    mem_limit: 512m
+    command: ["-config.file=/etc/loki/loki-config.yaml"]
+    volumes:
+      - ./monitoring/loki-config.yaml:/etc/loki/loki-config.yaml:ro
+      - loki-data:/loki
+    ports:
+      - "127.0.0.1:3100:3100"
+    networks:
+      - sajo-net
+    restart: unless-stopped
+
+  docker-socket-proxy:
+    image: tecnativa/docker-socket-proxy:v0.5.0
+    container_name: sajo-docker-socket-proxy
+    mem_limit: 128m
+    environment:
+      # 컨테이너 목록/로그 조회만 허용 (읽기 전용). 컨테이너 생성/실행/삭제 등
+      # 쓰기성 API(POST)는 전부 차단해서, alloy가 뚫려도 도커 소켓으로 호스트를
+      # 장악하는 경로를 막는다.
+      CONTAINERS: 1
+      POST: 0
+      # alloy(discovery.docker)가 컨테이너별 네트워크 정보를 조회하는 데 필요
+      # (컨테이너 목록만으론 부족하고 /networks 조회가 있어야 타겟이 생성됨).
+      # 네트워크 이름/서브넷 등 구성 정보만 노출되고, POST가 막혀있어 읽기 전용.
+      NETWORKS: 1
+      # healthcheck용 /_ping 확인을 위해 명시적으로 켜둔다.
+      PING: 1
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - docker-proxy-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://localhost:2375/_ping || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  alloy:
+    image: grafana/alloy:v1.19.2
+    container_name: sajo-alloy
+    mem_limit: 256m
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    volumes:
+      - ./monitoring/alloy-config.alloy:/etc/alloy/config.alloy:ro
+      - alloy-data:/var/lib/alloy/data
+    ports:
+      - "127.0.0.1:12345:12345"
+    networks:
+      - sajo-net          # loki로 로그 전송
+      - docker-proxy-net  # docker-socket-proxy로 컨테이너 조회
+    depends_on:
+      loki:
+        condition: service_started
+      docker-socket-proxy:
+        condition: service_healthy
+    restart: unless-stopped
+
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:13.2.2
     container_name: sajo-grafana
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      # grafana/provisioning/alerting/cpu-alert.yaml의 $__env{GRAFANA_SLACK_WEBHOOK_URL}이
+      # 이 값을 읽는다 (Grafana Alerting - CPU 50% 이상 시 Slack 알림). 별도
+      # 시크릿을 새로 안 만들고, operation-service가 쓰는 SLACK_WEBHOOK_URL을
+      # 그대로 재사용해 같은 슬랙 채널로 보낸다 (컨테이너 안에서 보이는 변수
+      # 이름만 GRAFANA_SLACK_WEBHOOK_URL로 바꿔서 넘겨주는 것).
+      GRAFANA_SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL}
     volumes:
       - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
     ports:
       - "127.0.0.1:3000:3000"
     networks:
       - sajo-net
+    depends_on:
+      loki:
+        condition: service_started
     restart: unless-stopped
 
   discovery-service:

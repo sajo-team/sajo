@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 FROM gradle:8-jdk21 AS deps
 WORKDIR /app
 COPY settings.gradle build.gradle ./
@@ -14,11 +15,11 @@ COPY libs/common-kafka/build.gradle libs/common-kafka/build.gradle
 COPY libs/common-redis/build.gradle libs/common-redis/build.gradle
 COPY libs/common-jwt/build.gradle libs/common-jwt/build.gradle
 COPY config-server/build.gradle config-server/build.gradle
-RUN gradle :operation-service:dependencies --no-daemon || true
+RUN --mount=type=cache,target=/home/gradle/.gradle,sharing=locked gradle :operation-service:dependencies --no-daemon || true
 
 FROM deps AS build
 COPY . .
-RUN gradle :operation-service:bootJar --no-daemon
+RUN --mount=type=cache,target=/home/gradle/.gradle,sharing=locked gradle :operation-service:bootJar --no-daemon
 
 FROM eclipse-temurin:21-jre
 WORKDIR /app
