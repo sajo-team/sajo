@@ -329,7 +329,6 @@ services:
     container_name: discovery-service
     environment:
       SPRING_PROFILES_ACTIVE: prod
-      TRACING_SAMPLING_PROBABILITY: "1.0"
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: "health,prometheus,conditions"
       MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
       MANAGEMENT_TRACING_EXPORT_ZIPKIN_ENDPOINT: "http://zipkin:9411/api/v2/spans"
@@ -352,7 +351,6 @@ services:
     container_name: config-server
     environment:
       SPRING_PROFILES_ACTIVE: prod
-      TRACING_SAMPLING_PROBABILITY: "1.0"
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: "health,prometheus,conditions"
       MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
       MANAGEMENT_TRACING_EXPORT_ZIPKIN_ENDPOINT: "http://zipkin:9411/api/v2/spans"
@@ -381,7 +379,6 @@ services:
     container_name: gateway
     environment:
       SPRING_PROFILES_ACTIVE: prod
-      TRACING_SAMPLING_PROBABILITY: "1.0"
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: "health,prometheus"
       MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
       MANAGEMENT_TRACING_EXPORT_ZIPKIN_ENDPOINT: "http://zipkin:9411/api/v2/spans"
@@ -405,7 +402,6 @@ services:
     container_name: user-service
     environment:
       SPRING_PROFILES_ACTIVE: prod
-      TRACING_SAMPLING_PROBABILITY: "1.0"
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: "health,prometheus,conditions"
       MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
       MANAGEMENT_TRACING_EXPORT_ZIPKIN_ENDPOINT: "http://zipkin:9411/api/v2/spans"
@@ -439,7 +435,6 @@ services:
     container_name: market-service
     environment:
       SPRING_PROFILES_ACTIVE: prod
-      TRACING_SAMPLING_PROBABILITY: "1.0"
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: "health,prometheus,conditions"
       MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
       MANAGEMENT_TRACING_EXPORT_ZIPKIN_ENDPOINT: "http://zipkin:9411/api/v2/spans"
@@ -471,7 +466,6 @@ services:
     container_name: trading-service
     environment:
       SPRING_PROFILES_ACTIVE: prod
-      TRACING_SAMPLING_PROBABILITY: "1.0"
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: "health,prometheus,conditions"
       MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
       MANAGEMENT_TRACING_EXPORT_ZIPKIN_ENDPOINT: "http://zipkin:9411/api/v2/spans"
@@ -504,7 +498,6 @@ services:
     container_name: operation-service
     environment:
       SPRING_PROFILES_ACTIVE: prod
-      TRACING_SAMPLING_PROBABILITY: "1.0"
       MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: "health,prometheus,conditions"
       MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
       MANAGEMENT_TRACING_EXPORT_ZIPKIN_ENDPOINT: "http://zipkin:9411/api/v2/spans"
