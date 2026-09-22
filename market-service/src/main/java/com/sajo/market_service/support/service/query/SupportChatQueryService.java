@@ -76,7 +76,10 @@ public class SupportChatQueryService {
             // similaritySearch()는 내부적으로 임베딩 API(OpenAI)를 호출한다. LLM 호출 실패와
             // 동일한 성격의 외부 AI 호출 실패이므로, 여기서도 잡아서 도메인 예외로 변환해야
             // GlobalExceptionHandler의 일반 500(INTERNAL_SERVER_ERROR)으로 새어나가지 않는다.
-            log.warn("관련 문서 검색에 실패했습니다. question={}", question, exception);
+            // 질문 원문은 ask()에서 밝힌 정책(민감 정보 가능성으로 로그에 남기지 않음)이 실패
+            // 경로에서도 그대로 적용되어야 하므로, 실패가 잦아질수록 원문이 더 많이 로그에 쌓이는
+            // 일이 없도록 길이만 남기고 원문은 남기지 않는다.
+            log.warn("관련 문서 검색에 실패했습니다. questionLength={}", question.length(), exception);
             throw new BusinessException(SupportErrorCode.DOCUMENT_SEARCH_FAILED);
         }
     }
@@ -103,7 +106,8 @@ public class SupportChatQueryService {
                     .call()
                     .content();
         } catch (RuntimeException exception) {
-            log.warn("LLM 응답 생성에 실패했습니다. question={}", question, exception);
+            // searchRelevantDocuments()와 동일한 이유로 질문 원문 대신 길이만 남긴다.
+            log.warn("LLM 응답 생성에 실패했습니다. questionLength={}", question.length(), exception);
             throw new BusinessException(SupportErrorCode.LLM_RESPONSE_FAILED);
         }
     }
