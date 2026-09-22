@@ -17,9 +17,9 @@ import feign.FeignException;
 import feign.RetryableException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
@@ -28,6 +28,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.AssertionsForClassTypes.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -1168,10 +1169,11 @@ class KisOrderCommandServiceTest {
     }
 
     @Test
-    @Disabled("KisOrderCommandService의 호가단위 검증 호출이 주석 처리되어 현재 비활성 상태")
-    @DisplayName("호가단위가 유효하지 않으면 KIS 주문을 호출하지 않고 FAILED 처리한다")
-    void failWhenOrderPriceHasInvalidTickSize() {
+    @DisplayName("매수 신호가가 호가단위에 맞지 않으면 내림으로 보정해 KIS 주문을 접수한다(#315)")
+    void snapsOrderPriceDownForBuyBeforePlacingOrder() {
         // given
+        // 70_050원은 5만~20만원 구간 호가단위(100원)의 배수가 아니다(NXT 유래 체결가 시나리오).
+        // 매수는 신호가보다 비싸게 사면 안 되므로 하위 틱인 70_000원으로 내림 보정되어야 한다.
         Order order = Order.create(
                 userId,
                 UUID.randomUUID(),
@@ -1204,33 +1206,63 @@ class KisOrderCommandServiceTest {
                         "OK",
                         new MarketStockQuoteResponse(
                                 "005930",
-                                100_000L,
-                                100_000L,
+                                60_000L,
+                                60_000L,
                                 OffsetDateTime.now()
                         )
                 )
         );
 
+        KisOrderResponse response =
+                new KisOrderResponse(
+                        "0",
+                        "SUCCESS",
+                        "주문 전송 완료",
+                        new KisOrderResponse.KisOrderOutput(
+                                "1234567890",
+                                "101530"
+                        )
+                );
+
+        when(kisOrderClient.placeOrder(
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                anyString(),
+                any(KisOrderRequest.class)
+        )).thenReturn(response);
+
         // when
         kisOrderCommandService.executeOrder(orderId);
 
         // then
-        verify(orderStatusCommandService)
+        verify(orderStatusCommandService, never())
                 .fail(
-                        orderId,
-                        "INVALID_ORDER_TICK_SIZE",
-                        "주문 가격이 해당 가격대의 호가단위에 맞지 않습니다."
+                        any(),
+                        any(),
+                        any()
                 );
 
-        verify(kisOrderClient, never())
+        ArgumentCaptor<KisOrderRequest> requestCaptor =
+                ArgumentCaptor.forClass(KisOrderRequest.class);
+
+        verify(kisOrderClient)
                 .placeOrder(
                         any(),
                         any(),
                         any(),
                         any(),
                         any(),
-                        any()
+                        requestCaptor.capture()
                 );
+
+        assertThat(requestCaptor.getValue().orderPrice())
+                .isEqualTo("70000");
+
+        // 실제로 KIS에 접수한 가격(스냅된 값)이 별도로 기록되는지 확인한다(#315)
+        verify(orderStatusCommandService)
+                .recordExecutedOrderPrice(orderId, 70_000L);
     }
 
     @Test
