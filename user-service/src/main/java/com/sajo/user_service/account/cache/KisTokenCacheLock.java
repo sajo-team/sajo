@@ -12,6 +12,16 @@ import java.util.List;
 @Component
 public class KisTokenCacheLock {
 
+    // KIS OAuth 호출 최대 시간(connect 5s + read 30s = 35s, KisRestClientConfiguration)보다 여유 있게 -
+    // 락 홀더가 죽었을 때 자동 해제되는 상한선
+    public static final Duration LOCK_TTL = Duration.ofSeconds(40);
+    // 락을 못 잡은 요청이 대기하다 포기하기까지의 최대 시간 - LOCK_TTL보다 반드시 여유 있게 커야 한다.
+    // 같거나 작으면, 홀더가 락 TTL 끝자락에 캐시를 막 채운 순간 대기자가 먼저 타임아웃해버리는
+    // 경합이 생긴다 (다른 서비스에서 실제로 발생했던 버그 패턴).
+    public static final Duration WAIT_TIMEOUT = Duration.ofSeconds(42);
+    // 락 재시도 간격
+    public static final Duration RETRY_INTERVAL = Duration.ofMillis(50);
+
     // access token / approval key 둘 다 이 락을 공유해서 쓴다 (key로 구분)
     private static final String LOCK_KEY_PREFIX = "user-service:kis:lock:";
 

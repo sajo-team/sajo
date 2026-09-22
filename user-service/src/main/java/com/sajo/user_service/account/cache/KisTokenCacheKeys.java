@@ -12,11 +12,11 @@ public final class KisTokenCacheKeys {
     private KisTokenCacheKeys() {
     }
 
-    public static String accessToken(UUID userId) {
-        return ACCESS_TOKEN_PREFIX + userId;
+    public static String accessToken(UUID accountId) {
+        return ACCESS_TOKEN_PREFIX + accountId;
     }
 
-    public static String approvalKey(UUID userId) {
-        return APPROVAL_KEY_PREFIX + userId;
+    public static String approvalKey(UUID accountId) {
+        return APPROVAL_KEY_PREFIX + accountId;
     }
 }
