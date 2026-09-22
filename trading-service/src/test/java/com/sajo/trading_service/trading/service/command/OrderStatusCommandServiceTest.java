@@ -54,6 +54,40 @@ class OrderStatusCommandServiceTest {
     }
 
     @Test
+    void 실제_접수가를_기록한다() {
+        Order order = mock(Order.class);
+
+        when(orderCommandRepository.findByIdForUpdate(orderId))
+                .thenReturn(Optional.of(order));
+
+        orderStatusCommandService.recordExecutedOrderPrice(orderId, 70_100L);
+
+        verify(orderCommandRepository)
+                .findByIdForUpdate(orderId);
+
+        verify(order)
+                .recordExecutedOrderPrice(70_100L);
+    }
+
+    @Test
+    void 접수가를_기록하려는_Order가_없으면_예외가_발생한다() {
+        when(orderCommandRepository.findByIdForUpdate(orderId))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() ->
+                orderStatusCommandService.recordExecutedOrderPrice(orderId, 70_100L)
+        )
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException =
+                            (BusinessException) exception;
+
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(TradingErrorCode.ORDER_NOT_FOUND);
+                });
+    }
+
+    @Test
     void 선점하려는_Order가_없으면_예외가_발생한다() {
         when(orderCommandRepository.findByIdForUpdate(orderId))
                 .thenReturn(Optional.empty());

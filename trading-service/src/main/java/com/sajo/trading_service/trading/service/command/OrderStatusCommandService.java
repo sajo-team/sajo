@@ -73,6 +73,19 @@ public class OrderStatusCommandService {
     }
 
     @Transactional
+    public void recordExecutedOrderPrice(UUID orderId, long executedOrderPrice){
+        Order order =
+                orderCommandRepository.findByIdForUpdate(orderId)
+                        .orElseThrow(() ->
+                                new BusinessException(
+                                        TradingErrorCode.ORDER_NOT_FOUND
+                                )
+                        );
+
+        order.recordExecutedOrderPrice(executedOrderPrice);
+    }
+
+    @Transactional
     public void retry(UUID orderId) {
         Order order =
                 orderCommandRepository.findByIdForUpdate(orderId)

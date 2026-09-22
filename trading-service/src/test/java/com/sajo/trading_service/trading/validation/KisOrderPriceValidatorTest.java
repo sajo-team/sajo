@@ -1,5 +1,6 @@
 package com.sajo.trading_service.trading.validation;
 
+import com.sajo.trading_service.trading.domain.enums.OrderType;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -53,6 +54,35 @@ class KisOrderPriceValidatorTest {
     void invalidNonPositivePrice(long price) {
         assertThat(validator.isValidTickSize(price))
                 .isFalse();
+    }
+
+    @ParameterizedTest
+    @CsvSource({
+            "BUY, 70000, 70000",
+            "BUY, 70050, 70000",
+            "BUY, 70049, 70000",
+            "BUY, 20010, 20000",
+            "BUY, 280250, 280000",
+            "BUY, 999, 999",
+            "BUY, 0, 0",
+            "BUY, -500, -500",
+            "SELL, 70000, 70000",
+            "SELL, 70050, 70100",
+            "SELL, 70049, 70100",
+            "SELL, 20010, 20050",
+            "SELL, 280250, 280500",
+            "SELL, 999, 999",
+            "SELL, 0, 0",
+            "SELL, -500, -500"
+    })
+    @DisplayName("호가단위에 맞지 않는 가격은 매매 방향에 따라 유효 틱으로 스냅한다(#315, NXT 유래 체결가 대응) — 매수는 내림, 매도는 올림")
+    void snapToTickSize(
+            OrderType orderType,
+            long price,
+            long expected
+    ) {
+        assertThat(validator.snapToTickSize(price, orderType))
+                .isEqualTo(expected);
     }
 
     @ParameterizedTest

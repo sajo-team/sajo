@@ -210,6 +210,64 @@ class OrderTest {
     }
 
     @Test
+    @DisplayName("PROCESSING 상태의 주문은 실제 접수가를 기록할 수 있다(#315)")
+    void recordExecutedOrderPriceFromProcessing() {
+        // given
+        Order order = createOrder();
+        order.startProcessing();
+
+        // when
+        order.recordExecutedOrderPrice(70_100L);
+
+        // then
+        assertThat(order.getExecutedOrderPrice())
+                .isEqualTo(70_100L);
+
+        // signalPrice는 신호 발생 시점의 원본 값으로 그대로 남는다
+        assertThat(order.getSignalPrice())
+                .isEqualTo(70_000L);
+    }
+
+    @Test
+    @DisplayName("PROCESSING 상태가 아니면 실제 접수가를 기록할 수 없다")
+    void recordExecutedOrderPriceNotAllowed() {
+        // given
+        Order order = createOrder();
+
+        // when & then
+        assertThatThrownBy(() -> order.recordExecutedOrderPrice(70_100L))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException =
+                            (BusinessException) exception;
+
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(
+                                    TradingErrorCode.ORDER_STATUS_CHANGE_NOT_ALLOWED
+                            );
+                });
+    }
+
+    @Test
+    @DisplayName("0 이하의 실제 접수가는 기록할 수 없다")
+    void recordExecutedOrderPriceRejectsNonPositivePrice() {
+        // given
+        Order order = createOrder();
+        order.startProcessing();
+
+        // when & then
+        assertThatThrownBy(() -> order.recordExecutedOrderPrice(0L))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException =
+                            (BusinessException) exception;
+
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(TradingErrorCode.INVALID_ORDER);
+                });
+    }
+
+    @Test
     @DisplayName("PROCESSING 상태의 주문을 ACCEPTED로 변경할 수 있다")
     void acceptFromProcessing() {
         // given
