@@ -1,0 +1,15 @@
+# grafana/provisioning/dashboards 폴더 안의 대시보드 JSON 파일들을
+# "SAJO Dashboards" 폴더로 자동 등록한다. 파일이 바뀌면 30초 주기로
+# 다시 읽어서 반영한다 (datasource/alerting 프로비저닝과 동일한 방식).
+apiVersion: 1
+
+providers:
+  - name: SAJO Dashboards
+    orgId: 1
+    folder: SAJO Dashboards
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /etc/grafana/provisioning/dashboards

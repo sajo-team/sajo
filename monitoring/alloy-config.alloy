@@ -1,0 +1,40 @@
+// Grafana Alloy - 도커 컨테이너 로그 수집 설정
+// 예전에 Promtail이 하던 역할(컨테이너 로그를 Loki로 전송)을 대체한다.
+// Promtail은 지원 종료(EOL)되어 Grafana가 공식적으로 Alloy로의 전환을 권장한다.
+
+// 1) docker-socket-proxy를 통해 이 호스트에서 떠 있는 모든 컨테이너를 찾는다.
+//    도커 소켓(/var/run/docker.sock)에 직접 접근하지 않고, 읽기 전용 API만
+//    허용하는 프록시(docker-socket-proxy)를 거쳐서 컨테이너 목록/로그를 조회한다.
+//    (alloy 컨테이너가 뚫리더라도 소켓을 통해 컨테이너를 생성/실행하는 등의
+//    쓰기 작업은 할 수 없도록 차단하기 위함)
+discovery.docker "containers" {
+	host = "tcp://docker-socket-proxy:2375"
+}
+
+// 2) 컨테이너 이름을 보기 좋은 라벨(container)로 붙인다.
+//    도커 API가 주는 컨테이너 이름은 앞에 "/"가 붙어있어 제거한다.
+discovery.relabel "containers" {
+	targets = discovery.docker.containers.targets
+
+	rule {
+		source_labels = ["__meta_docker_container_name"]
+		regex         = "/(.*)"
+		target_label  = "container"
+	}
+}
+
+// 3) 실제로 컨테이너 로그를 스트리밍해서 Loki로 보낼 준비를 한다.
+loki.source.docker "default" {
+	host             = "tcp://docker-socket-proxy:2375"
+	targets          = discovery.docker.containers.targets
+	labels           = {"job" = "dockerlogs"}
+	relabel_rules    = discovery.relabel.containers.rules
+	forward_to       = [loki.write.default.receiver]
+}
+
+// 4) 최종적으로 Loki에 푸시한다.
+loki.write "default" {
+	endpoint {
+		url = "http://loki:3100/loki/api/v1/push"
+	}
+}
