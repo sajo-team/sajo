@@ -307,14 +307,14 @@ public class KisOrderCommandService {
 
         long orderPrice = order.getSignalPrice();
 
-        if (!kisOrderPriceValidator.isValidTickSize(orderPrice)) {
-            orderStatusCommandService.fail( // 호가 단위 검증
-                    orderId,
-                    "INVALID_ORDER_TICK_SIZE",
-                    "주문 가격이 해당 가격대의 호가단위에 맞지 않습니다."
-            );
-            return;
-        }
+//        if (!kisOrderPriceValidator.isValidTickSize(orderPrice)) {
+//            orderStatusCommandService.fail( // 호가 단위 검증
+//                    orderId,
+//                    "INVALID_ORDER_TICK_SIZE",
+//                    "주문 가격이 해당 가격대의 호가단위에 맞지 않습니다."
+//            );
+//            return;
+//        }
 
         if (!kisOrderPriceValidator.isWithinDailyPriceLimit(
                 orderPrice,
