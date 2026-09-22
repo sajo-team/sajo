@@ -9,6 +9,7 @@ import com.sajo.market_service.strategy.domain.Strategy;
 import com.sajo.market_service.strategy.domain.StrategyStatus;
 import com.sajo.market_service.strategy.kafka.dto.TradingSignalGeneratedEvent;
 import com.sajo.market_service.strategy.kafka.producer.TradingSignalProducer;
+import com.sajo.market_service.strategy.kafka.config.StrategyKafkaConfig;
 import com.sajo.market_service.strategy.repository.query.StrategyQueryRepository;
 import com.sajo.market_service.strategy.service.command.StrategyEvaluationService;
 import org.junit.jupiter.api.DisplayName;
@@ -29,11 +30,13 @@ import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.stereotype.Component;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.annotation.DirtiesContext;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.EnabledIfDockerAvailable;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
+import org.testcontainers.containers.wait.strategy.Wait;
 
 import java.math.BigDecimal;
 import java.time.Instant;
@@ -57,9 +60,19 @@ import static org.mockito.BDDMockito.given;
  */
 @Testcontainers
 @EnabledIfDockerAvailable
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 @SpringBootTest(
         classes = MarketPriceEvaluationConsumerIntegrationTest.TestConfig.class,
-        properties = "eureka.client.enabled=false"
+        properties = {
+                "eureka.client.enabled=false",
+                "spring.ai.openai.api-key=dummy-key-for-tests",
+                "spring.ai.model.chat=none",
+                "spring.ai.model.embedding=none",
+                "spring.ai.model.image=none",
+                "spring.ai.model.moderation=none",
+                "spring.ai.model.audio.speech=none",
+                "spring.ai.model.audio.transcription=none"
+        }
 )
 @EmbeddedKafka(partitions = 3, topics = {"market.price.updated", "trading.signal.generated"})
 @DisplayName("MarketPriceEvaluationConsumer 실제 Kafka/Redis 통합 테스트")
@@ -69,7 +82,8 @@ class MarketPriceEvaluationConsumerIntegrationTest {
 
     @Container
     static GenericContainer<?> redis = new GenericContainer<>(DockerImageName.parse("redis:8-alpine"))
-            .withExposedPorts(6379);
+            .withExposedPorts(6379)
+            .waitingFor(Wait.forLogMessage(".*Ready to accept connections.*\\n", 1));
 
     @DynamicPropertySource
     static void configureProperties(DynamicPropertyRegistry registry) {
@@ -153,7 +167,7 @@ class MarketPriceEvaluationConsumerIntegrationTest {
             CommonJpaAuditingAutoConfiguration.class
     })
     @Import({
-            com.sajo.market_service.strategy.kafka.config.StrategyKafkaConfig.class,
+            StrategyKafkaConfig.class,
             MarketPriceEvaluationConsumer.class,
             StrategyEvaluationService.class,
             SignalStateStore.class,
