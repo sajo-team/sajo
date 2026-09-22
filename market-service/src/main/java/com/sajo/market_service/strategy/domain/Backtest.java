@@ -110,9 +110,18 @@ public class Backtest extends BaseUpdatableEntity {
         this.status = BacktestStatus.RUNNING;
     }
 
-    public void complete(BigDecimal totalReturnRate, Integer tradeCount) {
+    public void complete(
+            BigDecimal totalReturnRate,
+            BigDecimal mdd,
+            BigDecimal winRate,
+            Integer tradeCount,
+            Integer maxConsecutiveLosses
+    ) {
         this.totalReturnRate = totalReturnRate;
+        this.mdd = mdd;
+        this.winRate = winRate;
         this.tradeCount = tradeCount;
+        this.maxConsecutiveLosses = maxConsecutiveLosses;
         this.status = BacktestStatus.COMPLETED;
     }
 

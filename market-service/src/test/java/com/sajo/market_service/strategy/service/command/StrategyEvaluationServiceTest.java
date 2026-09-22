@@ -7,6 +7,7 @@ import com.sajo.market_service.strategy.domain.StrategyStatus;
 import com.sajo.market_service.strategy.kafka.dto.TradingSignalGeneratedEvent;
 import com.sajo.market_service.strategy.kafka.producer.TradingSignalProducer;
 import com.sajo.market_service.strategy.repository.query.StrategyQueryRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -55,13 +56,15 @@ class StrategyEvaluationServiceTest {
     private SignalStateStore signalStateStore;
 
     private StrategyEvaluationService strategyEvaluationService;
+    private SimpleMeterRegistry meterRegistry;
     private Strategy strategy;
     private String signalStateKey;
 
     @BeforeEach
     void setUp() {
+        meterRegistry = new SimpleMeterRegistry();
         strategyEvaluationService = new StrategyEvaluationService(
-                strategyQueryRepository, tradingSignalProducer, stringRedisTemplate, signalStateStore
+                strategyQueryRepository, tradingSignalProducer, stringRedisTemplate, signalStateStore, meterRegistry
         );
         strategy = Strategy.create(
                 UUID.randomUUID(),
@@ -101,6 +104,8 @@ class StrategyEvaluationServiceTest {
         strategyEvaluationService.evaluate(evaluationRequest(UUID.randomUUID(), 60_000L));
 
         verify(tradingSignalProducer, times(1)).publish(any(TradingSignalGeneratedEvent.class));
+        assertThatCounter("strategy_signal_published_total", "signalType", "BUY").isEqualTo(1.0);
+        assertThatCounter("strategy_signal_duplicate_blocked_total").isEqualTo(1.0);
     }
 
     @Test
@@ -118,6 +123,7 @@ class StrategyEvaluationServiceTest {
 
         verify(tradingSignalProducer, times(2)).publish(any(TradingSignalGeneratedEvent.class));
         verify(signalStateStore, times(1)).clearIfNotProcessing(signalStateKey);
+        assertThatCounter("strategy_signal_published_total", "signalType", "BUY").isEqualTo(2.0);
     }
 
     @Test
@@ -152,5 +158,13 @@ class StrategyEvaluationServiceTest {
 
     private StrategyEvaluationRequest evaluationRequest(UUID sourceEventId, Long currentPrice) {
         return new StrategyEvaluationRequest(sourceEventId, STOCK_CODE, currentPrice, Instant.now());
+    }
+
+    private org.assertj.core.api.AbstractDoubleAssert<?> assertThatCounter(String name, String... tagKeyValues) {
+        io.micrometer.core.instrument.search.RequiredSearch search = meterRegistry.get(name);
+        for (int i = 0; i < tagKeyValues.length; i += 2) {
+            search = search.tag(tagKeyValues[i], tagKeyValues[i + 1]);
+        }
+        return org.assertj.core.api.Assertions.assertThat(search.counter().count());
     }
 }

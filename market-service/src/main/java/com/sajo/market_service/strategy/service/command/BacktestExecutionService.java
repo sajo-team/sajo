@@ -54,15 +54,24 @@ public class BacktestExecutionService {
 
             BacktestExecutionResult result = calculate(strategy, backtest, prices);
 
-            backtest.complete(result.totalReturnRate(), result.tradeCount());
+            backtest.complete(
+                    result.totalReturnRate(),
+                    result.mdd(),
+                    result.winRate(),
+                    result.tradeCount(),
+                    result.maxConsecutiveLosses()
+            );
 
             backtestCommandRepository.save(backtest);
 
             log.info(
-                    "백테스트 실행 완료. backtestId={}, returnRate={}, tradeCount={}",
+                    "백테스트 실행 완료. backtestId={}, returnRate={}, mdd={}, winRate={}, tradeCount={}, maxConsecutiveLosses={}",
                     backtestId,
                     result.totalReturnRate(),
-                    result.tradeCount()
+                    result.mdd(),
+                    result.winRate(),
+                    result.tradeCount(),
+                    result.maxConsecutiveLosses()
             );
         } catch (Exception exception){
             backtest.fail();
@@ -85,8 +94,14 @@ public class BacktestExecutionService {
     ) {
         long cash = backtest.getInitialCash();
         long holdingQuantity = 0L;
+        long buyPrice = 0L;
         int tradeCount = 0;
+        int winningTradeCount = 0;
+        int consecutiveLosses = 0;
+        int maxConsecutiveLosses = 0;
         long lastPrice = 0L;
+        long peakAsset = backtest.getInitialCash();
+        BigDecimal mdd = BigDecimal.ZERO;
 
         if (strategy.getOrderAmount() == null || strategy.getOrderAmount() <= 0) {
             throw new BusinessException(
@@ -107,15 +122,42 @@ public class BacktestExecutionService {
 
                 if (quantity > 0 && cash >= quantity * currentPrice) {
                     holdingQuantity = quantity;
+                    buyPrice = currentPrice;
                     cash -= quantity * currentPrice;
                 }
             }
 
             if (holdingQuantity > 0 && currentPrice >= strategy.getSellConditionPrice()) {
                 cash += holdingQuantity * currentPrice;
+                long tradeProfit = (currentPrice - buyPrice) * holdingQuantity;
                 holdingQuantity = 0L;
+                buyPrice = 0L;
                 tradeCount++;
+
+                if (tradeProfit > 0) {
+                    winningTradeCount++;
+                    consecutiveLosses = 0;
+                } else if (tradeProfit < 0) {
+                    consecutiveLosses++;
+                    maxConsecutiveLosses = Math.max(maxConsecutiveLosses, consecutiveLosses);
+                }
             }
+
+            long currentAsset = cash + (holdingQuantity * currentPrice);
+            if (currentAsset > peakAsset) {
+                peakAsset = currentAsset;
+            }
+
+            BigDecimal drawdown = BigDecimal.valueOf(currentAsset - peakAsset)
+                    .divide(BigDecimal.valueOf(peakAsset), 8, RoundingMode.HALF_UP)
+                    .multiply(BigDecimal.valueOf(100));
+            if (drawdown.compareTo(mdd) < 0) {
+                mdd = drawdown;
+            }
+        }
+
+        if (lastPrice == 0L) {
+            throw new BusinessException(StrategyErrorCode.INVALID_STRATEGY, "유효한 종가 데이터가 없습니다.");
         }
 
         long finalAsset = cash + (holdingQuantity * lastPrice);
@@ -129,9 +171,18 @@ public class BacktestExecutionService {
                 )
                 .multiply(BigDecimal.valueOf(100));
 
+        BigDecimal winRate = tradeCount == 0
+                ? BigDecimal.ZERO.setScale(4)
+                : BigDecimal.valueOf(winningTradeCount)
+                        .multiply(BigDecimal.valueOf(100))
+                        .divide(BigDecimal.valueOf(tradeCount), 4, RoundingMode.HALF_UP);
+
         return new BacktestExecutionResult(
                 totalReturnRate,
-                tradeCount
+                mdd.setScale(4, RoundingMode.HALF_UP),
+                winRate,
+                tradeCount,
+                maxConsecutiveLosses
         );
     }
 
