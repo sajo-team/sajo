@@ -4,6 +4,7 @@ import com.sajo.common.redis.config.CommonRedisAutoConfiguration;
 import com.sajo.user_service.account.client.kis.KisOAuthClient;
 import com.sajo.user_service.account.client.kis.dto.response.KisAccessTokenResponse;
 import com.sajo.user_service.account.domain.AccountType;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -21,6 +22,7 @@ import org.testcontainers.junit.jupiter.EnabledIfDockerAvailable;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
+import java.time.Duration;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -175,7 +177,12 @@ class AccountCreationKisTokenCacheServiceCacheTest {
         accountCreationKisTokenCacheService.evict(userId, "app-key", "secret-key", AccountType.REAL);
 
         // then
-        assertThat(cache.get(key)).as("evict 후에는 캐시가 비어있어야 함").isNull();
+        // RedisCacheWriter의 evict 기본 동작이 비동기/지연 쓰기(Spring Data Redis 4.x 기본값)라
+        // evict() 호출이 리턴해도 Redis에 실제 반영되기까지 짧은 시간차가 있을 수 있다 - 폴링으로 검증한다.
+        Awaitility.await()
+                .atMost(Duration.ofMillis(500))
+                .pollInterval(Duration.ofMillis(5))
+                .untilAsserted(() -> assertThat(cache.get(key)).as("evict 후에는 캐시가 비어있어야 함").isNull());
     }
 
     @Test
@@ -187,6 +194,16 @@ class AccountCreationKisTokenCacheServiceCacheTest {
                 .willReturn(new KisAccessTokenResponse("issued-token", "Bearer", 86400, "2026-01-01 00:00:00"));
         accountCreationKisTokenCacheService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL);
         accountCreationKisTokenCacheService.evict(userId, "app-key", "secret-key", AccountType.REAL);
+
+        // evict()가 비동기/지연 쓰기라 곧바로 재조회하면 아직 안 지워진 캐시를 볼 수 있다(evictRemovesCachedToken
+        // 테스트와 동일한 원인) - 재조회 전에 실제로 evict가 반영됐는지부터 폴링으로 확인한다.
+        Cache cache = cacheManager.getCache("account-creation-token");
+        String key = cacheKey(userId, "app-key", "secret-key", AccountType.REAL);
+        assertThat(cache).isNotNull();
+        Awaitility.await()
+                .atMost(Duration.ofMillis(500))
+                .pollInterval(Duration.ofMillis(5))
+                .untilAsserted(() -> assertThat(cache.get(key)).isNull());
 
         // when
         accountCreationKisTokenCacheService.getAccessToken(userId, "app-key", "secret-key", AccountType.REAL);
