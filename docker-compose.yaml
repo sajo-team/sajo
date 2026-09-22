@@ -332,6 +332,9 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: prod
       TRACING_SAMPLING_PROBABILITY: "1.0"
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: "health,prometheus,conditions"
+      MANAGEMENT_TRACING_SAMPLING_PROBABILITY: "1.0"
+      MANAGEMENT_TRACING_EXPORT_ZIPKIN_ENDPOINT: "http://zipkin:9411/api/v2/spans"
     ports:
       - "127.0.0.1:8761:8761"
     networks:
@@ -352,6 +355,7 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: prod
       TRACING_SAMPLING_PROBABILITY: "1.0"
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: "health,prometheus,conditions"
       GITHUB_USERNAME: ${GITHUB_USERNAME}
       GITHUB_TOKEN: ${GITHUB_TOKEN}
       ENCRYPT_KEY: ${ENCRYPT_KEY}
@@ -378,6 +382,7 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: prod
       TRACING_SAMPLING_PROBABILITY: "1.0"
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: "health,prometheus,conditions"
       CONFIG_SERVER_URL: http://config-server:8888
       JWT_SECRET: ${JWT_SECRET}
     ports:
@@ -399,6 +404,7 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: prod
       TRACING_SAMPLING_PROBABILITY: "1.0"
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: "health,prometheus,conditions"
       CONFIG_SERVER_URL: http://config-server:8888
       DB_PASSWORD: ${DB_PASSWORD}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -430,6 +436,7 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: prod
       TRACING_SAMPLING_PROBABILITY: "1.0"
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: "health,prometheus,conditions"
       CONFIG_SERVER_URL: http://config-server:8888
       DB_PASSWORD: ${DB_PASSWORD}
       REDIS_PASSWORD: ${REDIS_PASSWORD}
@@ -457,6 +464,7 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: prod
       TRACING_SAMPLING_PROBABILITY: "1.0"
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: "health,prometheus,conditions"
       CONFIG_SERVER_URL: http://config-server:8888
       DB_PASSWORD: ${DB_PASSWORD}
       MONGO_PASSWORD: ${MONGO_PASSWORD}
@@ -487,6 +495,7 @@ services:
     environment:
       SPRING_PROFILES_ACTIVE: prod
       TRACING_SAMPLING_PROBABILITY: "1.0"
+      MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: "health,prometheus,conditions"
       CONFIG_SERVER_URL: http://config-server:8888
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       SLACK_WEBHOOK_URL: ${SLACK_WEBHOOK_URL}
