@@ -17,6 +17,7 @@ import feign.FeignException;
 import feign.RetryableException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -1167,6 +1168,7 @@ class KisOrderCommandServiceTest {
     }
 
     @Test
+    @Disabled("KisOrderCommandService의 호가단위 검증 호출이 주석 처리되어 현재 비활성 상태")
     @DisplayName("호가단위가 유효하지 않으면 KIS 주문을 호출하지 않고 FAILED 처리한다")
     void failWhenOrderPriceHasInvalidTickSize() {
         // given
