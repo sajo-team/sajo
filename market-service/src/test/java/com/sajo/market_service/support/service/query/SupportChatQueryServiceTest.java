@@ -42,7 +42,7 @@ class SupportChatQueryServiceTest {
         vectorStore = mock(VectorStore.class);
         chatClient = mock(ChatClient.class, RETURNS_DEEP_STUBS);
         SupportRagProperties properties =
-                new SupportRagProperties("classpath:support-docs/market-service-overview.md", 3);
+                new SupportRagProperties("classpath:support-docs/market-service-overview.md", 3, "gpt-4o-mini");
         service = new SupportChatQueryService(vectorStore, chatClient, properties);
     }
 

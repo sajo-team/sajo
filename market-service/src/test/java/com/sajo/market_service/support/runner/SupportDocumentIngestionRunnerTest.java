@@ -40,7 +40,7 @@ class SupportDocumentIngestionRunnerTest {
         when(resource.getInputStream()).thenThrow(new IOException("document not found"));
 
         VectorStore vectorStore = mock(VectorStore.class);
-        SupportRagProperties properties = new SupportRagProperties("classpath:support-docs/missing.md", 3);
+        SupportRagProperties properties = new SupportRagProperties("classpath:support-docs/missing.md", 3, "gpt-4o-mini");
         SupportDocumentIngestionRunner runner =
                 new SupportDocumentIngestionRunner(resourceLoader, vectorStore, properties);
 
@@ -55,7 +55,7 @@ class SupportDocumentIngestionRunnerTest {
         when(resourceLoader.getResource(anyString())).thenThrow(new IllegalStateException("unexpected"));
 
         VectorStore vectorStore = mock(VectorStore.class);
-        SupportRagProperties properties = new SupportRagProperties("classpath:support-docs/market-service-overview.md", 3);
+        SupportRagProperties properties = new SupportRagProperties("classpath:support-docs/market-service-overview.md", 3, "gpt-4o-mini");
         SupportDocumentIngestionRunner runner =
                 new SupportDocumentIngestionRunner(resourceLoader, vectorStore, properties);
 
@@ -76,7 +76,7 @@ class SupportDocumentIngestionRunnerTest {
         when(resourceLoader.getResource(anyString())).thenReturn(resource);
 
         VectorStore vectorStore = mock(VectorStore.class);
-        SupportRagProperties properties = new SupportRagProperties("classpath:support-docs/market-service-overview.md", 3);
+        SupportRagProperties properties = new SupportRagProperties("classpath:support-docs/market-service-overview.md", 3, "gpt-4o-mini");
         SupportDocumentIngestionRunner runner =
                 new SupportDocumentIngestionRunner(resourceLoader, vectorStore, properties);
 
@@ -133,7 +133,7 @@ class SupportDocumentIngestionRunnerTest {
         when(resourceLoader.getResource(anyString())).thenReturn(resource);
 
         VectorStore vectorStore = mock(VectorStore.class);
-        SupportRagProperties properties = new SupportRagProperties("classpath:support-docs/market-service-overview.md", 3);
+        SupportRagProperties properties = new SupportRagProperties("classpath:support-docs/market-service-overview.md", 3, "gpt-4o-mini");
         SupportDocumentIngestionRunner runner =
                 new SupportDocumentIngestionRunner(resourceLoader, vectorStore, properties);
 
