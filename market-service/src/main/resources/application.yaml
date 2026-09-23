@@ -41,6 +41,15 @@ spring:
             # contextId=user-service)는 이 설정의 영향을 받지 않고 기존 기본값을 그대로 사용한다.
             connect-timeout: ${KIS_WEBSOCKET_USER_SERVICE_CONNECT_TIMEOUT:2000}
             read-timeout: ${KIS_WEBSOCKET_USER_SERVICE_READ_TIMEOUT:3000}
+          accountHoldingFeignClient:
+            # AccountHoldingFeignClient(StrategyEvaluationService의 진입가 조회)에만 적용되는 설정이다.
+            # market.price.updated는 stockCode를 Kafka 메시지 키로 써서 같은 종목 tick이 같은 파티션/
+            # 스레드에서 순차 처리되므로(MarketPriceEventProducer 참고), 이 호출이 OpenFeign 기본
+            # 타임아웃(약 10s/60s)만큼 블로킹되면 같은 tick의 다른 전략은 물론 같은 파티션에 걸린 다른
+            # 종목의 후속 tick 처리까지 지연된다(코드 리뷰 반영). 실패 시 발행가 근사치로 폴백하는
+            # 로직이 이미 있어 짧게 잡아도 안전하게 저하될 뿐이다.
+            connect-timeout: ${ACCOUNT_HOLDING_CONNECT_TIMEOUT:2000}
+            read-timeout: ${ACCOUNT_HOLDING_READ_TIMEOUT:3000}
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     consumer:

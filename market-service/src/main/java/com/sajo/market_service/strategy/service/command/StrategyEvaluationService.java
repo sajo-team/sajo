@@ -2,6 +2,8 @@ package com.sajo.market_service.strategy.service.command;
 
 import com.sajo.common.exception.BusinessException;
 import com.sajo.market_service.strategy.cache.SignalStateStore;
+import com.sajo.market_service.strategy.client.user.AccountHoldingFeignClient;
+import com.sajo.market_service.strategy.client.user.dto.AccountHoldingPositionResponse;
 import com.sajo.market_service.strategy.controller.dto.request.StrategyEvaluationRequest;
 import com.sajo.market_service.strategy.domain.Strategy;
 import com.sajo.market_service.strategy.domain.StrategyStatus;
@@ -32,14 +34,21 @@ public class StrategyEvaluationService {
     private final StringRedisTemplate stringRedisTemplate;
     private final SignalStateStore signalStateStore;
     private final MeterRegistry meterRegistry;
+    private final AccountHoldingFeignClient accountHoldingFeignClient;
 
     private static final String EVALUATION_EVENT_KEY_PREFIX = "strategy:evaluation:event:";
     private static final String SIGNAL_STATE_KEY_PREFIX = "strategy:evaluation:state:";
+    private static final String ENTRY_PRICE_KEY_PREFIX = "strategy:evaluation:entry-price:";
     private static final String SIGNAL_PUBLISHED_METRIC = "strategy_signal_published_total";
     private static final String SIGNAL_DUPLICATE_BLOCKED_METRIC = "strategy_signal_duplicate_blocked_total";
     private static final Duration PROCESSING_TTL = Duration.ofMinutes(5);
     private static final Duration COMPLETED_TTL = Duration.ofDays(1);
     private static final Duration SIGNAL_STATE_TTL = Duration.ofDays(7);
+
+//    진입가(근사치) 캐시 TTL. SIGNAL_STATE_TTL(7일)보다 길게 잡아, 스윙 보유 기간 동안 만료로
+//    손절/목표수익 조건이 갑자기 절대가 조건으로만 폴백되는 상황을 줄인다. 만료돼도 절대가 조건은
+//    계속 유효하므로 안전하게 저하될 뿐이다.
+    private static final Duration ENTRY_PRICE_TTL = Duration.ofDays(30);
 
 //    선점(PROCESSING) 상태의 TTL. {@link TradingSignalProducer}가 최대 10초까지 블로킹하므로
 //    정상 처리 시간을 넉넉히 덮으면서도, 애플리케이션이 완료/해제 없이 죽었을 때 상태가 영구히 잠기지 않도록 짧게 잡는다.
@@ -105,11 +114,8 @@ public class StrategyEvaluationService {
         }
     }
 
-    /**
-     * 전략 비활성화 등으로 조건 구간 상태를 초기화해, 다음 평가부터 다시 Signal을 발행할 수 있게 한다.
-     * 다른 요청이 한창 선점 중(PROCESSING:*)이면 건드리지 않는다 — 비활성화와 Signal 발행이 동시에
-     * 일어나도 그 요청의 선점 상태를 실수로 지우지 않기 위함이다.
-     */
+//     전략 비활성화 등으로 조건 구간 상태를 초기화해, 다음 평가부터 다시 Signal을 발행할 수 있게 한다.
+//     다른 요청이 선점 중이면 건드리지 않는다.
     public void clearSignalState(UUID strategyId) {
         signalStateStore.clearIfNotProcessing(createSignalStateKey(strategyId));
     }
@@ -118,7 +124,10 @@ public class StrategyEvaluationService {
             Strategy strategy,
             StrategyEvaluationRequest request
     ) {
-        SignalType signalType = resolveSignalType(strategy, request.currentPrice());
+        String entryPriceKey = createEntryPriceKey(strategy.getId());
+        Long entryPrice = readEntryPrice(entryPriceKey);
+
+        SignalType signalType = resolveSignalType(strategy, request.currentPrice(), entryPrice);
         String signalStateKey = createSignalStateKey(strategy.getId());
 
         if (signalType == null) {
@@ -153,7 +162,7 @@ public class StrategyEvaluationService {
                 signalType,
                 request.currentPrice(),
                 strategy.getOrderAmount(),
-                createSignalReason(signalType, strategy, request.currentPrice())
+                createSignalReason(signalType, strategy, request.currentPrice(), entryPrice)
         );
 
         TradingSignalGeneratedEvent event = new TradingSignalGeneratedEvent(
@@ -182,6 +191,16 @@ public class StrategyEvaluationService {
             log.warn("Signal 완료 처리에 실패했습니다(다른 요청이 상태를 재선점했을 수 있음). strategyId={}", strategy.getId());
         }
 
+        // 진입가 캐시 갱신은 claim TTL(SIGNAL_CLAIM_TTL) 위험 구간 밖(complete() 이후)에서 수행한다.
+        // BUY는 계좌 서비스 조회(동기 HTTP, 지연 가능)를 거치므로, complete() 이전에 두면 그 지연만큼
+        // PROCESSING 키가 먼저 만료돼 다른 평가가 재선점 → 중복 발행으로 이어질 위험이 있다. 진입가는
+        // 다소 늦게 갱신돼도 안전하게 저하될 뿐이라 여기서 실행해도 기능 손실이 없다.
+        if (signalType == SignalType.BUY) {
+            updateEntryPriceOnBuyConfirmed(strategy, entryPriceKey, request.currentPrice());
+        } else {
+            stringRedisTemplate.delete(entryPriceKey);
+        }
+
         meterRegistry.counter(SIGNAL_PUBLISHED_METRIC, "signalType", signalType.name()).increment();
 
         log.info(
@@ -196,6 +215,42 @@ public class StrategyEvaluationService {
         return SIGNAL_STATE_KEY_PREFIX + strategyId;
     }
 
+    private String createEntryPriceKey(UUID strategyId) {
+        return ENTRY_PRICE_KEY_PREFIX + strategyId;
+    }
+
+    private Long readEntryPrice(String entryPriceKey) {
+        String value = stringRedisTemplate.opsForValue().get(entryPriceKey);
+        return value != null ? Long.valueOf(value) : null;
+    }
+
+    /**
+     * BUY Signal 확정 시점에 Account 서비스(user-service)에서 실제 평균 매입가를 1회 조회해 진입가로
+     * 저장한다. trading-service가 이 Signal을 소비해 KIS에 실제 주문을 내는 과정은 비동기라, 이 시점에는
+     * 아직 계좌에 반영되지 않아 조회에 실패하는 경우가 흔할 수 있다 — 그 경우 발행가 근사치로 폴백해
+     * SELL 조건 판단 자체가 막히지 않게 한다.
+     */
+    private void updateEntryPriceOnBuyConfirmed(Strategy strategy, String entryPriceKey, Long fallbackPrice) {
+        Long entryPrice = fallbackPrice;
+
+        try {
+            AccountHoldingPositionResponse position =
+                    accountHoldingFeignClient.getHoldingPosition(strategy.getUserId(), strategy.getStockCode());
+
+            if (position.quantity() != null && position.quantity() > 0 && position.avgPurchasePrice() != null) {
+                entryPrice = position.avgPurchasePrice().longValue();
+            } else {
+                log.info("Account 서비스 보유 포지션이 아직 반영되지 않아 발행가 근사치로 진입가를 저장합니다. strategyId={}",
+                        strategy.getId());
+            }
+        } catch (RuntimeException e) {
+            log.info("Account 서비스에서 평균 매입가 조회에 실패해 발행가 근사치로 진입가를 저장합니다. strategyId={}, error={}",
+                    strategy.getId(), e.getMessage());
+        }
+
+        stringRedisTemplate.opsForValue().set(entryPriceKey, String.valueOf(entryPrice), ENTRY_PRICE_TTL);
+    }
+
     private UUID createDeterministicSignalId(
             UUID sourceEventId,
             UUID strategyId,
@@ -208,7 +263,8 @@ public class StrategyEvaluationService {
     private String createSignalReason(
             SignalType signalType,
             Strategy strategy,
-            Long currentPrice
+            Long currentPrice,
+            Long entryPrice
     ) {
         return switch(signalType) {
             case BUY -> String.format(
@@ -217,24 +273,59 @@ public class StrategyEvaluationService {
                     strategy.getBuyConditionPrice()
             );
 
-            case SELL -> String.format(
-                    "현재가(%d)가 매도 조건 가격(%d) 이상입니다.",
-                    currentPrice,
-                    strategy.getSellConditionPrice()
-            );
+            case SELL -> createSellSignalReason(strategy, currentPrice, entryPrice);
         };
+    }
+
+    private String createSellSignalReason(
+            Strategy strategy,
+            Long currentPrice,
+            Long entryPrice
+    ) {
+        if (strategy.isStopLossTriggered(currentPrice, entryPrice)) {
+            return String.format(
+                    "진입가(%d) 대비 현재가(%d) 하락률이 손절률(%s%%) 이상입니다.",
+                    entryPrice, currentPrice, strategy.getStopLossRate()
+            );
+        }
+
+        if (strategy.isTargetReturnTriggered(currentPrice, entryPrice)) {
+            return String.format(
+                    "진입가(%d) 대비 현재가(%d) 상승률이 목표수익률(%s%%) 이상입니다.",
+                    entryPrice, currentPrice, strategy.getTargetReturnRate()
+            );
+        }
+
+        return String.format(
+                "현재가(%d)가 매도 조건 가격(%d) 이상입니다.",
+                currentPrice,
+                strategy.getSellConditionPrice()
+        );
     }
 
     private SignalType resolveSignalType(
             Strategy strategy,
-            Long currentPrice
+            Long currentPrice,
+            Long entryPrice
     ) {
         boolean buyMatched = currentPrice <= strategy.getBuyConditionPrice();
+        boolean absoluteSellMatched = currentPrice >= strategy.getSellConditionPrice();
+        boolean rateBasedSellMatched = strategy.isStopLossTriggered(currentPrice, entryPrice)
+                || strategy.isTargetReturnTriggered(currentPrice, entryPrice);
 
-        boolean sellMatched = currentPrice >= strategy.getSellConditionPrice();
+        // 손절/목표수익 조건은 진입가 기준이라 buyConditionPrice < sellConditionPrice 보장(Strategy
+        // 검증)과 무관하게 매수 조건과 겹칠 수 있다. 진입가는 보통 매수 조건가 이하에서 형성되므로,
+        // 손절률을 만족할 만큼 가격이 더 떨어지면 그 가격은 매수 조건가 이하이기도 한 경우가 대부분이라
+        // — 급락으로 손절이 가장 필요한 상황에 buyMatched와 겹쳤다는 이유로 Signal이 억제되면 안 된다.
+        // 그래서 손절/목표수익 조건은 이 우선순위 판단보다 먼저 확인해 SELL을 무조건 우선시킨다.
+        if (rateBasedSellMatched) {
+            return SignalType.SELL;
+        }
 
-        if (buyMatched && sellMatched) {
-            log.warn("매수/매도 조건이 동시에 만족되어 Signal을 발행하지 않습니다. strategyId={}", strategy.getId());
+        if (buyMatched && absoluteSellMatched) {
+            // buyConditionPrice < sellConditionPrice가 항상 보장되므로(Strategy.create/update 검증)
+            // 이론상 도달 불가능한 방어적 분기.
+            log.warn("매수/매도 절대가 조건이 동시에 만족되어 Signal을 발행하지 않습니다. strategyId={}", strategy.getId());
             return null;
         }
 
@@ -242,7 +333,7 @@ public class StrategyEvaluationService {
             return SignalType.BUY;
         }
 
-        if (sellMatched) {
+        if (absoluteSellMatched) {
             return SignalType.SELL;
         }
 

@@ -9,6 +9,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -367,5 +368,28 @@ public class Strategy extends BaseUpdatableEntity {
         if (!this.userId.equals(userId)) {
             throw new BusinessException(StrategyErrorCode.STRATEGY_ACCESS_DENIED);
         }
+    }
+
+//     진입가 대비 현재가 하락률이 손절률 이상인지 확인
+    public boolean isStopLossTriggered(Long currentPrice, Long entryPrice) {
+        if (entryPrice == null) {
+            return false;
+        }
+        BigDecimal lossRate = changeRate(entryPrice, currentPrice).negate();
+        return lossRate.compareTo(this.stopLossRate) >= 0;
+    }
+
+//     진입가 대비 현재가 상승률이 목표 수익률 이상인지 확인
+    public boolean isTargetReturnTriggered(Long currentPrice, Long entryPrice) {
+        if (entryPrice == null || this.targetReturnRate == null) {
+            return false;
+        }
+        return changeRate(entryPrice, currentPrice).compareTo(this.targetReturnRate) >= 0;
+    }
+
+    private static BigDecimal changeRate(Long entryPrice, Long currentPrice) {
+        return BigDecimal.valueOf(currentPrice - entryPrice)
+                .divide(BigDecimal.valueOf(entryPrice), 8, RoundingMode.HALF_UP)
+                .multiply(BigDecimal.valueOf(100));
     }
 }
