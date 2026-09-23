@@ -2,9 +2,12 @@
 # 로컬 전용 - prod/staging compose에는 넣지 않는다. 사용법은 sajo-mock-kis-server 레포의 README.md 참고.
 # mock 서버는 별도 레포(sajo-mock-kis-server)라, 이 레포와 같은 상위 폴더에 나란히 clone해 둬야 한다.
 #
-#   docker compose -f docker-compose.yaml -f docker-compose.override.yaml -f docker-compose.mock.yaml up -d --build
+#   docker compose -f docker-compose.yaml -f docker-compose.mock.yaml up -d --build
 #
-# (-f를 직접 지정하면 docker-compose.override.yaml이 자동으로 안 붙으므로 같이 적어준다)
+# 로컬에 docker-compose.override.yaml(개인 설정, .gitignore 대상)을 쓰고 있다면 같이 지정한다.
+# -f를 직접 지정하면 override 파일이 자동으로 붙지 않기 때문이다.
+#
+#   docker compose -f docker-compose.yaml -f docker-compose.override.yaml -f docker-compose.mock.yaml up -d --build
 services:
   mock-kis-server:
     build:
