@@ -191,6 +191,19 @@ class StrategyEvaluationServiceTest {
     }
 
     @Test
+    @DisplayName("signalStateStore.complete()는 Account 서비스 조회보다 먼저 호출된다(claim TTL 위험 구간 최소화)")
+    void completesSignalStateBeforeQueryingAccountService() {
+        org.mockito.BDDMockito.given(signalStateStore.claim(eq(signalStateKey), anyString(), eq("BUY"), eq(SIGNAL_CLAIM_TTL)))
+                .willReturn(true);
+
+        strategyEvaluationService.evaluate(evaluationRequest(UUID.randomUUID(), 65_000L));
+
+        org.mockito.InOrder inOrder = org.mockito.Mockito.inOrder(signalStateStore, accountHoldingFeignClient);
+        inOrder.verify(signalStateStore).complete(eq(signalStateKey), anyString(), eq("BUY"), eq(SIGNAL_STATE_TTL));
+        inOrder.verify(accountHoldingFeignClient).getHoldingPosition(any(), anyString());
+    }
+
+    @Test
     @DisplayName("BUY Signal 확정 시 Account 서비스 조회에 성공하면 실제 평균 매입가를 진입가로 저장한다")
     void savesActualAvgPurchasePriceWhenAccountServiceRespondsSuccessfully() {
         org.mockito.BDDMockito.given(signalStateStore.claim(eq(signalStateKey), anyString(), eq("BUY"), eq(SIGNAL_CLAIM_TTL)))
@@ -276,6 +289,36 @@ class StrategyEvaluationServiceTest {
         ArgumentCaptor<TradingSignalGeneratedEvent> eventCaptor = ArgumentCaptor.forClass(TradingSignalGeneratedEvent.class);
         verify(tradingSignalProducer).publish(eventCaptor.capture());
         assertThat(eventCaptor.getValue().payload().signalType()).isEqualTo(SignalType.SELL);
+    }
+
+    @Test
+    @DisplayName("급락으로 매수 조건가와 손절 조건이 동시에 만족돼도 SELL을 우선해서 발행한다(진입가가 매수 조건가 이하인 현실적인 경우)")
+    void publishesSellSignalWhenStopLossOverlapsWithBuyCondition() {
+        // 진입가(68000)가 매수 조건가(70000) 이하로 형성된 실제 상황을 재현한다. 이 상태에서 급락하면
+        // currentPrice가 매수 조건가 이하(buyMatched)이면서 동시에 손절 조건도 만족하는 경우가
+        // 발생한다 — 이때 SELL이 억제되지 않고 우선 발행되어야 한다.
+        Strategy overlapStrategy = Strategy.create(
+                UUID.randomUUID(), UUID.randomUUID(), STOCK_CODE, "손절-매수 충돌 테스트 전략",
+                70_000L, 90_000L, new BigDecimal("5.0000"), null,
+                3_000_000L, 100_000L, null, null, null
+        );
+        String stateKey = "strategy:evaluation:state:" + overlapStrategy.getId();
+        String priceKey = "strategy:evaluation:entry-price:" + overlapStrategy.getId();
+
+        given(strategyQueryRepository.findAllByStockCodeAndStatusAndDeletedAtIsNull(STOCK_CODE, StrategyStatus.ACTIVE))
+                .willReturn(List.of(overlapStrategy));
+        given(valueOperations.get(priceKey)).willReturn("68000");
+        given(signalStateStore.claim(eq(stateKey), anyString(), eq("SELL"), eq(SIGNAL_CLAIM_TTL)))
+                .willReturn(true);
+
+        // currentPrice(60000) <= buyConditionPrice(70000) → buyMatched도 true
+        // 진입가(68000) 대비 (68000-60000)/68000 = 11.76% 하락 → 손절률(5%) 이상
+        strategyEvaluationService.evaluate(evaluationRequest(UUID.randomUUID(), 60_000L));
+
+        ArgumentCaptor<TradingSignalGeneratedEvent> eventCaptor = ArgumentCaptor.forClass(TradingSignalGeneratedEvent.class);
+        verify(tradingSignalProducer).publish(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().payload().signalType()).isEqualTo(SignalType.SELL);
+        verify(signalStateStore, never()).claim(eq(stateKey), anyString(), eq("BUY"), eq(SIGNAL_CLAIM_TTL));
     }
 
     @Test

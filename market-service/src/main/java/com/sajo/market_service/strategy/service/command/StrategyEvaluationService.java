@@ -114,11 +114,8 @@ public class StrategyEvaluationService {
         }
     }
 
-    /**
-     * 전략 비활성화 등으로 조건 구간 상태를 초기화해, 다음 평가부터 다시 Signal을 발행할 수 있게 한다.
-     * 다른 요청이 한창 선점 중(PROCESSING:*)이면 건드리지 않는다 — 비활성화와 Signal 발행이 동시에
-     * 일어나도 그 요청의 선점 상태를 실수로 지우지 않기 위함이다.
-     */
+//     전략 비활성화 등으로 조건 구간 상태를 초기화해, 다음 평가부터 다시 Signal을 발행할 수 있게 한다.
+//     다른 요청이 선점 중이면 건드리지 않는다.
     public void clearSignalState(UUID strategyId) {
         signalStateStore.clearIfNotProcessing(createSignalStateKey(strategyId));
     }
@@ -186,21 +183,22 @@ public class StrategyEvaluationService {
             throw e;
         }
 
-        // 발행이 확정된 시점(= 실제 거래가 일어날 Signal)에 진입가 캐시를 갱신한다.
-        // BUY는 진입가를 저장하고(가능하면 실제 평균 매입가, 실패 시 발행가 근사치), SELL은 포지션
-        // 종료로 보고 다음 BUY 사이클을 위해 지운다. complete() 성공 여부와 무관하게 수행한다.
-        if (signalType == SignalType.BUY) {
-            updateEntryPriceOnBuyConfirmed(strategy, entryPriceKey, request.currentPrice());
-        } else {
-            stringRedisTemplate.delete(entryPriceKey);
-        }
-
         boolean completed = signalStateStore.complete(signalStateKey, claimToken, signalType.name(), SIGNAL_STATE_TTL);
         if (!completed) {
             // Signal은 이미 Kafka로 발행됐지만 로컬 상태 반영에는 실패한 상황(PROCESSING TTL 만료 후 다른 요청이 재선점한 경우 등)이라
             // 중복 발행 가능성이 남는다. Redis-Kafka 간 원자성은 별도 문제
             // TODO: Outbox/멱등 Producer-Consumer 도입이 필요
             log.warn("Signal 완료 처리에 실패했습니다(다른 요청이 상태를 재선점했을 수 있음). strategyId={}", strategy.getId());
+        }
+
+        // 진입가 캐시 갱신은 claim TTL(SIGNAL_CLAIM_TTL) 위험 구간 밖(complete() 이후)에서 수행한다.
+        // BUY는 계좌 서비스 조회(동기 HTTP, 지연 가능)를 거치므로, complete() 이전에 두면 그 지연만큼
+        // PROCESSING 키가 먼저 만료돼 다른 평가가 재선점 → 중복 발행으로 이어질 위험이 있다. 진입가는
+        // 다소 늦게 갱신돼도 안전하게 저하될 뿐이라 여기서 실행해도 기능 손실이 없다.
+        if (signalType == SignalType.BUY) {
+            updateEntryPriceOnBuyConfirmed(strategy, entryPriceKey, request.currentPrice());
+        } else {
+            stringRedisTemplate.delete(entryPriceKey);
         }
 
         meterRegistry.counter(SIGNAL_PUBLISHED_METRIC, "signalType", signalType.name()).increment();
@@ -311,13 +309,23 @@ public class StrategyEvaluationService {
             Long entryPrice
     ) {
         boolean buyMatched = currentPrice <= strategy.getBuyConditionPrice();
-
-        boolean sellMatched = currentPrice >= strategy.getSellConditionPrice()
-                || strategy.isStopLossTriggered(currentPrice, entryPrice)
+        boolean absoluteSellMatched = currentPrice >= strategy.getSellConditionPrice();
+        boolean rateBasedSellMatched = strategy.isStopLossTriggered(currentPrice, entryPrice)
                 || strategy.isTargetReturnTriggered(currentPrice, entryPrice);
 
-        if (buyMatched && sellMatched) {
-            log.warn("매수/매도 조건이 동시에 만족되어 Signal을 발행하지 않습니다. strategyId={}", strategy.getId());
+        // 손절/목표수익 조건은 진입가 기준이라 buyConditionPrice < sellConditionPrice 보장(Strategy
+        // 검증)과 무관하게 매수 조건과 겹칠 수 있다. 진입가는 보통 매수 조건가 이하에서 형성되므로,
+        // 손절률을 만족할 만큼 가격이 더 떨어지면 그 가격은 매수 조건가 이하이기도 한 경우가 대부분이라
+        // — 급락으로 손절이 가장 필요한 상황에 buyMatched와 겹쳤다는 이유로 Signal이 억제되면 안 된다.
+        // 그래서 손절/목표수익 조건은 이 우선순위 판단보다 먼저 확인해 SELL을 무조건 우선시킨다.
+        if (rateBasedSellMatched) {
+            return SignalType.SELL;
+        }
+
+        if (buyMatched && absoluteSellMatched) {
+            // buyConditionPrice < sellConditionPrice가 항상 보장되므로(Strategy.create/update 검증)
+            // 이론상 도달 불가능한 방어적 분기.
+            log.warn("매수/매도 절대가 조건이 동시에 만족되어 Signal을 발행하지 않습니다. strategyId={}", strategy.getId());
             return null;
         }
 
@@ -325,7 +333,7 @@ public class StrategyEvaluationService {
             return SignalType.BUY;
         }
 
-        if (sellMatched) {
+        if (absoluteSellMatched) {
             return SignalType.SELL;
         }
 
