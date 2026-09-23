@@ -1,0 +1,61 @@
+# 장 마감 후 로컬 테스트용 오버레이: 한국투자증권 Open API 대신 mock-kis-server를 바라보게 한다.
+# 로컬 전용 - prod/staging compose에는 넣지 않는다. 사용법은 sajo-mock-kis-server 레포의 README.md 참고.
+# mock 서버는 별도 레포(sajo-mock-kis-server)라, 이 레포와 같은 상위 폴더에 나란히 clone해 둬야 한다.
+#
+#   docker compose -f docker-compose.yaml -f docker-compose.mock.yaml up -d --build
+#
+# 로컬에 docker-compose.override.yaml(개인 설정, .gitignore 대상)을 쓰고 있다면 같이 지정한다.
+# -f를 직접 지정하면 override 파일이 자동으로 붙지 않기 때문이다.
+#
+#   docker compose -f docker-compose.yaml -f docker-compose.override.yaml -f docker-compose.mock.yaml up -d --build
+services:
+  mock-kis-server:
+    build:
+      context: ../sajo-mock-kis-server
+    container_name: mock-kis-server
+    environment:
+      MOCK_KIS_INITIAL_DEPOSIT: ${MOCK_KIS_INITIAL_DEPOSIT:-10000000}
+      MOCK_KIS_SAMSUNG_BASE_PRICE: ${MOCK_KIS_SAMSUNG_BASE_PRICE:-283000}
+      MOCK_KIS_VOLATILITY: ${MOCK_KIS_VOLATILITY:-0.0005}
+      MOCK_KIS_MAX_DAILY_CHANGE_RATE: ${MOCK_KIS_MAX_DAILY_CHANGE_RATE:-0.08}
+      MOCK_KIS_TICK_INTERVAL_MS: ${MOCK_KIS_TICK_INTERVAL_MS:-1000}
+      MOCK_KIS_PARTIAL_FILL: ${MOCK_KIS_PARTIAL_FILL:-true}
+      MOCK_KIS_ENFORCE_TOKEN_RATE_LIMIT: ${MOCK_KIS_ENFORCE_TOKEN_RATE_LIMIT:-false}
+    ports:
+      - "127.0.0.1:8095:8095"
+    networks:
+      - sajo-net
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8095/actuator/health | grep -q UP || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+
+  user-service:
+    environment:
+      # 모의/실전 계좌 모두 mock으로 보낸다
+      KIS_API_VIRTUAL_BASE_URL: http://mock-kis-server:8095
+      KIS_API_REAL_BASE_URL: http://mock-kis-server:8095
+    depends_on:
+      mock-kis-server:
+        condition: service_healthy
+
+  market-service:
+    environment:
+      KIS_API_BASE_URL: http://mock-kis-server:8095
+      MARKET_WEBSOCKET_URL: ws://mock-kis-server:8095
+      MARKET_WEBSOCKET_ENABLED: ${MARKET_WEBSOCKET_ENABLED:-true}
+      MARKET_WEBSOCKET_TARGET_STOCK_CODES: ${MARKET_WEBSOCKET_TARGET_STOCK_CODES:-005930}
+      MARKET_WEBSOCKET_SYSTEM_USER_ID: ${MARKET_WEBSOCKET_SYSTEM_USER_ID:-${MARKET_SCHEDULER_SYSTEM_USER_ID:-}}
+    depends_on:
+      mock-kis-server:
+        condition: service_healthy
+
+  trading-service:
+    environment:
+      KIS_BASE_URL: http://mock-kis-server:8095
+    depends_on:
+      mock-kis-server:
+        condition: service_healthy
