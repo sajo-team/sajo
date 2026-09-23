@@ -130,6 +130,12 @@ sajo:
       # 노출되는 문제가 있었다. 사용자 관점으로 다시 쓴 FAQ 문서로 교체한다.
       document-path: classpath:support-docs/market-service-faq.md
       top-k: ${SUPPORT_RAG_TOP_K:3}
+      # 실제 응답 생성에 쓰는 채팅 모델명. 모델명을 코드에 고정하지 않고 분리해서, OpenAI가
+      # 모델을 폐지(deprecate)하거나 더 적합한 모델로 교체해야 할 때 코드 변경 없이 이 값만
+      # 바꿔 재배포할 수 있게 한다. 기본값 gpt-4o-mini는 reasoning을 하지 않는 일반 모델로,
+      # Spring AI(2.0.1)가 모델 미지정 시 기본으로 잡는 reasoning 모델(gpt-5-mini)보다
+      # 이 챗봇(사전 적재된 FAQ 문서 요약 수준의 단순 응답)에 훨씬 빠르게 응답한다.
+      chat-model-name: ${SUPPORT_RAG_CHAT_MODEL_NAME:gpt-4o-mini}
 
   scheduler:
     enabled: ${MARKET_SCHEDULER_ENABLED:false}
