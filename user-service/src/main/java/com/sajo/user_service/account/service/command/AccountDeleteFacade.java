@@ -23,6 +23,7 @@ public class AccountDeleteFacade {
     private final KisOAuthClient kisOAuthClient;
     private final KisTokenCacheQueryService cacheQueryService;
     private final KisTokenCacheCommandService cacheCommandService;
+    private final AccountCreationKisTokenCacheService accountCreationKisTokenCacheService;
     private final AccountCommandService accountCommandService;
     private final KisTokenLogCommandService kisTokenLogCommandService;
     private final TradingFeignClient tradingClient;
@@ -89,6 +90,15 @@ public class AccountDeleteFacade {
             cacheCommandService.evictKisTokenCaches(account.getId());
         } catch (Exception e) {
             log.warn("계좌 삭제 시 KIS 토큰 캐시 제거 실패. userId={}", userId, e);
+        }
+
+        // 위 revoke로 이 appKey/secretKey의 토큰이 KIS에서 폐기됐으므로, 계좌 생성 재시도용
+        // 임시 캐시(accountId가 아닌 userId+자격증명 기준)에 남아있을 수 있는 같은 토큰도 제거한다.
+        try {
+            accountCreationKisTokenCacheService.evict(
+                    userId, account.getAppKey(), account.getSecretKey(), account.getAccountType());
+        } catch (Exception e) {
+            log.warn("계좌 삭제 시 계좌 생성용 KIS 토큰 캐시 제거 실패. userId={}", userId, e);
         }
     }
 

@@ -34,6 +34,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -597,6 +598,34 @@ class AccountKisQueryServiceTest {
                     BusinessException businessException = (BusinessException) exception;
                     assertThat(businessException.getErrorCode())
                             .isEqualTo(AccountErrorCode.KIS_ORDERABLE_AMOUNT_INQUIRY_FAILED);
+                });
+    }
+
+    @Test
+    @DisplayName("KIS가 계좌번호 오류(OPSQ2000)를 반환하면 KIS_ORDERABLE_AMOUNT_INQUIRY_FAILED가 아닌 "
+            + "INVALID_ACCOUNT_NO 예외를 그대로 전파한다 - 이미 생성 시점에 검증된 계좌라도 이후 KIS 쪽에서 "
+            + "이 코드가 올 수 있음(계좌 생성 검증과 이 메서드가 KisTrClient.inquireOrderableAmount를 "
+            + "공유하기 때문에 의도적으로 공용 동작으로 둠, PR 리뷰에서 논의됨)")
+    void getOrderableAmountPropagatesInvalidAccountNoWhenKisReturnsOpsq2000() {
+        // given
+        UUID userId = UUID.randomUUID();
+        Account account = Account.createAccount(
+                userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
+
+        given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
+        given(kisTokenCacheQueryService.getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL))
+                .willReturn("issued-token");
+        willThrow(new BusinessException(AccountErrorCode.INVALID_ACCOUNT_NO))
+                .given(kisTrClient).inquireOrderableAmount(
+                        "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.REAL, "", "", "00");
+
+        // when & then
+        assertThatThrownBy(() -> accountKisQueryService.getOrderableAmount(userId))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(AccountErrorCode.INVALID_ACCOUNT_NO);
                 });
     }
 
