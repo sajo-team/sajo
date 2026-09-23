@@ -1,6 +1,7 @@
 package com.sajo.market_service.strategy.service.command;
 
 import com.sajo.market_service.strategy.cache.SignalStateStore;
+import com.sajo.market_service.strategy.client.user.AccountHoldingFeignClient;
 import com.sajo.market_service.strategy.controller.dto.request.StrategyEvaluationRequest;
 import com.sajo.market_service.strategy.domain.Strategy;
 import com.sajo.market_service.strategy.domain.StrategyStatus;
@@ -79,10 +80,13 @@ class StrategyEvaluationConcurrencyIntegrationTest {
         Mockito.when(strategyQueryRepository.findAllByStockCodeAndStatusAndDeletedAtIsNull(STOCK_CODE, StrategyStatus.ACTIVE))
                 .thenReturn(List.of(strategy));
         TradingSignalProducer tradingSignalProducer = Mockito.mock(TradingSignalProducer.class);
+        AccountHoldingFeignClient accountHoldingFeignClient = Mockito.mock(AccountHoldingFeignClient.class);
+        Mockito.when(accountHoldingFeignClient.getHoldingPosition(Mockito.any(), Mockito.anyString()))
+                .thenThrow(new RuntimeException("포지션 미반영(테스트 기본값)"));
 
         StrategyEvaluationService strategyEvaluationService = new StrategyEvaluationService(
                 strategyQueryRepository, tradingSignalProducer, redisTemplate, new SignalStateStore(redisTemplate),
-                new SimpleMeterRegistry()
+                new SimpleMeterRegistry(), accountHoldingFeignClient
         );
 
         ExecutorService executorService = Executors.newFixedThreadPool(CONCURRENT_REQUESTS);
@@ -121,5 +125,7 @@ class StrategyEvaluationConcurrencyIntegrationTest {
         verify(tradingSignalProducer, Mockito.times(1)).publish(any());
         assertThat(redisTemplate.opsForValue().get("strategy:evaluation:state:" + strategy.getId()))
                 .isEqualTo("BUY");
+        assertThat(redisTemplate.opsForValue().get("strategy:evaluation:entry-price:" + strategy.getId()))
+                .isEqualTo("65000");
     }
 }

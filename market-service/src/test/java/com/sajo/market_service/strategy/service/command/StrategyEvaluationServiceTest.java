@@ -1,9 +1,12 @@
 package com.sajo.market_service.strategy.service.command;
 
 import com.sajo.market_service.strategy.cache.SignalStateStore;
+import com.sajo.market_service.strategy.client.user.AccountHoldingFeignClient;
+import com.sajo.market_service.strategy.client.user.dto.AccountHoldingPositionResponse;
 import com.sajo.market_service.strategy.controller.dto.request.StrategyEvaluationRequest;
 import com.sajo.market_service.strategy.domain.Strategy;
 import com.sajo.market_service.strategy.domain.StrategyStatus;
+import com.sajo.market_service.strategy.kafka.dto.SignalType;
 import com.sajo.market_service.strategy.kafka.dto.TradingSignalGeneratedEvent;
 import com.sajo.market_service.strategy.kafka.producer.TradingSignalProducer;
 import com.sajo.market_service.strategy.repository.query.StrategyQueryRepository;
@@ -24,9 +27,12 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
@@ -55,16 +61,23 @@ class StrategyEvaluationServiceTest {
     @Mock
     private SignalStateStore signalStateStore;
 
+    @Mock
+    private AccountHoldingFeignClient accountHoldingFeignClient;
+
+    private static final Duration ENTRY_PRICE_TTL = Duration.ofDays(30);
+
     private StrategyEvaluationService strategyEvaluationService;
     private SimpleMeterRegistry meterRegistry;
     private Strategy strategy;
     private String signalStateKey;
+    private String entryPriceKey;
 
     @BeforeEach
     void setUp() {
         meterRegistry = new SimpleMeterRegistry();
         strategyEvaluationService = new StrategyEvaluationService(
-                strategyQueryRepository, tradingSignalProducer, stringRedisTemplate, signalStateStore, meterRegistry
+                strategyQueryRepository, tradingSignalProducer, stringRedisTemplate, signalStateStore, meterRegistry,
+                accountHoldingFeignClient
         );
         strategy = Strategy.create(
                 UUID.randomUUID(),
@@ -82,6 +95,7 @@ class StrategyEvaluationServiceTest {
                 null
         );
         signalStateKey = "strategy:evaluation:state:" + strategy.getId();
+        entryPriceKey = "strategy:evaluation:entry-price:" + strategy.getId();
 
         lenient().when(strategyQueryRepository.findAllByStockCodeAndStatusAndDeletedAtIsNull(STOCK_CODE, StrategyStatus.ACTIVE))
                 .thenReturn(List.of(strategy));
@@ -89,7 +103,16 @@ class StrategyEvaluationServiceTest {
         // 이벤트 중복 처리 방지 락은 항상 최초 획득에 성공한 것으로 가정한다(이 테스트의 관심사가 아님).
         lenient().when(valueOperations.setIfAbsent(anyString(), anyString(), any()))
                 .thenReturn(true);
+        // 진입가는 기본적으로 없는 상태(BUY 이력 없음)로 가정한다. 필요한 테스트에서만 오버라이드한다.
+        lenient().when(valueOperations.get(entryPriceKey)).thenReturn(null);
+        // BUY 확정 직후엔 trading-service의 비동기 처리 특성상 계좌에 아직 반영되지 않은 경우가
+        // 흔하므로, 기본값은 조회 실패(발행가 근사치로 폴백)로 가정한다. 실제 조회 성공 케이스는
+        // 별도 테스트에서 오버라이드한다.
+        lenient().doThrow(new RuntimeException("포지션 미반영(테스트 기본값)"))
+                .when(accountHoldingFeignClient).getHoldingPosition(any(), anyString());
         lenient().when(signalStateStore.complete(eq(signalStateKey), anyString(), eq("BUY"), eq(SIGNAL_STATE_TTL)))
+                .thenReturn(true);
+        lenient().when(signalStateStore.complete(eq(signalStateKey), anyString(), eq("SELL"), eq(SIGNAL_STATE_TTL)))
                 .thenReturn(true);
     }
 
@@ -154,6 +177,116 @@ class StrategyEvaluationServiceTest {
         verify(signalStateStore).clearIfNotProcessing("strategy:evaluation:state:" + strategyId);
         verify(stringRedisTemplate, never()).delete(anyString());
         verify(tradingSignalProducer, never()).publish(any());
+    }
+
+    @Test
+    @DisplayName("BUY Signal 발행이 확정됐지만 Account 서비스 조회에 실패하면 발행가를 진입가 근사치로 저장한다")
+    void savesEntryPriceApproximationWhenBuySignalPublished() {
+        org.mockito.BDDMockito.given(signalStateStore.claim(eq(signalStateKey), anyString(), eq("BUY"), eq(SIGNAL_CLAIM_TTL)))
+                .willReturn(true);
+
+        strategyEvaluationService.evaluate(evaluationRequest(UUID.randomUUID(), 65_000L));
+
+        verify(valueOperations).set(entryPriceKey, "65000", ENTRY_PRICE_TTL);
+    }
+
+    @Test
+    @DisplayName("BUY Signal 확정 시 Account 서비스 조회에 성공하면 실제 평균 매입가를 진입가로 저장한다")
+    void savesActualAvgPurchasePriceWhenAccountServiceRespondsSuccessfully() {
+        org.mockito.BDDMockito.given(signalStateStore.claim(eq(signalStateKey), anyString(), eq("BUY"), eq(SIGNAL_CLAIM_TTL)))
+                .willReturn(true);
+        doReturn(new AccountHoldingPositionResponse(10L, new BigDecimal("64850"), new BigDecimal("0.23")))
+                .when(accountHoldingFeignClient).getHoldingPosition(strategy.getUserId(), STOCK_CODE);
+
+        strategyEvaluationService.evaluate(evaluationRequest(UUID.randomUUID(), 65_000L));
+
+        verify(valueOperations).set(entryPriceKey, "64850", ENTRY_PRICE_TTL);
+    }
+
+    @Test
+    @DisplayName("BUY Signal 확정 시 Account 서비스가 미보유(수량 0)를 응답하면 발행가로 폴백한다")
+    void fallsBackToApproximationWhenAccountServiceReportsZeroQuantity() {
+        org.mockito.BDDMockito.given(signalStateStore.claim(eq(signalStateKey), anyString(), eq("BUY"), eq(SIGNAL_CLAIM_TTL)))
+                .willReturn(true);
+        doReturn(new AccountHoldingPositionResponse(0L, BigDecimal.ZERO, BigDecimal.ZERO))
+                .when(accountHoldingFeignClient).getHoldingPosition(strategy.getUserId(), STOCK_CODE);
+
+        strategyEvaluationService.evaluate(evaluationRequest(UUID.randomUUID(), 65_000L));
+
+        verify(valueOperations).set(entryPriceKey, "65000", ENTRY_PRICE_TTL);
+    }
+
+    @Test
+    @DisplayName("SELL Signal 발행이 확정되면 진입가 키를 삭제해 포지션 종료를 반영한다")
+    void deletesEntryPriceWhenSellSignalPublished() {
+        org.mockito.BDDMockito.given(signalStateStore.claim(eq(signalStateKey), anyString(), eq("SELL"), eq(SIGNAL_CLAIM_TTL)))
+                .willReturn(true);
+
+        strategyEvaluationService.evaluate(evaluationRequest(UUID.randomUUID(), 85_000L));
+
+        verify(stringRedisTemplate).delete(entryPriceKey);
+    }
+
+    @Test
+    @DisplayName("절대 매도 조건가에 도달하지 않아도 진입가 대비 손절률을 넘으면 SELL Signal을 발행한다")
+    void publishesSellSignalWhenStopLossRateExceeded() {
+        // 매수/매도 절대가 구간을 넓게 잡아 손절률 조건과 겹치지 않게 한다.
+        Strategy stopLossStrategy = Strategy.create(
+                UUID.randomUUID(), UUID.randomUUID(), STOCK_CODE, "손절 테스트 전략",
+                50_000L, 90_000L, new BigDecimal("5.0000"), null,
+                3_000_000L, 100_000L, null, null, null
+        );
+        String stateKey = "strategy:evaluation:state:" + stopLossStrategy.getId();
+        String priceKey = "strategy:evaluation:entry-price:" + stopLossStrategy.getId();
+
+        given(strategyQueryRepository.findAllByStockCodeAndStatusAndDeletedAtIsNull(STOCK_CODE, StrategyStatus.ACTIVE))
+                .willReturn(List.of(stopLossStrategy));
+        given(valueOperations.get(priceKey)).willReturn("70000");
+        given(signalStateStore.claim(eq(stateKey), anyString(), eq("SELL"), eq(SIGNAL_CLAIM_TTL)))
+                .willReturn(true);
+
+        // 진입가(70000) 대비 (70000-66000)/70000 = 5.71% 하락 → 손절률(5%) 이상
+        strategyEvaluationService.evaluate(evaluationRequest(UUID.randomUUID(), 66_000L));
+
+        ArgumentCaptor<TradingSignalGeneratedEvent> eventCaptor = ArgumentCaptor.forClass(TradingSignalGeneratedEvent.class);
+        verify(tradingSignalProducer).publish(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().payload().signalType()).isEqualTo(SignalType.SELL);
+    }
+
+    @Test
+    @DisplayName("절대 매도 조건가에 도달하지 않아도 진입가 대비 목표수익률을 넘으면 SELL Signal을 발행한다")
+    void publishesSellSignalWhenTargetReturnRateExceeded() {
+        Strategy targetReturnStrategy = Strategy.create(
+                UUID.randomUUID(), UUID.randomUUID(), STOCK_CODE, "목표수익 테스트 전략",
+                50_000L, 90_000L, new BigDecimal("5.0000"), new BigDecimal("3.0000"),
+                3_000_000L, 100_000L, null, null, null
+        );
+        String stateKey = "strategy:evaluation:state:" + targetReturnStrategy.getId();
+        String priceKey = "strategy:evaluation:entry-price:" + targetReturnStrategy.getId();
+
+        given(strategyQueryRepository.findAllByStockCodeAndStatusAndDeletedAtIsNull(STOCK_CODE, StrategyStatus.ACTIVE))
+                .willReturn(List.of(targetReturnStrategy));
+        given(valueOperations.get(priceKey)).willReturn("70000");
+        given(signalStateStore.claim(eq(stateKey), anyString(), eq("SELL"), eq(SIGNAL_CLAIM_TTL)))
+                .willReturn(true);
+
+        // 진입가(70000) 대비 (73000-70000)/70000 = 4.28% 상승 → 목표수익률(3%) 이상
+        strategyEvaluationService.evaluate(evaluationRequest(UUID.randomUUID(), 73_000L));
+
+        ArgumentCaptor<TradingSignalGeneratedEvent> eventCaptor = ArgumentCaptor.forClass(TradingSignalGeneratedEvent.class);
+        verify(tradingSignalProducer).publish(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().payload().signalType()).isEqualTo(SignalType.SELL);
+    }
+
+    @Test
+    @DisplayName("진입가가 없으면(BUY 이력 없음) 손절/목표수익 조건은 무시되고 절대가 조건만 적용된다")
+    void ignoresStopLossAndTargetReturnWhenNoEntryPrice() {
+        // 절대 매수/매도 조건 사이 구간(70000~80000)이라 절대가 조건은 미충족.
+        // entryPrice는 setUp()에서 기본 null이므로 손절/목표수익 조건도 항상 false여야 한다.
+        strategyEvaluationService.evaluate(evaluationRequest(UUID.randomUUID(), 75_000L));
+
+        verify(tradingSignalProducer, never()).publish(any());
+        verify(signalStateStore).clearIfNotProcessing(signalStateKey);
     }
 
     private StrategyEvaluationRequest evaluationRequest(UUID sourceEventId, Long currentPrice) {
