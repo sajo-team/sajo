@@ -5,6 +5,7 @@ import com.sajo.market_service.market.domain.PriceSource;
 import com.sajo.market_service.market.kafka.dto.MarketPricePayload;
 import com.sajo.market_service.market.kafka.dto.MarketPriceUpdatedEvent;
 import com.sajo.market_service.strategy.cache.SignalStateStore;
+import com.sajo.market_service.strategy.client.user.AccountHoldingFeignClient;
 import com.sajo.market_service.strategy.domain.Strategy;
 import com.sajo.market_service.strategy.domain.StrategyStatus;
 import com.sajo.market_service.strategy.kafka.dto.TradingSignalGeneratedEvent;
@@ -47,6 +48,8 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.BDDMockito.given;
 
 /**
@@ -102,6 +105,11 @@ class MarketPriceEvaluationConsumerIntegrationTest {
     @MockitoBean
     private StrategyQueryRepository strategyQueryRepository;
 
+    // 이 테스트는 Kafka/Redis 신호 발행 경로만 검증한다.
+    // Account 서비스 실제 호출은 필요 없으므로 Mock으로 대체하고, BUY 확정 시 항상 폴백(발행가 근사치)되도록 실패로 스텁한다.
+    @MockitoBean
+    private AccountHoldingFeignClient accountHoldingFeignClient;
+
     @Test
     @DisplayName("market.price.updated 발행 → 전략 평가 → trading.signal.generated 발행까지 실제로 흐른다")
     void publishesMarketPriceEventAndReceivesGeneratedSignal() throws InterruptedException {
@@ -125,6 +133,8 @@ class MarketPriceEvaluationConsumerIntegrationTest {
         org.springframework.test.util.ReflectionTestUtils.setField(strategy, "id", strategyId);
         given(strategyQueryRepository.findAllByStockCodeAndStatusAndDeletedAtIsNull(STOCK_CODE, StrategyStatus.ACTIVE))
                 .willReturn(List.of(strategy));
+        given(accountHoldingFeignClient.getHoldingPosition(any(), anyString()))
+                .willThrow(new RuntimeException("이 테스트는 Account 서비스 연동을 검증하지 않음(폴백 경로로 흘려보냄)"));
 
         MarketPricePayload payload = new MarketPricePayload(
                 STOCK_CODE, 65_000L, -1_000L, new BigDecimal("-1.51"), 12_345L,

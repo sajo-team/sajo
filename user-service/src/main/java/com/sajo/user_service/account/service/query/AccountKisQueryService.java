@@ -8,6 +8,7 @@ import com.sajo.user_service.account.client.kis.dto.response.KisBalanceResponse;
 import com.sajo.user_service.account.client.kis.dto.response.KisOrderableAmountResponse;
 import com.sajo.user_service.account.controller.dto.response.AccessTokenResponse;
 import com.sajo.user_service.account.controller.dto.response.AccountDepositResponse;
+import com.sajo.user_service.account.controller.dto.response.AccountHoldingPositionResponse;
 import com.sajo.user_service.account.controller.dto.response.AccountHoldingsResponse;
 import com.sajo.user_service.account.controller.dto.response.ApprovalKeyResponse;
 import com.sajo.user_service.account.controller.dto.response.OrderableAmountResponse;
@@ -160,7 +161,7 @@ public class AccountKisQueryService {
         }
     }
 
-    // 매도 가능 수량 조회 (특정 종목) - inquire-balance를 페이지가 끝날 때까지(hasNext=false) 순회하며 stockCode를 찾음
+    // 매도 가능 수량 조회 (특정 종목)
     // 한투 api 중 매도가능수량조회 모의투자는 지원 하지 않아서 주식 잔고 조회를 통해 매도 가능 수량 조회
     // 주식 잔고 조회는 한번 요청에 최대 20개의 종목을 가져올 수 있음(모의투자 기준)
     // 추후 실전 투자 계좌는 KIS 매도가능수량조회 API 사용하도록 변경
@@ -174,6 +175,50 @@ public class AccountKisQueryService {
                 account.getAccountType()
         );
 
+        Optional<KisBalanceHoldingResponse> holding = findHoldingByStockCode(token, account, userId, stockCode);
+        if (holding.isEmpty()) {
+            // 미보유(0)로 처리하면 실제로는 조회 실패인데 매도 가능한 것으로 오인될 수 있으나,
+            // 매도가능수량 용도상 미보유=0이 자연스러운 응답이라 명시적 예외 대신 0을 반환한다
+            return SellableQuantityResponse.notHeld();
+        }
+
+        try {
+            return SellableQuantityResponse.from(holding.get());
+        } catch (NumberFormatException e) {
+            log.warn("KIS 매도가능수량 응답 필드 파싱 실패. userId={}, stockCode={}", userId, stockCode, e);
+            throw new BusinessException(
+                    AccountErrorCode.KIS_BALANCE_INQUIRY_FAILED, "KIS 응답 필드 파싱에 실패했습니다.");
+        }
+    }
+
+    // 특정 종목의 보유 포지션(보유수량/평균매입가/평가손익율) 조회
+    public AccountHoldingPositionResponse getHoldingPosition(UUID userId, String stockCode) {
+        Account account = accountQueryService.getAccountByUserId(userId);
+        String token = kisTokenCacheQueryService.getAccessToken(
+                userId,
+                account.getId(),
+                account.getAppKey(),
+                account.getSecretKey(),
+                account.getAccountType()
+        );
+
+        KisBalanceHoldingResponse holding = findHoldingByStockCode(token, account, userId, stockCode)
+                .orElseThrow(() -> new BusinessException(AccountErrorCode.ACCOUNT_HOLDING_NOT_FOUND));
+
+        try {
+            return AccountHoldingPositionResponse.from(holding);
+        } catch (NumberFormatException | NullPointerException e) {
+            log.warn("KIS 보유 포지션 응답 필드 파싱 실패. userId={}, stockCode={}", userId, stockCode, e);
+            throw new BusinessException(
+                    AccountErrorCode.KIS_BALANCE_INQUIRY_FAILED, "KIS 응답 필드 파싱에 실패했습니다.");
+        }
+    }
+
+    // inquire-balance를 페이지가 끝날 때까지(hasNext=false) 순회하며 stockCode를 찾는다.
+    // 찾으면 그 즉시 반환하고, 끝까지 없으면 빈 Optional을 반환한다 (미보유 처리는 호출부 책임).
+    private Optional<KisBalanceHoldingResponse> findHoldingByStockCode(
+            String token, Account account, UUID userId, String stockCode
+    ) {
         int count = 0;
         String ctxFk100 = null;
         String ctxNk100 = null;
@@ -195,17 +240,11 @@ public class AccountKisQueryService {
                     .findFirst();
 
             if (found.isPresent()) {
-                try {
-                    return SellableQuantityResponse.from(found.get());
-                } catch (NumberFormatException e) {
-                    log.warn("KIS 매도가능수량 응답 필드 파싱 실패. userId={}, stockCode={}", userId, stockCode, e);
-                    throw new BusinessException(
-                            AccountErrorCode.KIS_BALANCE_INQUIRY_FAILED, "KIS 응답 필드 파싱에 실패했습니다.");
-                }
+                return found;
             }
 
             if (!result.hasNext()) {
-                return SellableQuantityResponse.notHeld();
+                return Optional.empty();
             }
 
             ctxFk100 = response.ctx_area_fk100();
@@ -214,7 +253,6 @@ public class AccountKisQueryService {
         }
 
         // 정상적인 계좌라면 절대 도달하지 않음 (전체 상장종목 수 기준 넉넉히 잡은 안전장치) - KIS 응답 이상 시 무한 루프 방지
-        // 미보유(0)로 처리하면 실제로는 조회 실패인데 매도 가능한 것으로 오인될 수 있어 명시적으로 실패 처리한다
         log.warn("보유종목 조회 페이지 상한({})에 도달해 조회를 중단합니다. userId={}, stockCode={}",
                 MAX_HOLDINGS_PAGE, userId, stockCode);
         throw new BusinessException(

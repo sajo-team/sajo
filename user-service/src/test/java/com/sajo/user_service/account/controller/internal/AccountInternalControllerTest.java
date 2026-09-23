@@ -3,6 +3,7 @@ package com.sajo.user_service.account.controller.internal;
 import com.sajo.common.exception.BusinessException;
 import com.sajo.common.exception.GlobalExceptionHandler;
 import com.sajo.user_service.account.controller.dto.response.AccessTokenResponse;
+import com.sajo.user_service.account.controller.dto.response.AccountHoldingPositionResponse;
 import com.sajo.user_service.account.controller.dto.response.AccountOrderInfoResponse;
 import com.sajo.user_service.account.controller.dto.response.ApprovalKeyResponse;
 import com.sajo.user_service.account.controller.dto.response.OrderableAmountResponse;
@@ -19,6 +20,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 import static org.mockito.BDDMockito.given;
@@ -208,6 +210,51 @@ class AccountInternalControllerTest {
 
         // when & then
         mockMvc.perform(get("/internal/v1/accounts/{userId}/holdings/{stockCode}", userId, "005930"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.errorCode").value("ACCOUNT_0006"));
+    }
+
+    @Test
+    @DisplayName("보유 포지션 조회에 성공하면 200과 quantity/avgPurchasePrice/profitLossRate를 반환한다")
+    void getHoldingPosition() throws Exception {
+        // given
+        UUID userId = UUID.randomUUID();
+        given(accountKisQueryService.getHoldingPosition(userId, "005930"))
+                .willReturn(new AccountHoldingPositionResponse(
+                        10L, new BigDecimal("70000.5"), new BigDecimal("7.14")));
+
+        // when & then
+        mockMvc.perform(get("/internal/v1/accounts/{userId}/holdings/{stockCode}/position", userId, "005930"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.quantity").value(10))
+                .andExpect(jsonPath("$.avgPurchasePrice").value(70000.5))
+                .andExpect(jsonPath("$.profitLossRate").value(7.14));
+    }
+
+    @Test
+    @DisplayName("보유하지 않은 종목이면 보유 포지션 조회는 404와 ACCOUNT_0015를 반환한다")
+    void getHoldingPositionNotFound() throws Exception {
+        // given
+        UUID userId = UUID.randomUUID();
+        given(accountKisQueryService.getHoldingPosition(userId, "005930"))
+                .willThrow(new BusinessException(AccountErrorCode.ACCOUNT_HOLDING_NOT_FOUND));
+
+        // when & then
+        mockMvc.perform(get("/internal/v1/accounts/{userId}/holdings/{stockCode}/position", userId, "005930"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.errorCode").value("ACCOUNT_0015"));
+    }
+
+    @Test
+    @DisplayName("계좌가 없으면 보유 포지션 조회도 404와 ACCOUNT_0006을 반환한다")
+    void getHoldingPositionAccountNotFound() throws Exception {
+        // given
+        UUID userId = UUID.randomUUID();
+        given(accountKisQueryService.getHoldingPosition(userId, "005930"))
+                .willThrow(new BusinessException(AccountErrorCode.ACCOUNT_NOT_FOUND));
+
+        // when & then
+        mockMvc.perform(get("/internal/v1/accounts/{userId}/holdings/{stockCode}/position", userId, "005930"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.errorCode").value("ACCOUNT_0006"));
     }

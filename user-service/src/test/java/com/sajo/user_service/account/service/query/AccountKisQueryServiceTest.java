@@ -10,6 +10,7 @@ import com.sajo.user_service.account.client.kis.dto.response.KisOrderableAmountD
 import com.sajo.user_service.account.client.kis.dto.response.KisOrderableAmountResponse;
 import com.sajo.user_service.account.controller.dto.response.AccessTokenResponse;
 import com.sajo.user_service.account.controller.dto.response.AccountDepositResponse;
+import com.sajo.user_service.account.controller.dto.response.AccountHoldingPositionResponse;
 import com.sajo.user_service.account.controller.dto.response.AccountHoldingsResponse;
 import com.sajo.user_service.account.controller.dto.response.ApprovalKeyResponse;
 import com.sajo.user_service.account.controller.dto.response.OrderableAmountResponse;
@@ -33,6 +34,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -600,6 +602,34 @@ class AccountKisQueryServiceTest {
     }
 
     @Test
+    @DisplayName("KIS가 계좌번호 오류(OPSQ2000)를 반환하면 KIS_ORDERABLE_AMOUNT_INQUIRY_FAILED가 아닌 "
+            + "INVALID_ACCOUNT_NO 예외를 그대로 전파한다 - 이미 생성 시점에 검증된 계좌라도 이후 KIS 쪽에서 "
+            + "이 코드가 올 수 있음(계좌 생성 검증과 이 메서드가 KisTrClient.inquireOrderableAmount를 "
+            + "공유하기 때문에 의도적으로 공용 동작으로 둠, PR 리뷰에서 논의됨)")
+    void getOrderableAmountPropagatesInvalidAccountNoWhenKisReturnsOpsq2000() {
+        // given
+        UUID userId = UUID.randomUUID();
+        Account account = Account.createAccount(
+                userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
+
+        given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
+        given(kisTokenCacheQueryService.getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL))
+                .willReturn("issued-token");
+        willThrow(new BusinessException(AccountErrorCode.INVALID_ACCOUNT_NO))
+                .given(kisTrClient).inquireOrderableAmount(
+                        "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.REAL, "", "", "00");
+
+        // when & then
+        assertThatThrownBy(() -> accountKisQueryService.getOrderableAmount(userId))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(AccountErrorCode.INVALID_ACCOUNT_NO);
+                });
+    }
+
+    @Test
     @DisplayName("매도 가능 수량 조회 - 첫 페이지에서 종목을 찾으면 다음 페이지는 조회하지 않고 그 수량을 반환한다")
     void getSellableQuantityFoundOnFirstPage() {
         // given
@@ -760,6 +790,224 @@ class AccountKisQueryServiceTest {
                 });
 
         verifyNoInteractions(kisTokenCacheQueryService, kisTrClient);
+    }
+
+    @Test
+    @DisplayName("보유 포지션 조회 - 첫 페이지에서 종목을 찾으면 다음 페이지는 조회하지 않고 보유수량/평균매입가/평가손익율을 반환한다")
+    void getHoldingPositionFoundOnFirstPage() {
+        // given
+        UUID userId = UUID.randomUUID();
+        Account account = Account.createAccount(
+                userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
+        KisBalanceResponse kisBalanceResponse = new KisBalanceResponse(
+                "0", "MSG_CD", "정상처리 되었습니다", "next-fk", "next-nk",
+                List.of(holding("005930", "10")), List.of());
+
+        given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
+        given(kisTokenCacheQueryService.getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL))
+                .willReturn("issued-token");
+        given(kisTrClient.inquireBalance(
+                "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.REAL, null, null))
+                .willReturn(new KisContinuationResult<>(kisBalanceResponse, true));
+
+        // when
+        AccountHoldingPositionResponse result = accountKisQueryService.getHoldingPosition(userId, "005930");
+
+        // then
+        assertThat(result.quantity()).isEqualTo(10L);
+        assertThat(result.avgPurchasePrice()).isEqualByComparingTo("70000.5");
+        assertThat(result.profitLossRate()).isEqualByComparingTo("7.14");
+        verify(kisTrClient, times(1)).inquireBalance(
+                "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.REAL, null, null);
+    }
+
+    @Test
+    @DisplayName("보유 포지션 조회 - 첫 페이지에 없으면 다음 페이지 커서로 이어서 조회해 종목을 찾는다")
+    void getHoldingPositionFoundOnSecondPage() {
+        // given
+        UUID userId = UUID.randomUUID();
+        Account account = Account.createAccount(
+                userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
+        KisBalanceResponse firstPage = new KisBalanceResponse(
+                "0", "MSG_CD", "정상처리 되었습니다", "next-fk", "next-nk",
+                List.of(holding("000660", "5")), List.of());
+        KisBalanceResponse secondPage = new KisBalanceResponse(
+                "0", "MSG_CD", "정상처리 되었습니다", "last-fk", "last-nk",
+                List.of(holding("005930", "10")), List.of());
+
+        given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
+        given(kisTokenCacheQueryService.getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL))
+                .willReturn("issued-token");
+        given(kisTrClient.inquireBalance(
+                "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.REAL, null, null))
+                .willReturn(new KisContinuationResult<>(firstPage, true));
+        given(kisTrClient.inquireBalance(
+                "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.REAL, "next-fk", "next-nk"))
+                .willReturn(new KisContinuationResult<>(secondPage, false));
+
+        // when
+        AccountHoldingPositionResponse result = accountKisQueryService.getHoldingPosition(userId, "005930");
+
+        // then
+        assertThat(result.quantity()).isEqualTo(10L);
+    }
+
+    @Test
+    @DisplayName("보유 포지션 조회 - 마지막 페이지까지 종목을 못 찾으면 ACCOUNT_HOLDING_NOT_FOUND 예외를 던진다")
+    void getHoldingPositionFailsWhenNotHeld() {
+        // given
+        UUID userId = UUID.randomUUID();
+        Account account = Account.createAccount(
+                userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
+        KisBalanceResponse kisBalanceResponse = new KisBalanceResponse(
+                "0", "MSG_CD", "정상처리 되었습니다", null, null,
+                List.of(holding("000660", "5")), List.of());
+
+        given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
+        given(kisTokenCacheQueryService.getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL))
+                .willReturn("issued-token");
+        given(kisTrClient.inquireBalance(
+                "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.REAL, null, null))
+                .willReturn(new KisContinuationResult<>(kisBalanceResponse, false));
+
+        // when & then
+        assertThatThrownBy(() -> accountKisQueryService.getHoldingPosition(userId, "005930"))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(AccountErrorCode.ACCOUNT_HOLDING_NOT_FOUND);
+                });
+    }
+
+    @Test
+    @DisplayName("보유 포지션 조회 - hasNext가 계속 true이면 페이지 상한(150)에서 멈추고 KIS_BALANCE_INQUIRY_FAILED 예외를 던진다 (무한 루프 방지)")
+    void getHoldingPositionStopsAtPageCapAndThrows() {
+        // given
+        UUID userId = UUID.randomUUID();
+        Account account = Account.createAccount(
+                userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
+        KisBalanceResponse kisBalanceResponse = new KisBalanceResponse(
+                "0", "MSG_CD", "정상처리 되었습니다", "next-fk", "next-nk",
+                List.of(holding("000660", "5")), List.of());
+
+        given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
+        given(kisTokenCacheQueryService.getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL))
+                .willReturn("issued-token");
+        given(kisTrClient.inquireBalance(
+                eq("issued-token"), eq("app-key"), eq("secret-key"), eq("12345678"), eq("01"), eq(AccountType.REAL),
+                any(), any()))
+                .willReturn(new KisContinuationResult<>(kisBalanceResponse, true));
+
+        // when & then
+        assertThatThrownBy(() -> accountKisQueryService.getHoldingPosition(userId, "005930"))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(AccountErrorCode.KIS_BALANCE_INQUIRY_FAILED);
+                });
+        verify(kisTrClient, times(150)).inquireBalance(
+                eq("issued-token"), eq("app-key"), eq("secret-key"), eq("12345678"), eq("01"), eq(AccountType.REAL),
+                any(), any());
+    }
+
+    @Test
+    @DisplayName("보유 포지션 조회 - 평균매입가가 숫자로 파싱 불가능하면 KIS_BALANCE_INQUIRY_FAILED 예외를 던진다")
+    void getHoldingPositionFailsWhenAvgPurchasePriceIsNotParsable() {
+        // given
+        UUID userId = UUID.randomUUID();
+        Account account = Account.createAccount(
+                userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
+        KisBalanceResponse kisBalanceResponse = new KisBalanceResponse(
+                "0", "MSG_CD", "정상처리 되었습니다", null, null,
+                List.of(unparsableAvgPurchasePriceHolding("005930")), List.of());
+
+        given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
+        given(kisTokenCacheQueryService.getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL))
+                .willReturn("issued-token");
+        given(kisTrClient.inquireBalance(
+                "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.REAL, null, null))
+                .willReturn(new KisContinuationResult<>(kisBalanceResponse, false));
+
+        // when & then
+        assertThatThrownBy(() -> accountKisQueryService.getHoldingPosition(userId, "005930"))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(AccountErrorCode.KIS_BALANCE_INQUIRY_FAILED);
+                });
+    }
+
+    @Test
+    @DisplayName("보유 포지션 조회 - 평균매입가 필드가 null이면(NumberFormatException이 아닌 NPE) KIS_BALANCE_INQUIRY_FAILED 예외를 던진다")
+    void getHoldingPositionFailsWhenAvgPurchasePriceIsNull() {
+        // given
+        UUID userId = UUID.randomUUID();
+        Account account = Account.createAccount(
+                userId, "app-key", "secret-key", "12345678-01", "hashed-account-no", AccountType.REAL);
+        KisBalanceResponse kisBalanceResponse = new KisBalanceResponse(
+                "0", "MSG_CD", "정상처리 되었습니다", null, null,
+                List.of(nullAvgPurchasePriceHolding("005930")), List.of());
+
+        given(accountQueryService.getAccountByUserId(userId)).willReturn(account);
+        given(kisTokenCacheQueryService.getAccessToken(userId, null, "app-key", "secret-key", AccountType.REAL))
+                .willReturn("issued-token");
+        given(kisTrClient.inquireBalance(
+                "issued-token", "app-key", "secret-key", "12345678", "01", AccountType.REAL, null, null))
+                .willReturn(new KisContinuationResult<>(kisBalanceResponse, false));
+
+        // when & then
+        assertThatThrownBy(() -> accountKisQueryService.getHoldingPosition(userId, "005930"))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(AccountErrorCode.KIS_BALANCE_INQUIRY_FAILED);
+                });
+    }
+
+    @Test
+    @DisplayName("보유 포지션 조회 시 계좌가 없으면 ACCOUNT_NOT_FOUND 예외를 그대로 전파하고 KIS는 호출하지 않는다")
+    void getHoldingPositionFailsWhenAccountNotFound() {
+        // given
+        UUID userId = UUID.randomUUID();
+        given(accountQueryService.getAccountByUserId(userId))
+                .willThrow(new BusinessException(AccountErrorCode.ACCOUNT_NOT_FOUND));
+
+        // when & then
+        assertThatThrownBy(() -> accountKisQueryService.getHoldingPosition(userId, "005930"))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(exception -> {
+                    BusinessException businessException = (BusinessException) exception;
+                    assertThat(businessException.getErrorCode())
+                            .isEqualTo(AccountErrorCode.ACCOUNT_NOT_FOUND);
+                });
+
+        verifyNoInteractions(kisTokenCacheQueryService, kisTrClient);
+    }
+
+    private static KisBalanceHoldingResponse unparsableAvgPurchasePriceHolding(String pdno) {
+        return new KisBalanceHoldingResponse(
+                pdno, "종목명", null, null, null, null, null,
+                "10", // hldg_qty
+                "10", // ord_psbl_qty
+                "숫자아님", // pchs_avg_pric - 정상이면 BigDecimal로 변환 가능한 숫자 문자열이어야 함
+                null, "75000", "750000", "49995", "7.14",
+                null, null, null, null, null, null, null, null, null, null, null
+        );
+    }
+
+    private static KisBalanceHoldingResponse nullAvgPurchasePriceHolding(String pdno) {
+        return new KisBalanceHoldingResponse(
+                pdno, "종목명", null, null, null, null, null,
+                "10", // hldg_qty
+                "10", // ord_psbl_qty
+                null, // pchs_avg_pric - new BigDecimal(String)은 null이면 NumberFormatException이 아닌 NPE를 던짐
+                null, "75000", "750000", "49995", "7.14",
+                null, null, null, null, null, null, null, null, null, null, null
+        );
     }
 
     private static KisBalanceHoldingResponse holding(String pdno, String ordPsblQty) {
