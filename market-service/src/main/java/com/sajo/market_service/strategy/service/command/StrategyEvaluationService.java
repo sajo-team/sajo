@@ -19,8 +19,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
-import java.math.BigDecimal;
-import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
@@ -286,14 +284,14 @@ public class StrategyEvaluationService {
             Long currentPrice,
             Long entryPrice
     ) {
-        if (isStopLossTriggered(strategy, currentPrice, entryPrice)) {
+        if (strategy.isStopLossTriggered(currentPrice, entryPrice)) {
             return String.format(
                     "진입가(%d) 대비 현재가(%d) 하락률이 손절률(%s%%) 이상입니다.",
                     entryPrice, currentPrice, strategy.getStopLossRate()
             );
         }
 
-        if (isTargetReturnTriggered(strategy, currentPrice, entryPrice)) {
+        if (strategy.isTargetReturnTriggered(currentPrice, entryPrice)) {
             return String.format(
                     "진입가(%d) 대비 현재가(%d) 상승률이 목표수익률(%s%%) 이상입니다.",
                     entryPrice, currentPrice, strategy.getTargetReturnRate()
@@ -315,8 +313,8 @@ public class StrategyEvaluationService {
         boolean buyMatched = currentPrice <= strategy.getBuyConditionPrice();
 
         boolean sellMatched = currentPrice >= strategy.getSellConditionPrice()
-                || isStopLossTriggered(strategy, currentPrice, entryPrice)
-                || isTargetReturnTriggered(strategy, currentPrice, entryPrice);
+                || strategy.isStopLossTriggered(currentPrice, entryPrice)
+                || strategy.isTargetReturnTriggered(currentPrice, entryPrice);
 
         if (buyMatched && sellMatched) {
             log.warn("매수/매도 조건이 동시에 만족되어 Signal을 발행하지 않습니다. strategyId={}", strategy.getId());
@@ -332,34 +330,6 @@ public class StrategyEvaluationService {
         }
 
         return null;
-    }
-
-    /**
-     * 진입가(근사치) 대비 현재가 하락률이 손절률 이상인지 확인한다. 진입가가 없으면(BUY 이력 없음) 항상 false.
-     */
-    private boolean isStopLossTriggered(Strategy strategy, Long currentPrice, Long entryPrice) {
-        if (entryPrice == null) {
-            return false;
-        }
-        BigDecimal lossRate = changeRate(entryPrice, currentPrice).negate();
-        return lossRate.compareTo(strategy.getStopLossRate()) >= 0;
-    }
-
-    /**
-     * 진입가(근사치) 대비 현재가 상승률이 목표수익률 이상인지 확인한다. 진입가가 없거나
-     * targetReturnRate가 설정되지 않은 전략(선택값)이면 항상 false.
-     */
-    private boolean isTargetReturnTriggered(Strategy strategy, Long currentPrice, Long entryPrice) {
-        if (entryPrice == null || strategy.getTargetReturnRate() == null) {
-            return false;
-        }
-        return changeRate(entryPrice, currentPrice).compareTo(strategy.getTargetReturnRate()) >= 0;
-    }
-
-    private BigDecimal changeRate(Long entryPrice, Long currentPrice) {
-        return BigDecimal.valueOf(currentPrice - entryPrice)
-                .divide(BigDecimal.valueOf(entryPrice), 8, RoundingMode.HALF_UP)
-                .multiply(BigDecimal.valueOf(100));
     }
 
     private void validateOrderAmount(Strategy strategy) {

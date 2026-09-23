@@ -127,7 +127,11 @@ public class BacktestExecutionService {
                 }
             }
 
-            if (holdingQuantity > 0 && currentPrice >= strategy.getSellConditionPrice()) {
+            // 일봉(종가) 데이터만 받는 현재 구조상, 장중 저가/고가가 아닌 종가 기준으로만 판단
+            // 절대 매도가 미도달이어도 진입가 대비 손절률/목표수익률 조건을 만족하면 매도
+            if (holdingQuantity > 0 && (currentPrice >= strategy.getSellConditionPrice()
+                    || strategy.isStopLossTriggered(currentPrice, buyPrice)
+                    || strategy.isTargetReturnTriggered(currentPrice, buyPrice))) {
                 cash += holdingQuantity * currentPrice;
                 long tradeProfit = (currentPrice - buyPrice) * holdingQuantity;
                 holdingQuantity = 0L;

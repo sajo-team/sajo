@@ -104,17 +104,20 @@ class BacktestExecutionServiceTest {
     @Test
     @DisplayName("보유 중 평가 자산이 일시적으로 하락하면 MDD가 그 낙폭만큼 음수로 기록된다")
     void tracksMaxDrawdownWhileHolding() {
+        // 2일차 하락폭은 손절률(5%) 밑으로 유지한다(진입가 65,000 대비 -3.08%) — 그 이상이면
+        // 회복 전에 손절로 먼저 매도되어 이 테스트가 검증하려는 "일시적 하락 후 회복 매도"
+        // 시나리오 자체가 성립하지 않는다.
         given(backtestPriceReader.read(any(), any(), any())).willReturn(List.of(
                 priceOf(1, 65_000L), // 매수(4주)
-                priceOf(2, 50_000L), // 보유 중 하락 → 낙폭 발생
+                priceOf(2, 63_000L), // 보유 중 하락(손절 미도달) → 낙폭 발생
                 priceOf(3, 90_000L)  // 매도
         ));
 
         backtestExecutionService.execute(backtestId);
 
         assertThat(backtest.getStatus()).isEqualTo(BacktestStatus.COMPLETED);
-        // 2일차 평가자산 2,940,000 vs 그 시점까지의 최고 자산 3,000,000 → -2%
-        assertThat(backtest.getMdd()).isEqualByComparingTo("-2.0000");
+        // 2일차 평가자산 2,992,000 vs 그 시점까지의 최고 자산 3,000,000 → -0.2667%
+        assertThat(backtest.getMdd()).isEqualByComparingTo("-0.2667");
         assertThat(backtest.getTradeCount()).isEqualTo(1);
         assertThat(backtest.getWinRate()).isEqualByComparingTo("100.0000");
     }
