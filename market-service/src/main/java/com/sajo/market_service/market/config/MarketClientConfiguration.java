@@ -1,6 +1,7 @@
 package com.sajo.market_service.market.config;
 
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.restclient.autoconfigure.RestClientBuilderConfigurer;
 import org.springframework.cloud.openfeign.EnableFeignClients;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -15,10 +16,11 @@ import java.time.Duration;
 public class MarketClientConfiguration {
 
     @Bean
-    RestClient.Builder kisRestClientBuilder() {
+    RestClient.Builder kisRestClientBuilder(RestClientBuilderConfigurer configurer) {
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(Duration.ofSeconds(5));
         requestFactory.setReadTimeout(Duration.ofSeconds(30));
-        return RestClient.builder().requestFactory(requestFactory);
+        // RestClient.builder()로 직접 만들면 Boot 자동설정(계측 등)이 빠져 KIS 호출 span/메트릭이 안 남는다
+        return configurer.configure(RestClient.builder()).requestFactory(requestFactory);
     }
 }

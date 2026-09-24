@@ -40,6 +40,7 @@ class SlackClientTest {
 
         when(restClientBuilder.clone()).thenReturn(restClientBuilder);
         when(restClientBuilder.requestFactory(any())).thenReturn(restClientBuilder);
+        when(restClientBuilder.observationRegistry(any())).thenReturn(restClientBuilder);
         when(restClientBuilder.build()).thenReturn(restClient);
 
         when(restClient.post()).thenReturn(uriSpec);

@@ -15,6 +15,8 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-security'
 	api 'org.springframework.boot:spring-boot-starter-data-jpa'
 	api 'org.springframework.cloud:spring-cloud-starter-openfeign'
+	// Feign 호출에 Micrometer Observation을 붙여 traceId 전파 + client span/메트릭 생성
+	api 'io.github.openfeign:feign-micrometer'
 	annotationProcessor 'org.springframework.boot:spring-boot-autoconfigure-processor'
 	compileOnly 'org.projectlombok:lombok'
 	annotationProcessor 'org.projectlombok:lombok'
