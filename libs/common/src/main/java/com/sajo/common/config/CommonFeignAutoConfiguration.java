@@ -2,6 +2,7 @@ package com.sajo.common.config;
 
 import feign.Logger;
 import com.sajo.common.feign.CommonFeignErrorDecoder;
+import com.sajo.common.feign.StandardFeignObservationConvention;
 import feign.RequestInterceptor;
 import feign.RequestTemplate;
 import feign.codec.ErrorDecoder;
@@ -73,8 +74,7 @@ public class CommonFeignAutoConfiguration {
         };
     }
 
-    // CLAUDE.md 8번 규칙("내부 서비스 API는 /internal/v1/** 규칙을 따른다")을 그대로 판별 기준으로
-    // 쓴다. 인터셉터 실행 순서에 기대지 않고, 애초에 이 경로가 아니면 헤더를 붙이지 않는 방식이라
+    // 인터셉터 실행 순서에 기대지 않고, 애초에 이 경로가 아니면 헤더를 붙이지 않는 방식이라
     // KisFeignConfiguration의 명시적 제거 인터셉터와 별개로 안전하다(이중 방어).
     private boolean isInternalApiCall(RequestTemplate requestTemplate) {
         String path = requestTemplate.path();
@@ -90,6 +90,12 @@ public class CommonFeignAutoConfiguration {
     @ConditionalOnMissingBean(ErrorDecoder.class)
     public ErrorDecoder commonFeignErrorDecoder(ObjectMapper objectMapper) {
         return new CommonFeignErrorDecoder(objectMapper);
+    }
+
+    // Feign 메트릭 태그를 Spring RestClient와 같은 키로 맞춘다 - 이유는 StandardFeignObservationConvention 주석 참고
+    @Bean
+    public StandardFeignObservationConvention standardFeignObservationConvention() {
+        return new StandardFeignObservationConvention();
     }
 
 }

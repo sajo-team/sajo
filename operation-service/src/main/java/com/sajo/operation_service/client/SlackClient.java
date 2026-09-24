@@ -3,6 +3,7 @@ package com.sajo.operation_service.client;
 import com.sajo.operation_service.client.dto.request.SlackMessageRequest;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.observation.ObservationRegistry;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
@@ -33,8 +34,12 @@ public class SlackClient {
         requestFactory.setConnectTimeout(connectTimeoutMillis);
         requestFactory.setReadTimeout(readTimeoutMillis);
 
+        // Slack Incoming Webhook은 URL 경로 자체가 비밀키라 계측에서 제외한다 - 켜두면 경로 전체가
+        // http_client_requests의 uri 라벨과 Zipkin span(http.url)에 남고, traceId 헤더도 Slack으로 나간다.
+        // 전송 실패 감시는 아래 slack_send_failures_total 카운터로 충분하다.
         this.restClient = restClientBuilder.clone()
                 .requestFactory(requestFactory)
+                .observationRegistry(ObservationRegistry.NOOP)
                 .build();
 
         this.slackSendFailureCounter = Counter.builder("slack_send_failures_total")
